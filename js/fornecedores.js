@@ -202,13 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
             endereco: endereco,
             ativo: ativo,
             observacao: observacao,
-            tipo: 'fornecedor',
-            data_cadastro: new Date().toISOString()
+            tipo: 'fornecedor'
         };
         
         try {
             if (id) {
-                delete dados.data_cadastro;
                 
                 const { error } = await supabaseClient
                     .from('clientes')

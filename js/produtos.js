@@ -117,29 +117,45 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectFiltro) selectFiltro.innerHTML = options;
             if (selectProduto) {
                 selectProduto.innerHTML = '<option value="">Selecione uma categoria</option>' +
-                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei}">${c.nome}</option>`).join('');
+                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei}" data-exige-serial="${c.exige_serial || c.exige_imei}">${c.nome}</option>`).join('');
                 
                 selectProduto.addEventListener('change', (e) => {
                     const selectedOption = e.target.options[e.target.selectedIndex];
+                    if (!selectedOption || selectedOption.value === "") {
+                        document.getElementById('seriaisContainer').style.display = 'none';
+                        return;
+                    }
                     const exigeIMEI = selectedOption.getAttribute('data-exige-imei') === 'true';
+                    const exigeSerial = selectedOption.getAttribute('data-exige-serial') === 'true' || exigeIMEI;
                     exigeIMEIActual = exigeIMEI;
-                    const quantidade = parseInt(document.getElementById('quantidade_estoque').value) || 1;
-                    gerarCamposSerial(quantidade, exigeIMEIActual);
                     
+                    const seriaisContainer = document.getElementById('seriaisContainer');
                     const avisoIMEI = document.getElementById('avisoIMEI');
-                    if (exigeIMEIActual) {
-                        if (!avisoIMEI) {
-                            const msg = document.createElement('div');
-                            msg.id = 'avisoIMEI';
-                            msg.className = 'estoque-info-warning';
-                            msg.style.marginTop = '10px';
-                            msg.style.padding = '10px';
-                            msg.style.borderRadius = '8px';
-                            msg.innerHTML = '📱 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do IMEI para cada unidade!';
-                            document.getElementById('seriaisContainer').before(msg);
+                    
+                    if (exigeSerial) {
+                        if (seriaisContainer) seriaisContainer.style.display = 'block';
+                        const quantidade = parseInt(document.getElementById('quantidade_estoque').value) || 1;
+                        gerarCamposSerial(quantidade, exigeIMEIActual);
+                        
+                        if (exigeIMEIActual) {
+                            if (!avisoIMEI) {
+                                const msg = document.createElement('div');
+                                msg.id = 'avisoIMEI';
+                                msg.className = 'estoque-info-warning';
+                                msg.style.marginTop = '10px';
+                                msg.style.padding = '10px';
+                                msg.style.borderRadius = '8px';
+                                msg.innerHTML = '📱 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do IMEI para cada unidade!';
+                                document.getElementById('seriaisContainer').before(msg);
+                            }
+                        } else {
+                            if (avisoIMEI) avisoIMEI.remove();
                         }
                     } else {
+                        if (seriaisContainer) seriaisContainer.style.display = 'none';
                         if (avisoIMEI) avisoIMEI.remove();
+                        const container = document.getElementById('seriaisList');
+                        if (container) container.innerHTML = '';
                     }
                 });
             }
@@ -326,9 +342,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const podeExcluir = verificarPermissao('produtos', 'excluir');
         
         tbody.innerHTML = produtosPagina.map(p => {
+            const isServico = p.tipo === 'servico';
             const estoque = p.estoque_total || 0;
             const minimo = p.estoque_minimo || 5;
             const estoqueClass = estoque < minimo ? 'color: #dc3545; font-weight: bold;' : 'color: #28a745;';
+            const estoqueText = isServico ? '<span style="color: var(--primary); font-weight: 600;">🛠️ Serviço</span>' : `${estoque} unid.`;
+            const minEstoqueText = isServico ? '-' : (p.estoque_minimo || 5);
             
             return `
                 <tr>
@@ -339,12 +358,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td>${p.categoria || '-'}</td>
                     <td>${p.marca || '-'}</td>
-                    <td style="${estoqueClass}">${estoque} unid.</td>
-                    <td>${p.estoque_minimo || 5}</td>
+                    <td style="${isServico ? '' : estoqueClass}">${estoqueText}</td>
+                    <td>${minEstoqueText}</td>
                     <td>R$ ${(p.valor_venda || 0).toFixed(2)}</td>
                     <td class="table-actions">
                         ${podeEditar ? `<button class="btn-warning" onclick="editarProduto(${p.id})" title="Editar">✏️</button>` : ''}
-                        ${(usuario.config_loja?.habilitar_seriais !== false) ? `<button class="btn-info" onclick="verSeriais(${p.id})" title="Ver Seriais">🔢</button>` : ''}
+                        ${(usuario.config_loja?.habilitar_seriais !== false && !isServico) ? `<button class="btn-info" onclick="verSeriais(${p.id})" title="Ver Seriais">🔢</button>` : ''}
                         ${podeExcluir ? `<button class="btn-danger" onclick="excluirProduto(${p.id})" title="Excluir">🗑️</button>` : ''}
                     </td>
                 </tr>
@@ -461,6 +480,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('garantia_dias').value = produto.garantia_dias || 0;
         document.getElementById('imagem').value = produto.imagem || '';
         
+        const tipoSelect = document.getElementById('produtoTipo');
+        if (tipoSelect) {
+            tipoSelect.value = produto.tipo || 'produto';
+            tipoSelect.dispatchEvent(new Event('change'));
+        }
+        
         document.getElementById('quantidade_estoque').value = 0;
         document.getElementById('quantidade_estoque').disabled = true;
         document.getElementById('seriaisList').innerHTML = `
@@ -517,6 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dadosProduto = {
             codigo: document.getElementById('codigo').value,
             nome: document.getElementById('nome').value,
+            tipo: document.getElementById('produtoTipo').value || 'produto',
             categoria: document.getElementById('categoria').value,
             marca: document.getElementById('marca').value,
             modelo: document.getElementById('modelo').value,
@@ -549,9 +575,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                const isEletronico = (usuario.config_loja?.habilitar_seriais !== false);
+                const selectProduto = document.getElementById('categoria');
+                const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
+                const exigeSerial = (usuario.config_loja?.habilitar_seriais !== false) && 
+                                    (selectedOption?.getAttribute('data-exige-serial') === 'true' || 
+                                     selectedOption?.getAttribute('data-exige-imei') === 'true');
                 
-                if (isEletronico) {
+                if (exigeSerial) {
                     const seriaisValidos = validarSeriais();
                     if (!seriaisValidos) return;
                     
@@ -686,12 +716,60 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('quantidade_estoque').value = 1;
         document.getElementById('quantidade_estoque').disabled = false;
         exigeIMEIActual = false;
-        gerarCamposSerial(1, false);
+        
+        const tipoSelect = document.getElementById('produtoTipo');
+        if (tipoSelect) {
+            tipoSelect.value = 'produto';
+            tipoSelect.dispatchEvent(new Event('change'));
+        }
+        
+        const seriaisContainer = document.getElementById('seriaisContainer');
+        if (seriaisContainer) seriaisContainer.style.display = 'none';
+        
+        const container = document.getElementById('seriaisList');
+        if (container) container.innerHTML = '';
         
         const avisoIMEI = document.getElementById('avisoIMEI');
         if (avisoIMEI) avisoIMEI.remove();
         
         document.getElementById('modalProduto').style.display = 'flex';
+    });
+    
+    document.getElementById('produtoTipo')?.addEventListener('change', (e) => {
+        const tipo = e.target.value;
+        const estoqueRow = document.getElementById('quantidade_estoque')?.closest('.form-group');
+        const minEstoqueRow = document.getElementById('estoque_minimo')?.closest('.form-group');
+        const seriaisContainer = document.getElementById('seriaisContainer');
+        
+        if (tipo === 'servico') {
+            if (estoqueRow) estoqueRow.style.display = 'none';
+            if (minEstoqueRow) minEstoqueRow.style.display = 'none';
+            if (seriaisContainer) seriaisContainer.style.display = 'none';
+            document.getElementById('quantidade_estoque').value = '1';
+            document.getElementById('estoque_minimo').value = '0';
+        } else {
+            if (estoqueRow) estoqueRow.style.display = 'block';
+            if (minEstoqueRow) minEstoqueRow.style.display = 'block';
+            
+            const selectProduto = document.getElementById('categoria');
+            const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
+            const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true' || selectedOption?.getAttribute('data-exige-imei') === 'true';
+            if (seriaisContainer) {
+                seriaisContainer.style.display = exigeSerial ? 'block' : 'none';
+            }
+        }
+    });
+    
+    document.getElementById('quantidade_estoque')?.addEventListener('input', (e) => {
+        const selectProduto = document.getElementById('categoria');
+        const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
+        const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true' || selectedOption?.getAttribute('data-exige-imei') === 'true';
+        if (exigeSerial) {
+            const quantidade = parseInt(e.target.value) || 0;
+            if (quantidade > 0) {
+                gerarCamposSerial(quantidade, exigeIMEIActual);
+            }
+        }
     });
     
     document.getElementById('btnSalvarProduto')?.addEventListener('click', salvarProduto);
@@ -754,6 +832,15 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalSerial').style.display = 'none';
         }
     };
+    
+    // Eventos de Exportação
+    document.getElementById('btnExportExcel')?.addEventListener('click', () => {
+        exportarTabelaParaExcel('produtosTable', 'relatorio_produtos');
+    });
+    
+    document.getElementById('btnExportPDF')?.addEventListener('click', () => {
+        exportarTabelaParaPDF('produtosTable', 'Relatório de Produtos', 'Lista de produtos cadastrados no sistema');
+    });
     
     // Inicializar
     carregarCategorias();

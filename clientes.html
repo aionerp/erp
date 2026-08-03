@@ -66,12 +66,16 @@
                     <button class="btn-primary" id="btnNovo">+ Novo Cliente</button>
                 </div>
                 
-                <div class="filters">
-                    <input type="text" id="searchInput" placeholder="🔍 Pesquisar por nome, telefone ou email...">
+                <div class="filters" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" id="searchInput" placeholder="🔍 Pesquisar por nome, telefone ou email..." style="flex: 1; margin-bottom: 0;">
+                    <div class="export-actions">
+                        <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
+                        <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                    </div>
                 </div>
                 
                 <div class="table-container">
-                    <table>
+                    <table id="clientesTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -168,7 +172,9 @@
 
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
+    <script src="js/export-helper.js"></script>
     <script src="js/clientes.js"></script>
-<script src="js/active-nav.js"></script>`n</body>
+<script src="js/active-nav.js"></script>
+</body>
 </html>
 

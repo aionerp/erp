@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             extraLinksHtml += '<li><a href="agendamentos.html">💅 Agendamentos</a></li>';
         }
         if (config.habilitar_mesas) {
-            extraLinksHtml += '<li><a href="mesas.html">🍔 Mesas & Comandas</a></li>';
+            extraLinksHtml += '<li><a href="mesas.html">🍔 Comanda/Serviço</a></li>';
         }
         
         sidebar.innerHTML = `
@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">${labelVendas}</a></li>
+                <li><a href="fechamento.html">💵 Fechamento de Caixa</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 ${extraLinksHtml}
@@ -295,6 +296,7 @@ function filtrarMenuPorPermissao(usuario) {
         'estoque.html': 'estoque',
         'entradas.html': 'entradas',
         'saidas.html': 'saidas',
+        'fechamento.html': 'saidas',
         'devolucoes.html': 'saidas',
         'fornecedores.html': 'fornecedores',
         'ordem-servico.html': 'ordens_servico',

@@ -165,13 +165,19 @@
                     <h1>Controle de Estoque</h1>
                 </div>
                 
-                <div class="filters">
-                    <input type="text" id="searchInput" placeholder="Pesquisar produto...">
-                    <button class="btn-primary" id="btnAjustar">✏️ Ajustar Estoque</button>
+                <div class="filters" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px; flex: 1; align-items: center;">
+                        <input type="text" id="searchInput" placeholder="Pesquisar produto..." style="flex: 1; margin-bottom: 0;">
+                        <button class="btn-primary" id="btnAjustar" style="margin-bottom: 0;">✏️ Ajustar Estoque</button>
+                    </div>
+                    <div class="export-actions">
+                        <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
+                        <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                    </div>
                 </div>
                 
                 <div class="table-container">
-                    <table>
+                    <table id="estoqueTable">
                         <thead>
                             <tr>
                                 <th>Código</th>
@@ -243,7 +249,9 @@
 
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
+    <script src="js/export-helper.js"></script>
     <script src="js/estoque.js"></script>
-<script src="js/active-nav.js"></script>`n</body>
+<script src="js/active-nav.js"></script>
+</body>
 </html>
 

@@ -107,9 +107,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Filtrar localmente
         let filtrados = agendamentos.filter(a => {
-            const dataAgendamento = a.data_hora.substring(0, 10);
+            if (!a.data_hora) return false;
+            const dataHoraLocal = new Date(a.data_hora);
+            const ano = dataHoraLocal.getFullYear();
+            const mes = String(dataHoraLocal.getMonth() + 1).padStart(2, '0');
+            const dia = String(dataHoraLocal.getDate()).padStart(2, '0');
+            const dataAgendamento = `${ano}-${mes}-${dia}`;
+            
             const matchData = !filtroData || dataAgendamento === filtroData;
-            const matchProf = !filtroProfissional || a.profissional_id.toString() === filtroProfissional;
+            const matchProf = !filtroProfissional || (a.profissional_id && a.profissional_id.toString() === filtroProfissional);
             const matchStatus = !filtroStatus || a.status === filtroStatus;
             return matchData && matchProf && matchStatus;
         });
@@ -153,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn-primary" onclick="alterarStatusAgendamento(${a.id}, 'confirmado')" style="font-size:11px; padding:4px 8px;">👍 Confirmar</button>
                         ` : ''}
                         ${a.status === 'confirmado' ? `
-                            <button class="btn-success" onclick="alterarStatusAgendamento(${a.id}, 'concluido')" style="font-size:11px; padding:4px 8px;">✅ Concluir</button>
+                            <button class="btn-success" onclick="concluirAgendamento(${a.id})" style="font-size:11px; padding:4px 8px;">✅ Concluir</button>
                         ` : ''}
                         ${a.status !== 'concluido' && a.status !== 'cancelado' ? `
                             <button class="btn-warning" onclick="editarAgendamento(${a.id})" style="font-size:11px; padding:4px 8px; font-weight:bold;">✏️</button>
@@ -184,89 +190,35 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalAgendamento').style.display = 'flex';
     };
 
+    window.concluirAgendamento = (id) => {
+        const a = agendamentos.find(item => item.id === id);
+        if (!a) return;
+
+        // Armazenar temporariamente no sessionStorage para o PDV (saidas.html) carregar
+        sessionStorage.setItem('checkout_agendamento', JSON.stringify({
+            agendamento_id: a.id,
+            cliente_id: a.cliente_id,
+            servico_id: a.servico_id,
+            servico_nome: a.produtos?.nome || 'Serviço',
+            codigo: a.produtos?.codigo || 'SERV-AGEND',
+            valor: a.valor,
+            profissional_id: a.profissional_id
+        }));
+
+        window.location.href = 'saidas.html';
+    };
+
     window.alterarStatusAgendamento = async (id, novoStatus) => {
         if (!confirm(`Deseja alterar o status deste agendamento para "${novoStatus}"?`)) return;
 
         try {
-            // Se for concluído, registra uma venda correspondente no PDV para alimentar relatórios e dashboards
-            if (novoStatus === 'concluido') {
-                const a = agendamentos.find(item => item.id === id);
-                if (a) {
-                    const usuarioObj = JSON.parse(sessionStorage.getItem('usuario')) || {};
-                    
-                    // 1. Criar registro na tabela saidas
-                    const { data: venda, error: vendaError } = await supabaseClient
-                        .from('saidas')
-                        .insert([{
-                            cliente_id: a.cliente_id,
-                            usuario_id: a.profissional_id || usuarioObj.id,
-                            total: a.valor,
-                            subtotal: a.valor,
-                            desconto: 0,
-                            acrescimo: 0,
-                            forma_pagamento: 'Dinheiro', // padrão para agendamentos
-                            observacao: `Agendamento Concluído #${a.id}`
-                        }])
-                        .select()
-                        .single();
-
-                    if (vendaError) throw vendaError;
-
-                    // 2. Criar registro na tabela saida_itens
-                    const { error: itemError } = await supabaseClient
-                        .from('saida_itens')
-                        .insert([{
-                            saida_id: venda.id,
-                            produto_id: a.servico_id,
-                            quantidade: 1,
-                            valor_unitario: a.valor,
-                            subtotal: a.valor
-                        }]);
-
-                    if (itemError) throw itemError;
-
-                    // 3. Atualizar estoque do produto (serviço) e registrar movimento de estoque
-                    try {
-                        const { data: prod } = await supabaseClient
-                            .from('produtos')
-                            .select('estoque_total')
-                            .eq('id', a.servico_id)
-                            .maybeSingle();
-
-                        if (prod) {
-                            const anterior = prod.estoque_total || 0;
-                            const nova = Math.max(0, anterior - 1);
-                            
-                            await supabaseClient
-                                .from('produtos')
-                                .update({ estoque_total: nova })
-                                .eq('id', a.servico_id);
-
-                            await supabaseClient
-                                .from('movimentos_estoque')
-                                .insert([{
-                                    produto_id: a.servico_id,
-                                    tipo: 'saida',
-                                    quantidade: 1,
-                                    quantidade_anterior: anterior,
-                                    quantidade_nova: nova,
-                                    motivo: `Agendamento Concluído #${a.id}`,
-                                    usuario_id: usuarioObj.id
-                                }]);
-                        }
-                    } catch (estError) {
-                        console.error('Erro ao movimentar estoque do agendamento:', estError);
-                    }
-                }
-            }
-
             const { error } = await supabaseClient
                 .from('agendamentos')
                 .update({ status: novoStatus })
                 .eq('id', id);
 
             if (error) throw error;
-            mostrarNotificacao(`Agendamento ${novoStatus === 'concluido' ? 'finalizado e faturado' : 'atualizado'} com sucesso!`, 'success');
+            mostrarNotificacao(`Agendamento atualizado com sucesso!`, 'success');
             carregarAgendamentos();
         } catch (error) {
             console.error('Erro ao alterar status:', error);

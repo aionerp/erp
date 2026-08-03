@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mesas & Comandas - Aion ERP</title>
+    <title>Comanda/Serviço - Aion ERP</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
@@ -87,11 +87,11 @@
             <div class="content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
                     <div>
-                        <h1>🍔 Mesas & Comandas</h1>
+                        <h1>🍔 Comanda/Serviço</h1>
                         <p style="font-size: 13px; color: var(--gray); margin-top: 4px;">Gerenciamento de consumo e atendimento em tempo real</p>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn-primary" id="btnNovaMesa">+ Adicionar Mesa/Comanda</button>
+                        <button class="btn-primary" id="btnNovaMesa">+ Adicionar comanda/serviço</button>
                     </div>
                 </div>
                 
@@ -100,6 +100,7 @@
                         <option value="">Todos os Tipos</option>
                         <option value="mesa">Mesa</option>
                         <option value="comanda">Comanda</option>
+                        <option value="servico">Serviço</option>
                     </select>
                     <select id="filtroStatus" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;">
                         <option value="">Todos os Status</option>
@@ -120,7 +121,7 @@
     <div id="modalMesa" class="modal">
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
-                <h2 id="modalTitle">Nova Mesa / Comanda</h2>
+                <h2 id="modalTitle">Nova Comanda/Serviço</h2>
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
@@ -137,6 +138,7 @@
                         <select id="tipo" required style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border);">
                             <option value="mesa">Mesa</option>
                             <option value="comanda">Comanda</option>
+                            <option value="servico">Serviço</option>
                         </select>
                     </div>
                 </form>
@@ -152,7 +154,7 @@
     <div id="modalConsumo" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h2 id="consumoTitle">Gerenciar Mesa</h2>
+                <h2 id="consumoTitle">Gerenciar Comanda/Serviço</h2>
                 <span class="close" id="closeConsumo">&times;</span>
             </div>
             <div class="modal-body">
@@ -163,17 +165,46 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>Adicionar Lançamento (Valor em R$)</label>
+                    <label>Adicionar Lançamento (Valor Adicional em R$)</label>
                     <div style="display: flex; gap: 8px;">
                         <input type="number" step="0.01" id="lancamentoValor" placeholder="Ex: 25.50" style="flex: 1; padding:10px; border-radius:8px; border:1px solid var(--border);">
-                        <button type="button" class="btn-primary" id="btnAdicionarLancamentoRapido" style="padding: 10px 16px; border-radius: 8px; white-space: nowrap; font-weight: 600;">➕ Lançar</button>
+                        <button type="button" class="btn-primary" id="btnAdicionarLancamentoRapido" style="padding: 10px 16px; border-radius: 8px; white-space: nowrap; font-weight: 600;">➕ Lançar Valor</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px;">
+                    <label style="font-weight: 600;">Lançar Produtos da Listagem</label>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; margin-top: 8px;">
+                        <select id="lancamentoProdutoSelect" style="padding:10px; border-radius:8px; border:1px solid var(--border); width: 100%;">
+                            <option value="">Carregando produtos...</option>
+                        </select>
+                        <input type="number" id="lancamentoProdutoQtd" value="1" min="1" placeholder="Qtd" style="padding:10px; border-radius:8px; border:1px solid var(--border); width: 100%;">
+                        <button type="button" class="btn-success" id="btnLancarProdutoMesa" style="padding: 10px; border-radius: 8px; font-weight: 600; white-space: nowrap;">➕ Lançar</button>
+                    </div>
+                </div>
+
+                <div id="carrinhoMesaContainer" style="margin-top: 20px; display: none;">
+                    <div style="font-size: 13px; color: var(--gray); text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Produtos Lançados</div>
+                    <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: white; margin-bottom: 15px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--light); text-align: left; border-bottom: 1px solid var(--border);">
+                                    <th style="padding: 6px 10px;">Produto</th>
+                                    <th style="padding: 6px 10px; text-align: center;">Qtd</th>
+                                    <th style="padding: 6px 10px; text-align: right;">Subtotal</th>
+                                    <th style="padding: 6px 10px; text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="carrinhoMesaBody">
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px;">
                     <label>Status</label>
                     <select id="consumoStatus" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border);">
-                        <option value="livre">Livre (Limpar Consumo)</option>
+                        <option value="livre">Livre (Limpar Consumo/Itens)</option>
                         <option value="ocupada">Ocupada (Consumindo)</option>
                         <option value="fechando">Pedindo Conta</option>
                     </select>

@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p><strong>Cidade/UF:</strong> ${cliente.cidade || '-'}/${cliente.estado || '-'}</p>
                     <p><strong>CEP:</strong> ${cliente.cep || '-'}</p>
                     <p><strong>Observação:</strong> ${cliente.observacao || '-'}</p>
-                    <p><strong>Data Cadastro:</strong> ${cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '-'}</p>
+                    <p><strong>Data Cadastro:</strong> ${cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('pt-BR') : (cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '-')}</p>
                 </div>
             `;
             
@@ -285,8 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cidade: document.getElementById('cidade').value.trim(),
             estado: document.getElementById('estado').value,
             cep: document.getElementById('cep').value.trim(),
-            observacao: document.getElementById('observacao').value.trim(),
-            data_cadastro: new Date().toISOString()
+            observacao: document.getElementById('observacao').value.trim()
         };
         
         if (!dados.nome || !dados.telefone) {
@@ -296,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             if (id) {
-                delete dados.data_cadastro;
                 const { error } = await supabaseClient
                     .from('clientes')
                     .update(dados)
@@ -335,6 +333,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     document.getElementById('searchInput')?.addEventListener('input', renderizarTabela);
+    
+    // Eventos de Exportação
+    document.getElementById('btnExportExcel')?.addEventListener('click', () => {
+        exportarTabelaParaExcel('clientesTable', 'relatorio_clientes');
+    });
+    
+    document.getElementById('btnExportPDF')?.addEventListener('click', () => {
+        exportarTabelaParaPDF('clientesTable', 'Relatório de Clientes', 'Lista de clientes cadastrados no sistema');
+    });
     
     window.onclick = (event) => {
         if (event.target === document.getElementById('modal')) {

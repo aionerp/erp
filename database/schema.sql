@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS public.config_loja CASCADE;
 DROP TABLE IF EXISTS public.movimentos_estoque CASCADE;
 DROP TABLE IF EXISTS public.saida_itens CASCADE;
 DROP TABLE IF EXISTS public.saidas CASCADE;
+DROP TABLE IF EXISTS public.caixas CASCADE;
 DROP TABLE IF EXISTS public.entrada_itens CASCADE;
 DROP TABLE IF EXISTS public.entradas CASCADE;
 DROP TABLE IF EXISTS public.produtos_seriais CASCADE;
@@ -44,6 +45,8 @@ CREATE TABLE public.usuarios (
     perfil VARCHAR(50) NOT NULL DEFAULT 'basico',
     nivel_acesso VARCHAR(50) DEFAULT 'basico',
     permissoes JSONB DEFAULT '{}'::jsonb,
+    cargo VARCHAR(100),
+    telefone VARCHAR(20),
     ativo BOOLEAN DEFAULT true NOT NULL,
     ultimo_acesso TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -70,12 +73,16 @@ CREATE TABLE public.clientes (
     nome VARCHAR(255) NOT NULL,
     tipo VARCHAR(20) DEFAULT 'cliente' CHECK (tipo IN ('cliente', 'fornecedor')),
     cpf_cnpj VARCHAR(20),
+    documento VARCHAR(50),
     telefone VARCHAR(20),
     email VARCHAR(255),
     endereco TEXT,
     numero VARCHAR(20),
+    bairro VARCHAR(100),
     cidade VARCHAR(100),
     estado VARCHAR(50),
+    cep VARCHAR(20),
+    observacao TEXT,
     ativo BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -86,6 +93,7 @@ CREATE TABLE public.produtos (
     loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
     codigo VARCHAR(100),
     nome VARCHAR(255) NOT NULL,
+    tipo VARCHAR(50) DEFAULT 'produto' CHECK (tipo IN ('produto', 'servico')),
     categoria VARCHAR(255), -- mantido para compatibilidade de texto do front
     categoria_id INTEGER REFERENCES public.categorias(id) ON DELETE SET NULL, -- relacionamento relacional real
     marca VARCHAR(255),
@@ -129,7 +137,7 @@ CREATE TABLE public.entradas (
     usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
     data DATE NOT NULL DEFAULT CURRENT_DATE,
     total NUMERIC(10, 2) DEFAULT 0.00,
-    observacoes TEXT,
+    observacao TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -141,6 +149,20 @@ CREATE TABLE public.entrada_itens (
     quantidade INTEGER NOT NULL CHECK (quantidade > 0),
     valor_unitario NUMERIC(10, 2) NOT NULL,
     subtotal NUMERIC(10, 2) NOT NULL
+);
+
+-- 8.5 TABELA DE CAIXAS (FECHAMENTO DIÁRIO)
+CREATE TABLE public.caixas (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    data_abertura TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    data_fechamento TIMESTAMP WITH TIME ZONE,
+    saldo_inicial NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
+    saldo_final NUMERIC(10, 2),
+    usuario_abertura_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    usuario_fechamento_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    status VARCHAR(50) DEFAULT 'aberto' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 9. TABELA DE SAÍDAS (VENDAS / PDV)
@@ -158,7 +180,8 @@ CREATE TABLE public.saidas (
     cancelado_por INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
     motivo_cancelamento TEXT,
     data_finalizacao TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    observacoes TEXT
+    observacao TEXT,
+    caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL
 );
 
 -- 10. ITENS DE SAÍDA
@@ -226,9 +249,10 @@ CREATE TABLE public.mesas_comandas (
     id SERIAL PRIMARY KEY,
     loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
     numero VARCHAR(50) NOT NULL,
-    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('mesa', 'comanda')),
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('mesa', 'comanda', 'servico')),
     status VARCHAR(50) DEFAULT 'livre' CHECK (status IN ('livre', 'ocupada', 'fechando')),
     valor_acumulado NUMERIC(10, 2) DEFAULT 0.00,
+    itens_carrinho JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     CONSTRAINT unique_numero_tipo_por_loja UNIQUE (loja_id, numero, tipo)
 );
@@ -256,6 +280,7 @@ ALTER TABLE public.movimentos_estoque ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.config_loja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agendamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mesas_comandas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.caixas ENABLE ROW LEVEL SECURITY;
 
 -- Função auxiliar para obter o ID da loja a partir do cabeçalho HTTP
 CREATE OR REPLACE FUNCTION public.obter_loja_id_requisicao()
@@ -297,6 +322,9 @@ CREATE POLICY tenant_agendamentos_policy ON public.agendamentos
     FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 
 CREATE POLICY tenant_mesas_comandas_policy ON public.mesas_comandas
+    FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+
+CREATE POLICY tenant_caixas_policy ON public.caixas
     FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 
 -- Políticas para tabelas dependentes (que não contêm loja_id diretamente)
@@ -382,13 +410,14 @@ SELECT setval('public.lojas_id_seq', 1);
 
 -- Inserir usuário administrador master único (senha: admin)
 INSERT INTO public.usuarios (id, loja_id, nome, email, senha, perfil, nivel_acesso, ativo, permissoes) VALUES
-(1, 1, 'Administrador Master', 'admin@admin.com', 'admin', 'admin', 'admin', true, '{}'::jsonb);
+(1, 1, 'Ailton Rocha Cordeiro', 'arc48388528@gmail.com', 'admin', 'admin', 'admin', true, '{}'::jsonb),
+(2, 1, 'Administrador Master', 'admin@admin.com', 'admin', 'admin', 'admin', true, '{}'::jsonb);
 
-SELECT setval('public.usuarios_id_seq', 1);
+SELECT setval('public.usuarios_id_seq', 2);
 
 -- Inserir configurações iniciais da loja única (todas as verticais ativas por padrão para experimentação)
 INSERT INTO public.config_loja (loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco, habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes) VALUES
-(1, 'Minha Empresa', 'Minha Empresa Ltda', '00.000.000/0001-00', '(11) 99999-9999', 'admin@admin.com', 'Rua Principal, 100 - Centro', true, true, true, true, true);
+(1, 'Minha Empresa', 'Minha Empresa Ltda', '00.000.000/0001-00', '(11) 99999-9999', 'arc48388528@gmail.com', 'Rua Principal, 100 - Centro', true, true, true, true, true);
 
 -- Inserir algumas categorias padrão para a Loja 1 (Eletrônicos)
 INSERT INTO public.categorias (id, loja_id, nome, descricao, exige_imei, exige_serial, ativo) VALUES
@@ -447,6 +476,7 @@ SELECT setval('public.agendamentos_id_seq', 2);
 
 
 
+/*
 As rotinas de Agendamentos e Mesas & Comandas são controladas por flags booleanas na tabela public.config_loja associadas ao loja_id (tenant) de cada empresa.
 
 Abaixo estão os comandos SQL para ativar ou remover (desativar) essas funcionalidades no banco de dados.
@@ -455,48 +485,46 @@ Abaixo estão os comandos SQL para ativar ou remover (desativar) essas funcional
 
 1. Rotina de Agendamentos (Estética / Serviços)
 Para ATIVAR:
+*/
 
--sql
+-- UPDATE public.config_loja 
+-- SET habilitar_agendamentos = true 
+-- WHERE loja_id = 1;
 
-
-UPDATE public.config_loja 
-SET habilitar_agendamentos = true 
-WHERE loja_id = 1;
+/*
 Para REMOVER (desativar):
+*/
 
-sql
+-- UPDATE public.config_loja 
+-- SET habilitar_agendamentos = false 
+-- WHERE loja_id = 1;
 
-
-UPDATE public.config_loja 
-SET habilitar_agendamentos = false 
-WHERE loja_id = 1;
+/*
 2. Rotina de Mesas & Comandas (Restaurante / Alimentação)
 Para ATIVAR:
+*/
 
-sql
+-- UPDATE public.config_loja 
+-- SET habilitar_mesas = true 
+-- WHERE loja_id = 1;
 
-
-UPDATE public.config_loja 
-SET habilitar_mesas = true 
-WHERE loja_id = 1;
+/*
 Para REMOVER (desativar):
+*/
 
-sql
+-- UPDATE public.config_loja 
+-- SET habilitar_mesas = false 
+-- WHERE loja_id = 1;
 
-
-UPDATE public.config_loja 
-SET habilitar_mesas = false 
-WHERE loja_id = 1;
+/*
 3. Verificar o status atual das configurações de uma loja
 Caso queira checar o que está ativo em cada loja:
+*/
 
-sql
-
-
-SELECT 
-    loja_id, 
-    nome_fantasia, 
-    habilitar_agendamentos, 
-    habilitar_mesas, 
-    habilitar_seriais 
-FROM public.config_loja;
+-- SELECT 
+--     loja_id, 
+--     nome_fantasia, 
+--     habilitar_agendamentos, 
+--     habilitar_mesas, 
+--     habilitar_seriais 
+-- FROM public.config_loja;

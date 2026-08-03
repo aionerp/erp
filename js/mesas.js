@@ -9,6 +9,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let mesas = [];
+    let listaProdutos = [];
+
+    // =====================================================
+    // CARREGAR PRODUTOS DO SUPABASE
+    // =====================================================
+    async function carregarProdutosListagem() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('produtos')
+                .select('id, nome, codigo, valor_venda')
+                .order('nome');
+            
+            if (error) throw error;
+            listaProdutos = data || [];
+            
+            const select = document.getElementById('lancamentoProdutoSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Selecione um produto...</option>' +
+                    listaProdutos.map(p => `<option value="${p.id}">${p.nome} - R$ ${p.valor_venda.toFixed(2)}</option>`).join('');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar lista de produtos no select:', error);
+        }
+    }
 
     // =====================================================
     // CARREGAR MESAS DO SUPABASE
@@ -59,7 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tipoIcones = {
             mesa: '🪑',
-            comanda: '📝'
+            comanda: '📝',
+            servico: '🛠️'
         };
 
         container.innerHTML = filtrados.map(m => {
@@ -99,14 +124,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]);
 
             if (error) throw error;
-            mostrarNotificacao('Mesa/Comanda criada!', 'success');
+            mostrarNotificacao('Comanda/Serviço criada com sucesso!', 'success');
             document.getElementById('modalMesa').style.display = 'none';
             document.getElementById('mesaForm').reset();
             carregarMesas();
 
         } catch (error) {
             console.error('Erro ao salvar mesa:', error);
-            mostrarNotificacao('Erro ao cadastrar Mesa/Comanda (verifique duplicidade)', 'error');
+            mostrarNotificacao('Erro ao cadastrar Comanda/Serviço (verifique duplicidade)', 'error');
         }
     }
 
@@ -118,10 +143,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!m) return;
 
         document.getElementById('consumoMesaId').value = m.id;
-        document.getElementById('consumoTitle').innerHTML = `${m.tipo === 'mesa' ? '🪑' : '📝'} Gerenciar ${m.numero}`;
+        let iconeMesa = '🪑';
+        if (m.tipo === 'comanda') iconeMesa = '📝';
+        else if (m.tipo === 'servico') iconeMesa = '🛠️';
+        document.getElementById('consumoTitle').innerHTML = `${iconeMesa} Gerenciar ${m.numero}`;
+        
         document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor_acumulado);
         document.getElementById('consumoStatus').value = m.status;
         document.getElementById('lancamentoValor').value = '';
+
+        // Reset product dropdown and quantity
+        const prodSelect = document.getElementById('lancamentoProdutoSelect');
+        if (prodSelect) prodSelect.value = '';
+        const qtdInput = document.getElementById('lancamentoProdutoQtd');
+        if (qtdInput) qtdInput.value = '1';
+
+        // Renderizar carrinho de itens da mesa
+        renderCarrinhoMesa(m.itens_carrinho || []);
 
         // Exibir botão de checkout (Vender) se houver consumo acumulado
         const btnCheckout = document.getElementById('btnLancarVendaMesa');
@@ -136,6 +174,78 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalConsumo').style.display = 'flex';
     };
 
+    function renderCarrinhoMesa(itens) {
+        const container = document.getElementById('carrinhoMesaContainer');
+        const tbody = document.getElementById('carrinhoMesaBody');
+        if (!tbody || !container) return;
+
+        if (!itens || itens.length === 0) {
+            container.style.display = 'none';
+            tbody.innerHTML = '';
+            return;
+        }
+
+        container.style.display = 'block';
+        tbody.innerHTML = itens.map((it, idx) => {
+            const subtotal = it.valor_venda * it.quantidade;
+            const subtotalFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal);
+            return `
+                <tr>
+                    <td style="padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: 500;">${it.nome}</td>
+                    <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">${it.quantidade}</td>
+                    <td style="padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--primary);">${subtotalFormatado}</td>
+                    <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">
+                        <button type="button" class="btn-danger" onclick="removerItemMesa(${index = idx})" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none;">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    window.removerItemMesa = async (index) => {
+        const id = parseInt(document.getElementById('consumoMesaId').value);
+        const m = mesas.find(item => item.id === id);
+        if (!m) return;
+
+        const itens = [...(m.itens_carrinho || [])];
+        const itemRemovido = itens[index];
+        if (!itemRemovido) return;
+
+        itens.splice(index, 1);
+        
+        const valorItem = itemRemovido.valor_venda * itemRemovido.quantidade;
+        let novoValor = Math.max(0, m.valor_acumulado - valorItem);
+
+        try {
+            const { error } = await supabaseClient
+                .from('mesas_comandas')
+                .update({
+                    itens_carrinho: itens,
+                    valor_acumulado: novoValor
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            m.itens_carrinho = itens;
+            m.valor_acumulado = novoValor;
+
+            document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoValor);
+            renderCarrinhoMesa(itens);
+            
+            const btnCheckout = document.getElementById('btnLancarVendaMesa');
+            if (btnCheckout) {
+                btnCheckout.style.display = novoValor > 0 ? 'inline-block' : 'none';
+            }
+
+            mostrarNotificacao('Item removido com sucesso!', 'success');
+            carregarMesas();
+        } catch (error) {
+            console.error('Erro ao remover item:', error);
+            mostrarNotificacao('Erro ao remover item da comanda', 'error');
+        }
+    };
+
     async function atualizarConsumo() {
         const id = parseInt(document.getElementById('consumoMesaId').value);
         const m = mesas.find(item => item.id === id);
@@ -146,10 +256,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let novoValor = m.valor_acumulado + lancamento;
         let novoStatus = status;
+        let novosItens = [...(m.itens_carrinho || [])];
 
-        // Se o status for setado como livre, zera o consumo acumulado
+        // Se o status for setado como livre, zera o consumo acumulado e limpa itens
         if (status === 'livre') {
             novoValor = 0.00;
+            novosItens = [];
         } else if (lancamento > 0 && status === 'livre') {
             novoStatus = 'ocupada'; // se lançou valor, marca como ocupada
         } else if (novoValor > 0 && status === 'livre') {
@@ -161,7 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('mesas_comandas')
                 .update({
                     status: novoStatus,
-                    valor_acumulado: novoValor
+                    valor_acumulado: novoValor,
+                    itens_carrinho: novosItens
                 })
                 .eq('id', id);
 
@@ -185,7 +298,8 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.setItem('checkout_restaurante', JSON.stringify({
             mesa_id: m.id,
             numero: m.numero,
-            valor: m.valor_acumulado
+            valor: m.valor_acumulado,
+            itens: m.itens_carrinho || []
         }));
 
         document.getElementById('modalConsumo').style.display = 'none';
@@ -241,6 +355,91 @@ document.addEventListener('DOMContentLoaded', () => {
             mostrarNotificacao('Erro ao adicionar lançamento', 'error');
         } finally {
             btn.disabled = false;
+            btn.textContent = '➕ Lançar Valor';
+        }
+    });
+
+    // Lançamento de Produto do Cardápio / Listagem
+    document.getElementById('btnLancarProdutoMesa')?.addEventListener('click', async () => {
+        const id = parseInt(document.getElementById('consumoMesaId').value);
+        const m = mesas.find(item => item.id === id);
+        if (!m) return;
+
+        const prodSelect = document.getElementById('lancamentoProdutoSelect');
+        const prodId = parseInt(prodSelect.value);
+        if (!prodId) {
+            mostrarNotificacao('Selecione um produto para lançar!', 'error');
+            return;
+        }
+
+        const qtdInput = document.getElementById('lancamentoProdutoQtd');
+        const quantidade = parseInt(qtdInput.value) || 1;
+        if (quantidade <= 0) {
+            mostrarNotificacao('Informe uma quantidade maior que zero!', 'error');
+            return;
+        }
+
+        const produto = listaProdutos.find(p => p.id === prodId);
+        if (!produto) return;
+
+        const btn = document.getElementById('btnLancarProdutoMesa');
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        const itens = [...(m.itens_carrinho || [])];
+        const itemExistente = itens.find(it => it.id === produto.id);
+        if (itemExistente) {
+            itemExistente.quantidade += quantidade;
+        } else {
+            itens.push({
+                id: produto.id,
+                nome: produto.nome,
+                codigo: produto.codigo,
+                valor_venda: produto.valor_venda,
+                quantidade: quantidade
+            });
+        }
+
+        const valorAdicional = produto.valor_venda * quantidade;
+        const novoValor = m.valor_acumulado + valorAdicional;
+        const novoStatus = m.status === 'livre' ? 'ocupada' : m.status;
+
+        try {
+            const { error } = await supabaseClient
+                .from('mesas_comandas')
+                .update({
+                    itens_carrinho: itens,
+                    status: novoStatus,
+                    valor_acumulado: novoValor
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            m.itens_carrinho = itens;
+            m.valor_acumulado = novoValor;
+            m.status = novoStatus;
+
+            document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoValor);
+            document.getElementById('consumoStatus').value = novoStatus;
+            
+            prodSelect.value = '';
+            qtdInput.value = '1';
+
+            renderCarrinhoMesa(itens);
+
+            const btnCheckout = document.getElementById('btnLancarVendaMesa');
+            if (btnCheckout) {
+                btnCheckout.style.display = 'inline-block';
+            }
+
+            mostrarNotificacao('Item lançado com sucesso!', 'success');
+            carregarMesas();
+        } catch (error) {
+            console.error('Erro ao lançar produto na comanda:', error);
+            mostrarNotificacao('Erro ao lançar produto', 'error');
+        } finally {
+            btn.disabled = false;
             btn.textContent = '➕ Lançar';
         }
     });
@@ -285,4 +484,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Inicializar
     carregarMesas();
+    carregarProdutosListagem();
 });

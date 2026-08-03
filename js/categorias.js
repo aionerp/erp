@@ -264,5 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    // Eventos de Exportação
+    document.getElementById('btnExportExcel')?.addEventListener('click', () => {
+        exportarTabelaParaExcel('categoriasTable', 'relatorio_categorias');
+    });
+    
+    document.getElementById('btnExportPDF')?.addEventListener('click', () => {
+        exportarTabelaParaPDF('categoriasTable', 'Relatório de Categorias', 'Lista de categorias cadastradas no sistema');
+    });
+    
     carregarCategorias();
 });

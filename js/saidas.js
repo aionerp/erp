@@ -124,14 +124,73 @@ document.addEventListener('DOMContentLoaded', () => {
             clientes   = clientesRes.data  || [];
             configLoja = configRes.data?.[0] || {};
 
-            // Contador de produtos
-            const contador = document.getElementById('contadorProdutos');
-            if (contador) contador.textContent = `(${produtos.length} disponíveis)`;
-
-            renderizarProdutos(produtos);
+            // Contador de produtos no placeholder
+            const inputProd = document.getElementById('searchProdutoVenda');
+            if (inputProd) {
+                inputProd.placeholder = `🔍 Informe o cód. de barras, código ou serial (${produtos.length} produtos disponíveis)...`;
+            }
             renderizarVendas(vendasRes.data || []);
 
-            // Verificar se há checkout pendente do restaurante
+            // === VERIFICAR STATUS DO CAIXA DIÁRIO ===
+            let caixaAtivo = null;
+            try {
+                caixaAtivo = await obterCaixaAtivo();
+            } catch (e) {
+                console.warn('Erro ao consultar caixa ativo:', e);
+            }
+
+            const bannerCaixa = document.getElementById('bannerCaixaFechado');
+            const inputCli = document.getElementById('searchCliente');
+            const btnFinalizar = document.getElementById('btnFinalizarVenda');
+
+            if (!caixaAtivo) {
+                // Se caixa estiver fechado, criar ou exibir o banner
+                if (!bannerCaixa) {
+                    const banner = document.createElement('div');
+                    banner.id = 'bannerCaixaFechado';
+                    banner.style.backgroundColor = '#f8d7da';
+                    banner.style.color = '#721c24';
+                    banner.style.border = '1px solid #f5c6cb';
+                    banner.style.padding = '12px 20px';
+                    banner.style.borderRadius = '8px';
+                    banner.style.marginBottom = '15px';
+                    banner.style.fontWeight = '700';
+                    banner.style.fontSize = '14px';
+                    banner.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa no menu <a href="fechamento.html" style="color:#721c24; text-decoration:underline;">Fechamento Diário</a>.';
+                    
+                    const containerPDV = document.querySelector('.pdv-busca-top');
+                    if (containerPDV && containerPDV.parentNode) {
+                        containerPDV.parentNode.insertBefore(banner, containerPDV);
+                    }
+                } else {
+                    bannerCaixa.style.display = 'block';
+                }
+
+                // Desabilitar controles
+                if (inputProd) inputProd.disabled = true;
+                if (inputCli) inputCli.disabled = true;
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = true;
+                    btnFinalizar.style.backgroundColor = '#ccc';
+                    btnFinalizar.style.cursor = 'not-allowed';
+                    btnFinalizar.textContent = '🔒 Caixa Fechado';
+                }
+            } else {
+                // Caixa aberto, esconder banner se existir
+                if (bannerCaixa) {
+                    bannerCaixa.style.display = 'none';
+                }
+                if (inputProd) inputProd.disabled = false;
+                if (inputCli) inputCli.disabled = false;
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = false;
+                    btnFinalizar.style.backgroundColor = '';
+                    btnFinalizar.style.cursor = '';
+                    btnFinalizar.textContent = '✅ Finalizar Venda';
+                }
+            }
+
+            // === VERIFICAR CHECKOUT RESTAURANTE (MESA/COMANDA/SERVICO) ===
             const checkoutRestauranteStr = sessionStorage.getItem('checkout_restaurante');
             if (checkoutRestauranteStr) {
                 try {
@@ -142,12 +201,91 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (obsField) {
                         obsField.value = `Fechamento de ${checkout.numero}`;
                     }
+
+                    // Se existirem itens detalhados na comanda, carrega cada um deles
+                    if (checkout.itens && checkout.itens.length > 0) {
+                        carrinho = checkout.itens.map(item => {
+                            return {
+                                id: item.id,
+                                nome: item.nome,
+                                codigo: item.codigo,
+                                categoria: 'Restaurante',
+                                valor_venda: item.valor_venda,
+                                quantidade: item.quantidade,
+                                subtotal: item.valor_venda * item.quantity || item.valor_venda * item.quantidade,
+                                serial: null,
+                                imei: null
+                            };
+                        });
+                    } else {
+                        // Caso contrário (lançamento manual de valor adicional), procuramos ou criamos o produto dummy
+                        let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
+                        if (!dummyProduct) {
+                            const { data, error } = await supabaseClient.from('produtos').insert([{
+                                nome: 'Consumo Comanda/Serviço',
+                                codigo: 'REST-MESA',
+                                categoria: 'Outros',
+                                valor_venda: 0,
+                                estoque_total: 99999,
+                                ativo: true
+                            }]).select();
+                            if (!error && data && data.length > 0) {
+                                dummyProduct = data[0];
+                                produtos.push(dummyProduct);
+                            }
+                        }
+                        
+                        carrinho = [{
+                            id: dummyProduct ? dummyProduct.id : 999999,
+                            nome: `Consumo ${checkout.numero}`,
+                            codigo: 'REST-MESA',
+                            categoria: 'Restaurante',
+                            valor_venda: checkout.valor,
+                            quantidade: 1,
+                            subtotal: checkout.valor,
+                            serial: null,
+                            imei: null
+                        }];
+                    }
+                    renderizarCarrinho();
+                    calcularTotais();
+                } catch (e) {
+                    console.error('Erro ao processar checkout_restaurante:', e);
+            }
+
+            // === VERIFICAR CHECKOUT AGENDAMENTO ===
+            const checkoutAgendamentoStr = sessionStorage.getItem('checkout_agendamento');
+            if (checkoutAgendamentoStr) {
+                try {
+                    const checkout = JSON.parse(checkoutAgendamentoStr);
+                    mostrarNotificacao(`Carregando agendamento: ${checkout.servico_nome} - R$ ${checkout.valor.toFixed(2)}`, 'info');
                     
+                    const obsField = document.getElementById('observacao');
+                    if (obsField) {
+                        obsField.value = `Fechamento do Agendamento #${checkout.agendamento_id}`;
+                    }
+
+                    // Preencher cliente se vier no agendamento
+                    if (checkout.cliente_id) {
+                        const cliente = clientes.find(c => c.id === checkout.cliente_id);
+                        if (cliente) {
+                            document.getElementById('clienteId').value = cliente.id;
+                            document.getElementById('searchCliente').value = cliente.nome;
+                            document.getElementById('clienteSelecionado').innerHTML = `
+                                <div class="selected-customer-card" style="margin-top: 10px; padding: 12px; background: var(--light); border-radius: 8px; border-left: 4px solid var(--primary);">
+                                    👤 <strong>${cliente.nome}</strong><br>
+                                    📞 ${cliente.telefone || 'Sem telefone'}
+                                </div>
+                            `;
+                        }
+                    }
+
+                    // Carrega o serviço no carrinho
                     carrinho = [{
-                        id: 999999, // ID temporário fictício
-                        nome: `Consumo ${checkout.numero}`,
-                        codigo: 'REST-MESA',
-                        categoria: 'Restaurante',
+                        id: checkout.servico_id,
+                        nome: checkout.servico_nome,
+                        codigo: checkout.codigo,
+                        categoria: 'Serviço',
                         valor_venda: checkout.valor,
                         quantidade: 1,
                         subtotal: checkout.valor,
@@ -158,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderizarCarrinho();
                     calcularTotais();
                 } catch (e) {
-                    console.error('Erro ao ler checkout do restaurante:', e);
+                    console.error('Erro ao processar checkout_agendamento:', e);
                 }
             }
 
@@ -172,47 +310,94 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZAR PRODUTOS
     // =====================================================
 
-    function renderizarProdutos(lista) {
-        const container = document.getElementById('produtosList');
+    function renderizarSugestoesProdutos(lista) {
+        const container = document.getElementById('produtoSuggestions');
         if (!container) return;
 
         if (!lista || lista.length === 0) {
-            container.innerHTML = `
-                <div style="text-align:center;padding:30px;color:var(--gray);">
-                    <div style="font-size:32px;margin-bottom:8px;">📦</div>
-                    <div>Nenhum produto encontrado</div>
-                </div>`;
+            container.innerHTML = '<div class="produto-suggestion-item" style="color:var(--gray);">Nenhum produto encontrado</div>';
+            container.style.display = 'block';
             return;
         }
 
         container.innerHTML = lista.map(p => {
             const estoque = p.estoque_total ?? p.estoque ?? 0;
             const semEstoque = estoque <= 0;
-
+            
             let estoqueBadge = '';
-            if (semEstoque)      estoqueBadge = '<span class="estoque-badge estoque-zero">Sem estoque</span>';
-            else if (estoque <= 5) estoqueBadge = `<span class="estoque-badge estoque-baixo">${estoque} un</span>`;
-            else                   estoqueBadge = `<span class="estoque-badge estoque-ok">${estoque} un</span>`;
+            if (semEstoque)      estoqueBadge = '<span class="estoque-badge estoque-zero" style="font-size:9px;">Sem estoque</span>';
+            else if (estoque <= 5) estoqueBadge = `<span class="estoque-badge estoque-baixo" style="font-size:9px;">${estoque} un</span>`;
+            else                   estoqueBadge = `<span class="estoque-badge estoque-ok" style="font-size:9px;">${estoque} un</span>`;
 
-            // Badge para match de serial/IMEI
             const serialBadge = p._serialMatch
                 ? `<br><small style="color:#2563eb;font-weight:600;">🔢 Serial/IMEI: ${p._serialMatch}</small>`
                 : '';
 
             return `
-                <div class="produto-item ${semEstoque ? 'sem-estoque' : ''}"
-                     ${semEstoque ? '' : `onclick="selecionarProduto(${p.id})"`}>
-                    <div class="produto-info">
-                        <h4>${p.nome}</h4>
-                        <small>Cód: ${p.codigo || p.id} ${estoqueBadge}
-                            ${p.categoria ? `| ${p.categoria}` : ''}
-                        </small>
+                <div class="produto-suggestion-item ${semEstoque ? 'sem-estoque' : ''}"
+                     ${semEstoque ? '' : `onclick="selecionarSugestaoProduto(${p.id})"`}>
+                    <div>
+                        <strong>${p.nome}</strong><br>
+                        <small>Cód: ${p.codigo || p.id} | ${p.categoria || 'Sem Categoria'} ${estoqueBadge}</small>
                         ${serialBadge}
                     </div>
-                    <div class="produto-preco">${formatarMoeda(p.valor_venda)}</div>
+                    <div style="font-weight: 700; color: var(--primary); font-size:13px;">${formatarMoeda(p.valor_venda)}</div>
                 </div>`;
         }).join('');
+        container.style.display = 'block';
     }
+
+    window.selecionarSugestaoProduto = async (produtoId) => {
+        document.getElementById('searchProdutoVenda').value = '';
+        document.getElementById('produtoSuggestions').style.display = 'none';
+        await selecionarProduto(produtoId);
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-produto-wrapper')) {
+            const suggestions = document.getElementById('produtoSuggestions');
+            if (suggestions) suggestions.style.display = 'none';
+        }
+    });
+
+    document.getElementById('searchProdutoVenda')?.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+            const termo = e.target.value.trim();
+            if (!termo) return;
+            
+            const termoLower = termo.toLowerCase();
+            const exactMatch = produtos.find(p => 
+                p.codigo?.toLowerCase() === termoLower || 
+                p.id.toString() === termo
+            );
+            
+            if (exactMatch) {
+                await selecionarProduto(exactMatch.id);
+                e.target.value = '';
+                document.getElementById('produtoSuggestions').style.display = 'none';
+                return;
+            }
+            
+            try {
+                const { data: serials } = await supabaseClient
+                    .from('produtos_seriais')
+                    .select('produto_id')
+                    .or(`numero_serie.eq.${termo},imei.eq.${termo}`)
+                    .eq('status', 'disponivel')
+                    .limit(1);
+                
+                if (seriais && seriais.length > 0) {
+                    await selecionarProduto(seriais[0].produto_id);
+                    e.target.value = '';
+                    document.getElementById('produtoSuggestions').style.display = 'none';
+                } else {
+                    mostrarNotificacao('Produto ou Serial não encontrado!', 'warning');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    });
 
     // =====================================================
     // BUSCA COM SUPORTE A IMEI / SERIAL
@@ -225,9 +410,14 @@ document.addEventListener('DOMContentLoaded', () => {
         searchTimer = setTimeout(() => filtrarProdutos(termo), 280);
     });
 
+    document.getElementById('searchProdutoVenda')?.addEventListener('focus', (e) => {
+        const termo = e.target.value.trim();
+        filtrarProdutos(termo);
+    });
+
     async function filtrarProdutos(termo) {
         if (!termo) {
-            renderizarProdutos(produtos);
+            renderizarSugestoesProdutos(produtos);
             return;
         }
 
@@ -265,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Mesclar sem duplicatas
         const idsLocais = new Set(porNomeCodigo.map(p => p.id));
         const extras = porSerial.filter(p => !idsLocais.has(p.id));
-        renderizarProdutos([...porNomeCodigo, ...extras]);
+        renderizarSugestoesProdutos([...porNomeCodigo, ...extras]);
     }
 
     // =====================================================
@@ -382,28 +572,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const estoque = produto.estoque_total ?? produto.estoque ?? 0;
         if (estoque <= 0) { mostrarNotificacao('Produto sem estoque disponível!', 'error'); return; }
 
-        let exigeSerial = false;
-        if (usuario.config_loja?.habilitar_seriais !== false) {
-            try {
-                const { data: categoria } = await supabaseClient
-                    .from('categorias')
-                    .select('exige_serial')
-                    .eq('nome', produto.categoria)
-                    .maybeSingle();
-                exigeSerial = categoria?.exige_serial === true || produto.categoria === 'Celular';
-            } catch {
-                exigeSerial = produto.categoria === 'Celular';
-            }
+        let exigeIMEI = false;
+        try {
+            const { data: categoria } = await supabaseClient
+                .from('categorias')
+                .select('exige_imei')
+                .eq('nome', produto.categoria)
+                .maybeSingle();
+            exigeIMEI = categoria?.exige_imei === true || produto.categoria === 'Celular';
+        } catch {
+            exigeIMEI = produto.categoria === 'Celular';
         }
 
-        if (exigeSerial) {
+        if (exigeIMEI) {
             const { data: seriais, error } = await supabaseClient
                 .from('produtos_seriais')
                 .select('*')
                 .eq('produto_id', produtoId)
                 .eq('status', 'disponivel');
 
-            if (error) { mostrarNotificacao('Erro ao verificar seriais!', 'error'); return; }
+            if (error) { mostrarNotificacao('Erro ao verificar IMEIs!', 'error'); return; }
 
             produtoSerialPendente = produto;
             seriaisDisponiveis    = seriais || [];
@@ -413,20 +601,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const container = document.getElementById('seriaisDisponiveis');
             if (seriaisDisponiveis.length === 0) {
-                container.innerHTML = '<p style="color:#dc2626;font-size:13px;">⚠️ Nenhum número de série disponível!</p>';
+                container.innerHTML = '<p style="color:#dc2626;font-size:13px;">⚠️ Nenhum IMEI disponível!</p>';
             } else {
                 container.innerHTML = `
-                    <strong>📱 Seriais disponíveis (${seriaisDisponiveis.length} un.):</strong>
+                    <strong>📱 IMEIs disponíveis (${seriaisDisponiveis.length} un.):</strong>
                     <ul style="margin-top:10px;max-height:150px;overflow-y:auto;padding:0;list-style:none;">
                         ${seriaisDisponiveis.map(s => `
-                            <li onclick="selecionarSerial('${s.numero_serie}')"
+                            <li onclick="selecionarSerial('${s.imei || ''}')"
                                 style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;
                                        display:flex;justify-content:space-between;align-items:center;border-radius:4px;"
                                 onmouseover="this.style.background='#f0f9ff'"
                                 onmouseout="this.style.background=''">
                                 <div>
-                                    <code>${s.numero_serie || 'N/A'}</code>
-                                    ${s.imei ? `<br><small>IMEI: ${s.imei}</small>` : ''}
+                                    <code>IMEI: ${s.imei || 'N/A'}</code>
+                                    ${s.numero_serie ? `<br><small>Serial: ${s.numero_serie}</small>` : ''}
                                 </div>
                                 <button style="background:#2563eb;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">
                                     Selecionar
@@ -434,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </li>`).join('')}
                     </ul>
                     <small style="color:var(--gray);margin-top:8px;display:block;">
-                        📝 Digite ou clique no serial acima para selecionar
+                        📝 Digite ou clique no IMEI acima para selecionar
                     </small>`;
             }
 
@@ -454,16 +642,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const numeroSerie = document.getElementById('numeroSerie').value.trim();
 
         if (!numeroSerie && seriaisDisponiveis.length > 0) {
-            mostrarNotificacao('Informe o número de série!', 'error');
+            mostrarNotificacao('Informe o IMEI!', 'error');
             return;
         }
 
         const serial = seriaisDisponiveis.find(s =>
-            s.numero_serie === numeroSerie || s.imei === numeroSerie
+            s.imei === numeroSerie
         );
 
         if (seriaisDisponiveis.length > 0 && !serial) {
-            mostrarNotificacao('Número de série inválido!', 'error');
+            mostrarNotificacao('IMEI inválido!', 'error');
             return;
         }
 
@@ -519,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             itemExistente.quantidade++;
-            itemExistente.subtotal = itemExistente.quantidade * itemExistente.valor_venda;
+            itemExistente.subtotal = (itemExistente.quantidade * itemExistente.valor_venda) - (itemExistente.desconto || 0) + (itemExistente.acrescimo || 0);
         } else {
             carrinho.push({
                 id:          produto.id,
@@ -528,6 +716,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 categoria:   produto.categoria,
                 valor_venda: produto.valor_venda || 0,
                 quantidade:  1,
+                desconto:    0,
+                acrescimo:   0,
                 subtotal:    produto.valor_venda || 0,
                 serial:      serial?.numero_serie || null,
                 imei:        serial?.imei || null,
@@ -546,31 +736,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (carrinho.length === 0) {
             container.innerHTML = `
-                <div style="text-align:center;padding:20px;color:var(--gray);">
-                    Clique nos produtos da lista para adicionar à venda
+                <div style="text-align:center;padding:80px 20px;color:#9ca3af;font-size:14px;">
+                    <span style="font-size: 40px; display: block; margin-bottom: 10px;">🛒</span>
+                    Utilize a barra de busca superior para adicionar produtos
                 </div>`;
             return;
         }
 
         container.innerHTML = carrinho.map((item, index) => `
             <div class="carrinho-item">
-                <div>
-                    <strong>${item.nome}</strong><br>
-                    <small>Cód: ${item.codigo || item.id}</small>
-                    ${item.serial ? `<br><small style="color:#2563eb;">🔢 Serial: <code>${item.serial}</code></small>` : ''}
-                    ${item.imei   ? `<br><small style="color:#6b7280;">📱 IMEI: ${item.imei}</small>` : ''}
+                <div class="carrinho-item-info">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 2px;">Produto</span>
+                    <strong>${item.nome}</strong>
+                    <small>Cód: ${item.codigo || item.id}
+                        ${item.serial ? `<br><span style="color:#2563eb;font-weight:600;">🔢 Serial: <code>${item.serial}</code></span>` : ''}
+                        ${item.imei   ? `<br><span style="color:#4b5563;">📱 IMEI: ${item.imei}</span>` : ''}
+                    </small>
                 </div>
-                <div>${formatarMoeda(item.valor_venda)}</div>
-                <div>
-                    <input type="number" min="1" value="${item.quantidade}"
-                           onchange="atualizarQuantidade(${index}, this.value)"
-                           style="width:60px;padding:5px;text-align:center;border:1px solid var(--border);border-radius:4px;"
-                           ${item.serial_id ? 'disabled' : ''}>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Unit.</span>
+                    <div class="carrinho-item-price">${formatarMoeda(item.valor_venda)}</div>
                 </div>
-                <div><strong>${formatarMoeda(item.subtotal)}</strong></div>
-                <button class="btn-remover" onclick="removerDoCarrinho(${index})">✕</button>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Qtd.</span>
+                    <div class="qtd-control">
+                        <button type="button" class="qtd-btn" onclick="alterarQuantidadeItem(${index}, -1)" ${item.serial_id ? 'disabled' : ''}>-</button>
+                        <input type="number" class="qtd-input" min="1" value="${item.quantidade}"
+                               onchange="atualizarQuantidade(${index}, this.value)"
+                               ${item.serial_id ? 'disabled' : ''}>
+                        <button type="button" class="qtd-btn" onclick="alterarQuantidadeItem(${index}, 1)" ${item.serial_id ? 'disabled' : ''}>+</button>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Desconto</span>
+                    <div class="discount-container">
+                        <span class="discount-prefix">R$</span>
+                        <input type="number" class="discount-input" min="0" step="0.01" value="${item.desconto || 0}"
+                               onchange="atualizarDescontoItem(${index}, this.value)"
+                               placeholder="0.00" title="Desconto no Produto (R$)">
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Acréscimo</span>
+                    <div class="discount-container">
+                        <span class="discount-prefix">R$</span>
+                        <input type="number" class="discount-input" min="0" step="0.01" value="${item.acrescimo || 0}"
+                               onchange="atualizarAcrescimoItem(${index}, this.value)"
+                               placeholder="0.00" title="Acréscimo no Produto (R$)">
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+                    <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Subtotal</span>
+                    <div class="carrinho-item-subtotal">${formatarMoeda(item.subtotal)}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
+                    <span style="font-size: 9px; font-weight: 700; color: transparent; user-select: none;">Ação</span>
+                    <button class="btn-remover-item" onclick="removerDoCarrinho(${index})" title="Remover item">✕</button>
+                </div>
             </div>`).join('');
     }
+
+    window.alterarQuantidadeItem = (index, delta) => {
+        const item = carrinho[index];
+        if (!item) return;
+        const novaQtd = (item.quantidade || 1) + delta;
+        atualizarQuantidade(index, novaQtd);
+    };
 
     window.atualizarQuantidade = (index, quantidade) => {
         quantidade = parseInt(quantidade);
@@ -580,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cartItem.serial_id) {
             mostrarNotificacao('Produtos com número de série têm quantidade limitada a 1!', 'error');
             cartItem.quantidade = 1;
-            cartItem.subtotal = cartItem.valor_venda;
+            cartItem.subtotal = cartItem.valor_venda - (cartItem.desconto || 0) + (cartItem.acrescimo || 0);
             renderizarCarrinho();
             calcularTotais();
             return;
@@ -595,7 +826,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         cartItem.quantidade = quantidade;
-        cartItem.subtotal   = quantidade * cartItem.valor_venda;
+        
+        const maxDesconto = quantidade * cartItem.valor_venda;
+        if ((cartItem.desconto || 0) > maxDesconto) {
+            cartItem.desconto = maxDesconto;
+            mostrarNotificacao(`Desconto do item ajustado para R$ ${maxDesconto.toFixed(2)} devido à alteração de quantidade.`, 'warning');
+        }
+        
+        cartItem.subtotal   = (quantidade * cartItem.valor_venda) - (cartItem.desconto || 0) + (cartItem.acrescimo || 0);
+        renderizarCarrinho();
+        calcularTotais();
+    };
+
+    window.atualizarDescontoItem = (index, desconto) => {
+        desconto = parseFloat(desconto);
+        if (isNaN(desconto) || desconto < 0) desconto = 0;
+
+        const cartItem = carrinho[index];
+        const maxDesconto = cartItem.quantidade * cartItem.valor_venda;
+        if (desconto > maxDesconto) {
+            mostrarNotificacao(`Desconto não pode ser maior que o subtotal (R$ ${maxDesconto.toFixed(2)})!`, 'error');
+            desconto = maxDesconto;
+        }
+
+        cartItem.desconto = desconto;
+        cartItem.subtotal = (cartItem.quantidade * cartItem.valor_venda) - desconto + (cartItem.acrescimo || 0);
+        renderizarCarrinho();
+        calcularTotais();
+    };
+
+    window.atualizarAcrescimoItem = (index, acrescimo) => {
+        acrescimo = parseFloat(acrescimo);
+        if (isNaN(acrescimo) || acrescimo < 0) acrescimo = 0;
+
+        const cartItem = carrinho[index];
+        cartItem.acrescimo = acrescimo;
+        cartItem.subtotal = (cartItem.quantidade * cartItem.valor_venda) - (cartItem.desconto || 0) + acrescimo;
         renderizarCarrinho();
         calcularTotais();
     };
@@ -607,15 +873,48 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function calcularTotais() {
-        const subtotal  = carrinho.reduce((s, i) => s + i.subtotal, 0);
-        const desconto  = parseFloat(document.getElementById('desconto')?.value)  || 0;
-        const acrescimo = parseFloat(document.getElementById('acrescimo')?.value) || 0;
-        const total     = Math.max(0, subtotal - desconto + acrescimo);
+        const subtotalOriginal = carrinho.reduce((s, i) => s + (i.quantidade * i.valor_venda), 0);
+        const descontoProdutos = carrinho.reduce((s, i) => s + (i.desconto || 0), 0);
+        const acrescimoProdutos = carrinho.reduce((s, i) => s + (i.acrescimo || 0), 0);
+        const descontoVenda    = parseFloat(document.getElementById('desconto')?.value)  || 0;
+        const acrescimo        = parseFloat(document.getElementById('acrescimo')?.value) || 0;
+        const total            = Math.max(0, subtotalOriginal - descontoProdutos - descontoVenda + acrescimo + acrescimoProdutos);
 
-        if (document.getElementById('subtotal'))      document.getElementById('subtotal').textContent      = formatarMoeda(subtotal);
-        if (document.getElementById('valorDesconto')) document.getElementById('valorDesconto').textContent = formatarMoeda(desconto);
-        if (document.getElementById('valorAcrescimo'))document.getElementById('valorAcrescimo').textContent= formatarMoeda(acrescimo);
-        if (document.getElementById('total'))         document.getElementById('total').textContent         = formatarMoeda(total);
+        if (document.getElementById('subtotal')) {
+            document.getElementById('subtotal').textContent = formatarMoeda(subtotalOriginal);
+        }
+        
+        const linhaDescProd = document.getElementById('linhaDescontoProdutos');
+        const valorDescProd = document.getElementById('valorDescontoProdutos');
+        if (linhaDescProd && valorDescProd) {
+            if (descontoProdutos > 0) {
+                linhaDescProd.style.display = 'flex';
+                valorDescProd.textContent = `- ${formatarMoeda(descontoProdutos)}`;
+            } else {
+                linhaDescProd.style.display = 'none';
+            }
+        }
+
+        const linhaAcresProd = document.getElementById('linhaAcrescimoProdutos');
+        const valorAcresProd = document.getElementById('valorAcrescimoProdutos');
+        if (linhaAcresProd && valorAcresProd) {
+            if (acrescimoProdutos > 0) {
+                linhaAcresProd.style.display = 'flex';
+                valorAcresProd.textContent = `+ ${formatarMoeda(acrescimoProdutos)}`;
+            } else {
+                linhaAcresProd.style.display = 'none';
+            }
+        }
+        
+        if (document.getElementById('valorDesconto')) {
+            document.getElementById('valorDesconto').textContent = formatarMoeda(descontoVenda);
+        }
+        if (document.getElementById('valorAcrescimo')) {
+            document.getElementById('valorAcrescimo').textContent = formatarMoeda(acrescimo);
+        }
+        if (document.getElementById('total')) {
+            document.getElementById('total').textContent = formatarMoeda(total);
+        }
     }
 
     document.getElementById('desconto')?.addEventListener('input',  calcularTotais);
@@ -630,6 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderizarCarrinho();
         calcularTotais();
         sessionStorage.removeItem('checkout_restaurante');
+        sessionStorage.removeItem('checkout_agendamento');
 
         document.getElementById('clienteId').value         = '';
         document.getElementById('searchCliente').value     = '';
@@ -642,7 +942,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
         formaPagamentoSelecionada = null;
 
-        renderizarProdutos(produtos);
+        const suggestions = document.getElementById('produtoSuggestions');
+        if (suggestions) suggestions.style.display = 'none';
     }
 
     document.getElementById('btnLimparVenda')?.addEventListener('click', () => {
@@ -681,41 +982,52 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnFinalizar) { btnFinalizar.disabled = true; btnFinalizar.textContent = '⏳ Processando...'; }
 
         try {
+            // Verificar caixa ativo novamente antes de criar venda
+            const caixaAtivo = await obterCaixaAtivo();
+            if (!caixaAtivo) {
+                mostrarNotificacao('❌ Venda não permitida: O caixa está fechado!', 'error');
+                if (btnFinalizar) { btnFinalizar.disabled = false; btnFinalizar.textContent = '✅ Finalizar Venda'; }
+                return;
+            }
+
             const dataVenda = getDataLocalBrasil();
 
-            const { data: venda, error: vendaError } = await supabaseClient
+            let insertData = {
+                cliente_id:       clienteId || null,
+                data:             dataVenda,
+                total:            total,
+                desconto:         desconto,
+                forma_pagamento:  formaPagamentoSelecionada,
+                observacao:       observacao
+                    ? `${observacao} | Acréscimo: R$ ${acrescimo.toFixed(2)}`
+                    : acrescimo > 0 ? `Acréscimo: R$ ${acrescimo.toFixed(2)}` : null,
+                usuario_id:       usuario.id,
+                data_finalizacao: new Date().toISOString(),
+                caixa_id:         caixaAtivo.id
+            };
+
+            let { data: venda, error: vendaError } = await supabaseClient
                 .from('saidas')
-                .insert([{
-                    cliente_id:       clienteId || null,
-                    data:             dataVenda,
-                    total:            total,
-                    desconto:         desconto,
-                    forma_pagamento:  formaPagamentoSelecionada,
-                    observacao:       observacao
-                        ? `${observacao} | Acréscimo: R$ ${acrescimo.toFixed(2)}`
-                        : acrescimo > 0 ? `Acréscimo: R$ ${acrescimo.toFixed(2)}` : null,
-                    usuario_id:       usuario.id,
-                    data_finalizacao: new Date().toISOString()
-                }])
+                .insert([insertData])
                 .select()
                 .single();
 
-            if (vendaError) throw vendaError;
-
-            // Se for checkout de restaurante, atualizar o status da mesa para livre no banco
-            const checkoutRestauranteStr = sessionStorage.getItem('checkout_restaurante');
-            if (checkoutRestauranteStr) {
-                try {
-                    const checkout = JSON.parse(checkoutRestauranteStr);
-                    await supabaseClient
-                        .from('mesas_comandas')
-                        .update({ status: 'livre', valor_acumulado: 0.00 })
-                        .eq('id', checkout.mesa_id);
-                    sessionStorage.removeItem('checkout_restaurante');
-                } catch (e) {
-                    console.error('Erro ao limpar mesa/comanda:', e);
+            if (vendaError) {
+                // Se der erro que indica que a coluna caixa_id não existe no banco, remove e tenta novamente
+                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.code === 'PGRST116')) {
+                    console.warn('⚠️ A coluna caixa_id não existe na tabela public.saidas. Retentando sem vincular caixa_id...');
+                    delete insertData.caixa_id;
+                    const retryResult = await supabaseClient
+                        .from('saidas')
+                        .insert([insertData])
+                        .select()
+                        .single();
+                    venda = retryResult.data;
+                    vendaError = retryResult.error;
                 }
             }
+
+            if (vendaError) throw vendaError;
 
             for (const item of carrinho) {
                 await supabaseClient.from('saida_itens').insert([{
@@ -753,6 +1065,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]);
             }
 
+            // Se for checkout de restaurante, atualizar o status da mesa para livre no banco e limpar itens
+            const checkoutRestauranteStr = sessionStorage.getItem('checkout_restaurante');
+            if (checkoutRestauranteStr) {
+                try {
+                    const checkout = JSON.parse(checkoutRestauranteStr);
+                    await supabaseClient
+                        .from('mesas_comandas')
+                        .update({ status: 'livre', valor_acumulado: 0.00, itens_carrinho: [] })
+                        .eq('id', checkout.mesa_id);
+                } catch (e) {
+                    console.error('Erro ao limpar mesa/comanda:', e);
+                }
+            }
+
+            // Se for checkout de agendamento, atualizar o status do agendamento para concluído no banco
+            const checkoutAgendamentoStr = sessionStorage.getItem('checkout_agendamento');
+            if (checkoutAgendamentoStr) {
+                try {
+                    const checkout = JSON.parse(checkoutAgendamentoStr);
+                    await supabaseClient
+                        .from('agendamentos')
+                        .update({ status: 'concluido' })
+                        .eq('id', checkout.agendamento_id);
+                    sessionStorage.removeItem('checkout_agendamento');
+                } catch (e) {
+                    console.error('Erro ao concluir agendamento:', e);
+                }
+            }
+
             mostrarNotificacao(`✅ Venda #${venda.id} finalizada com sucesso!`, 'success');
 
             // Feedback de status na página
@@ -776,6 +1117,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('btnFinalizarVenda')?.addEventListener('click', finalizarVenda);
+
+    function obterMotivoCancelamento(vendaId, infoText) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('modalCancelar');
+            const info = document.getElementById('cancelarInfo');
+            const input = document.getElementById('cancelarMotivoInput');
+            const btnFechar = document.getElementById('btnCancelarFechar');
+            const btnConfirmar = document.getElementById('btnCancelarConfirmar');
+
+            if (!modal || !info || !input || !btnFechar || !btnConfirmar) {
+                resolve(null);
+                return;
+            }
+
+            info.textContent = infoText;
+            input.value = '';
+            modal.style.display = 'flex';
+
+            const novoBtnFechar = btnFechar.cloneNode(true);
+            const novoBtnConfirmar = btnConfirmar.cloneNode(true);
+            btnFechar.parentNode.replaceChild(novoBtnFechar, btnFechar);
+            btnConfirmar.parentNode.replaceChild(novoBtnConfirmar, btnConfirmar);
+
+            novoBtnFechar.addEventListener('click', () => {
+                modal.style.display = 'none';
+                resolve(null);
+            });
+
+            novoBtnConfirmar.addEventListener('click', () => {
+                const motivo = input.value.trim();
+                if (!motivo) {
+                    mostrarNotificacao('Informe o motivo do cancelamento!', 'error');
+                    return;
+                }
+                modal.style.display = 'none';
+                resolve(motivo);
+            });
+        });
+    }
 
     // =====================================================
     // CANCELAR VENDA
@@ -804,13 +1184,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const motivo = prompt(
-                `⚠️ Cancelar Venda #${vendaId}\nCliente: ${venda?.clientes?.nome || '—'}\nTotal: ${formatarMoeda(venda?.total)}\n\nInforme o motivo:`
-            );
+            const infoText = `Cancelar Venda #${vendaId} - Cliente: ${venda?.clientes?.nome || '—'} - Total: ${formatarMoeda(venda?.total)}`;
+            const motivo = await obterMotivoCancelamento(vendaId, infoText);
             if (motivo === null) return;
-            if (!motivo.trim()) { mostrarNotificacao('Informe o motivo!', 'error'); return; }
-
-            if (!confirm(`Confirma o cancelamento da venda #${vendaId}?\n\nIsso irá estornar o estoque de todos os produtos.`)) return;
 
             const { data: itens } = await supabaseClient
                 .from('saida_itens')
@@ -891,99 +1267,138 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const cliente  = venda?.clientes || {};
-            const subtotal = (itens || []).reduce((s, i) => s + (i.subtotal || 0), 0);
-            const desconto = venda?.desconto || 0;
+            const originalSubtotal = (itens || []).reduce((s, i) => s + (i.quantidade * (i.valor_unitario || 0)), 0);
+            const descontoProdutos = (itens || []).reduce((s, i) => s + ((i.quantidade * (i.valor_unitario || 0)) - (i.subtotal || 0)), 0);
+            const descontoVenda = venda?.desconto || 0;
             const total    = venda?.total    || 0;
             const cancelada = venda?.cancelado;
             const horaVenda = new Date().toLocaleTimeString('pt-BR');
 
             document.getElementById('comprovanteBody').innerHTML = `
-                <div id="comprovante" style="padding:15px 5px;font-family:'Courier New',monospace;max-width:400px;margin:0 auto;font-size:14px;line-height:1.3;color:#000;box-sizing:border-box;">
+                <div id="comprovante" style="padding:15px 5px;font-family:'Courier New',monospace;max-width:400px;margin:0 auto;font-size:16px;line-height:1.3;color:#000;box-sizing:border-box;font-weight:bold;">
 
-                    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:10px;margin-bottom:12px;">
-                        <h2 style="margin:0;font-size:18px;font-weight:bold;">${configLoja.nome_fantasia || usuario.loja_nome || 'Aion ERP'}</h2>
-                        ${configLoja.cnpj     ? `<p style="margin:2px 0;font-size:13px;">CNPJ: ${configLoja.cnpj}</p>` : ''}
-                        ${configLoja.endereco ? `<p style="margin:2px 0;font-size:13px;">${configLoja.endereco}</p>` : ''}
-                        ${configLoja.telefone ? `<p style="margin:2px 0;font-size:13px;">Tel: ${configLoja.telefone}</p>` : ''}
-                        ${configLoja.email    ? `<p style="margin:2px 0;font-size:13px;">Email: ${configLoja.email}</p>` : ''}
+                    <!-- CABEÇALHO -->
+                    <div style="text-align:center;line-height:1.4;">
+                        <h2 style="margin:0;font-size:19px;font-weight:bold;text-transform:uppercase;">${configLoja.nome_fantasia || configLoja.nome || usuario.loja_nome || 'Aion ERP'}</h2>
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
+                        ${(configLoja.endereco) ? `<p style="margin:2px 0;font-size:15px;">${configLoja.endereco}${configLoja.numero ? ', ' + configLoja.numero : ''}</p>` : ''}
+                        ${(configLoja.telefone) ? `<p style="margin:2px 0;font-size:15px;">Telefone: ${configLoja.telefone}</p>` : ''}
+                        ${(configLoja.cnpj) ? `<p style="margin:2px 0;font-size:15px;">CNPJ: ${configLoja.cnpj}</p>` : ''}
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 
-                    <div style="text-align:center;margin-bottom:12px;">
-                        <h3 style="margin:0;font-size:15px;font-weight:bold;">${cancelada ? '⚠️ CANCELADO — ' : ''}COMPROVANTE DE VENDA</h3>
-                        <p style="margin:4px 0;font-size:13px;"><strong>Nº ${venda.id}</strong> | ${formatarData(venda.data)} às ${horaVenda}</p>
+                    <!-- DADOS DO PEDIDO -->
+                    <div style="font-size:15px;line-height:1.4;margin-bottom:8px;">
+                        <p style="margin:2px 0;">Data venda: ${formatarData(venda.data)} - ${venda.hora || horaVenda}</p>
+                        <h3 style="margin:2px 0;font-size:17px;font-weight:bold;">PEDIDO NÚMERO: ${venda.id}</h3>
+                        <p style="margin:2px 0;">Vendedor: ${venda.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
                         ${cancelada ? `
-                            <p style="color:#dc2626;margin-top:8px;font-size:13px;">
-                                <strong>VENDA CANCELADA</strong><br>
-                                Motivo: ${venda.motivo_cancelamento || 'Não informado'}<br>
-                                Cancelado em: ${venda.cancelado_em ? new Date(venda.cancelado_em).toLocaleString('pt-BR') : '-'}
+                            <p style="color:#dc2626;margin-top:6px;font-size:15px;font-weight:bold;">
+                                ⚠️ VENDA CANCELADA<br>
+                                Motivo: ${venda.motivo_cancelamento || 'Não informado'}
                             </p>` : ''}
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 
-                    <div style="margin-bottom:12px;font-size:13px;">
-                        <div style="border-top:1px dashed #000;margin-bottom:8px;"></div>
-                        <p style="margin:2px 0;"><strong>Vendedor:</strong> ${venda.usuarios?.nome || 'Sistema'}</p>
-                        <div style="border-top:1px dashed #eee;margin:6px 0;"></div>
-                        <h4 style="margin:0 0 6px;font-size:14px;font-weight:bold;">DADOS DO CLIENTE</h4>
-                        <p style="margin:2px 0;"><strong>Nome:</strong> ${cliente.nome || 'Cliente não informado'}</p>
-                        ${cliente.cpf_cnpj ? `<p style="margin:2px 0;"><strong>CPF/CNPJ:</strong> ${cliente.cpf_cnpj}</p>` : ''}
-                        ${cliente.telefone ? `<p style="margin:2px 0;"><strong>Tel:</strong> ${cliente.telefone}</p>` : ''}
-                        ${cliente.email    ? `<p style="margin:2px 0;"><strong>Email:</strong> ${cliente.email}</p>` : ''}
-                        ${cliente.endereco ? `<p style="margin:2px 0;"><strong>End.:</strong> ${cliente.endereco}, ${cliente.numero || ''} — ${cliente.cidade || ''}/${cliente.estado || ''}</p>` : ''}
+                    <!-- DADOS DO CLIENTE -->
+                    <div style="font-size:15px;line-height:1.4;margin-bottom:8px;">
+                        <p style="margin:2px 0;">Cliente: ${cliente.nome || ''}</p>
+                        <p style="margin:2px 0;">CPF: ${cliente.cpf_cnpj || ''}</p>
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 
+                    <!-- ITENS -->
                     <div style="margin-bottom:12px;">
-                        <div style="border-top:1px dashed #000;margin-bottom:8px;"></div>
-                        <h4 style="margin:0 0 6px;font-size:14px;font-weight:bold;">ITENS VENDIDOS</h4>
-                        <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.2;">
-                            <thead>
-                                <tr style="border-bottom:1px dashed #000;">
-                                    <th style="padding:4px 0;text-align:left;">Cod/Produto/Série</th>
-                                    <th style="padding:4px 0;text-align:center;width:40px;">Qtd</th>
-                                    <th style="padding:4px 0;text-align:right;width:90px;">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${(itens || []).map(item => `
-                                    <tr style="border-bottom:1px dashed #eee;">
-                                        <td style="padding:5px 0;vertical-align:top;">
-                                            <span style="font-size:11px;color:#555;">${item.produtos?.codigo || item.produto_id}</span><br>
-                                            <strong>${item.produtos?.nome || 'Produto'}</strong>
-                                            ${item.numero_serie ? `<br><small style="color:#2563eb;">🔢 Série: <strong>${item.numero_serie}</strong></small>` : ''}
-                                            ${item.imei ? `<br><small style="color:#6b7280;">📱 IMEI: ${item.imei}</small>` : ''}
-                                        </td>
-                                        <td style="padding:5px 0;vertical-align:top;text-align:center;">${item.quantidade}</td>
-                                        <td style="padding:5px 0;vertical-align:top;text-align:right;">${formatarMoeda(item.subtotal)}</td>
-                                    </tr>`).join('')}
-                            </tbody>
-                            <tfoot>
-                                <tr style="border-top:1px dashed #000;">
-                                    <td colspan="2" style="padding:6px 0 2px;text-align:right;">Subtotal:</td>
-                                    <td style="padding:6px 0 2px;text-align:right;">${formatarMoeda(subtotal)}</td>
-                                </tr>
-                                ${desconto > 0 ? `
-                                <tr>
-                                    <td colspan="2" style="padding:2px 0;text-align:right;">Desconto:</td>
-                                    <td style="padding:2px 0;text-align:right;">-${formatarMoeda(desconto)}</td>
-                                </tr>` : ''}
-                                <tr style="font-size:15px;font-weight:bold;">
-                                    <td colspan="2" style="padding:4px 0;text-align:right;border-top:1px dashed #000;">TOTAL:</td>
-                                    <td style="padding:4px 0;text-align:right;border-top:1px dashed #000;">${formatarMoeda(total)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                        <div style="font-weight:bold;margin-bottom:6px;font-size:15px;">ITENS:</div>
+                        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-bottom:2px;">
+                            <span style="width:30%;text-align:left;">Cod.</span>
+                            <span style="width:40%;text-align:center;">Qtd.</span>
+                            <span style="width:30%;text-align:right;">Total</span>
+                        </div>
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
+                        
+                        ${(itens || []).map(item => {
+                            const descItem = (item.quantidade * (item.valor_unitario || 0)) - (item.subtotal || 0);
+                            return `
+                            <div style="margin-bottom:12px;font-size:15px;line-height:1.3;">
+                                <div style="display:flex;justify-content:space-between;">
+                                    <span style="width:30%;text-align:left;">${item.produtos?.codigo || item.produto_id}</span>
+                                    <span style="width:40%;text-align:center;">${item.quantidade} x ${formatarMoeda(item.valor_unitario)}</span>
+                                    <span style="width:30%;text-align:right;">R$ ${parseFloat(item.subtotal || 0).toFixed(2)}</span>
+                                </div>
+                                <div style="text-transform:uppercase;font-weight:bold;margin-top:2px;">
+                                    ${item.produtos?.nome || 'Produto'}
+                                </div>
+                                ${descItem > 0 ? `
+                                <div style="font-size:13px;color:#dc2626;margin-top:2px;">
+                                    Desconto no produto: - ${formatarMoeda(descItem)}
+                                </div>` : ''}
+                                ${(item.numero_serie || item.imei) ? `
+                                <div style="font-size:13px;margin-top:2px;">
+                                    IMEI / n° Série: ${item.numero_serie || item.imei}
+                                </div>` : ''}
+                            </div>`;
+                        }).join('')}
+                        <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 
-                    <div style="margin-bottom:12px;font-size:13px;">
-                        <div style="border-top:1px dashed #000;margin-bottom:8px;"></div>
-                        <p style="margin:2px 0;"><strong>Forma de Pagamento:</strong> ${venda.forma_pagamento || '-'}</p>
-                        ${venda.observacao ? `<p style="margin:2px 0;"><strong>Observação:</strong> ${venda.observacao}</p>` : ''}
+                    <!-- PAGAMENTO / VALORES -->
+                    <div style="font-size:15px;line-height:1.4;margin-bottom:12px;">
+                        <div style="text-align:center;font-weight:bold;margin-bottom:6px;">PAGAMENTO</div>
+                        
+                        <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                            <span>Subtotal</span>
+                            <span>${formatarMoeda(originalSubtotal)}</span>
+                        </div>
+                        ${descontoProdutos > 0 ? `
+                        <div style="display:flex;justify-content:space-between;margin-bottom:2px;color:#dc2626;">
+                            <span>(-) Desc. Prod.</span>
+                            <span>- ${formatarMoeda(descontoProdutos)}</span>
+                        </div>
+                        ` : ''}
+                        ${descontoVenda > 0 ? `
+                        <div style="display:flex;justify-content:space-between;margin-bottom:2px;color:#dc2626;">
+                            <span>(-) Desc. Venda</span>
+                            <span>- ${formatarMoeda(descontoVenda)}</span>
+                        </div>
+                        ` : ''}
+                        
+                        <div style="border-top:1px solid #000;margin:6px 0;"></div>
+                        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:17px;margin-bottom:6px;">
+                            <span>TOTAL:</span>
+                            <span>${formatarMoeda(total)}</span>
+                        </div>
+                        <div style="border-top:1px solid #000;margin:6px 0;"></div>
+                        
+                        <p style="margin:2px 0;">Forma de pagamento: ${venda.forma_pagamento || '-'}</p>
+                        <p style="margin:2px 0;">Valor Pago: ${formatarMoeda(total)}</p>
                     </div>
 
-                    <div style="text-align:center;border-top:1px dashed #000;padding-top:10px;font-size:11px;line-height:1.2;">
-                        <p style="margin:4px 0;">${configLoja.mensagem_garantia || 'Produto com garantia de 90 dias contra defeitos de fabricação.'}</p>
-                        <p style="margin:4px 0;">Este documento é um comprovante de venda válido.</p>
-                        <p style="margin:4px 0;font-weight:bold;">Obrigado pela preferência! 😊</p>
+                    <!-- TERMOS DE GARANTIA E TROCAS -->
+                    <div style="border-top:1px solid #000;padding-top:10px;font-size:13px;line-height:1.4;text-align:left;">
+                        <p style="margin:4px 0;font-weight:bold;text-align:center;">GARANTIA DOS PRODUTOS</p>
+                        <br>
+                        <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
+                        <p style="margin:1px 0;">SANSUNG</p>
+                        <p style="margin:1px 0;">APPLE</p>
+                        <p style="margin:1px 0;">ACER</p>
+                        <p style="margin:1px 0;">LENOVO</p>
+                        <p style="margin:1px 0;">DELL</p>
+                        <p style="margin:1px 0;">HP</p>
+                        <br>
+                        <p style="margin:2px 0;font-weight:bold;">3 MESES PARA:</p>
+                        <p style="margin:1px 0;">XIONI</p>
+                        <br>
+                        <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
+                        <p style="margin:1px 0;">MOTOROLA</p>
+                        <br>
+                        <p style="margin:4px 0;font-weight:bold;text-align:center;">POLITICA DE TROCAS</p>
+                        <br>
+                        <p style="margin:2px 0;text-align:justify;">O prazo de troca dos produtos é de 7 dias úteis para qualquer defeito funcional, após esse prazo, procure um posto autorizado do fabricante, norma que se aplica aos produtos APPLE, SANSUNG, DELL, ACER, LENOVO, HP, LG, MOTOROLA</p>
+                        <br>
+                        <p style="margin:2px 0;font-weight:bold;text-align:center;">OBS: NÃO EFETUAMOS TROCA POR INSATISFAÇÃO</p>
                     </div>
+
                 </div>`;;
 
             document.getElementById('modalComprovante').style.display = 'flex';
@@ -1013,11 +1428,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     width: 100%;
                     max-width: 72mm;
                     margin: 0 auto;
-                    font-size: 14px;
+                    font-size: 16px;
                     line-height: 1.3;
                     box-sizing: border-box;
                     background: #fff;
                     color: #000;
+                    font-weight: bold;
                 }
                 @media print {
                     html, body {
@@ -1049,11 +1465,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     width: 100%;
                     max-width: 72mm;
                     margin: 0 auto;
-                    font-size: 14px;
+                    font-size: 16px;
                     line-height: 1.3;
                     box-sizing: border-box;
                     background: #fff;
                     color: #000;
+                    font-weight: bold;
                 }
                 @media print {
                     html, body {
@@ -1203,9 +1620,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalSerial').style.display = 'none';
             produtoSerialPendente = null;
         }
-        if (event.target === modalNovoCliente) {
-            fecharModalCliente();
-        }
+        // Removido fechamento de modalNovoCliente ao clicar fora
     };
 
     // =====================================================
@@ -1227,11 +1642,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // =====================================================
 
     window.selecionarProduto   = selecionarProduto;
+    window.selecionarSugestaoProduto = selecionarSugestaoProduto;
     window.selecionarSerial    = selecionarSerial;
     window.atualizarQuantidade = atualizarQuantidade;
+    window.alterarQuantidadeItem = alterarQuantidadeItem;
+    window.atualizarDescontoItem = atualizarDescontoItem;
+    window.atualizarAcrescimoItem = atualizarAcrescimoItem;
     window.removerDoCarrinho   = removerDoCarrinho;
     window.verComprovante      = verComprovante;
     window.cancelarVenda       = cancelarVenda;
 
     carregarDados();
+
+    // Sincronização em tempo real (Supabase Realtime)
+    try {
+        supabaseClient
+            .channel('schema-db-changes-saidas')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos' }, () => {
+                carregarDados();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => {
+                carregarDados();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'saidas' }, () => {
+                carregarDados();
+            })
+            .subscribe();
+    } catch (e) {
+        console.error('Erro ao assinar canais Realtime de saídas:', e);
+    }
 });

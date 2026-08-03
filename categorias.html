@@ -171,22 +171,28 @@
                     </ul>
                 </div>
                 
-                <div class="filters-container">
-                    <input type="text" id="searchCategoria" placeholder="Pesquisar categoria...">
-                    <select id="filtroStatus">
-                        <option value="">Todos</option>
-                        <option value="true">Ativas</option>
-                        <option value="false">Inativas</option>
-                    </select>
-                    <select id="filtroIMEI">
-                        <option value="">Todos</option>
-                        <option value="true">IMEI Obrigatório</option>
-                        <option value="false">IMEI Opcional</option>
-                    </select>
+                <div class="filters-container" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px; flex: 1; align-items: center;">
+                        <input type="text" id="searchCategoria" placeholder="Pesquisar categoria..." style="flex: 1; margin-bottom: 0;">
+                        <select id="filtroStatus" style="width: auto; margin-bottom: 0;">
+                            <option value="">Todos</option>
+                            <option value="true">Ativas</option>
+                            <option value="false">Inativas</option>
+                        </select>
+                        <select id="filtroIMEI" style="width: auto; margin-bottom: 0;">
+                            <option value="">Todos</option>
+                            <option value="true">IMEI Obrigatório</option>
+                            <option value="false">IMEI Opcional</option>
+                        </select>
+                    </div>
+                    <div class="export-actions">
+                        <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
+                        <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                    </div>
                 </div>
                 
                 <div class="table-container">
-                    <table>
+                    <table id="categoriasTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -261,7 +267,9 @@
     
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
+    <script src="js/export-helper.js"></script>
     <script src="js/categorias.js"></script>
-<script src="js/active-nav.js"></script>`n</body>
+<script src="js/active-nav.js"></script>
+</body>
 </html>
 

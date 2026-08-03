@@ -1522,3 +1522,62 @@ tr:hover td {
         display: block !important;
     }
 }
+
+/* ══ Estilos para Botões de Exportação (Excel & PDF) ══ */
+.btn-excel {
+    background: #107c41 !important; /* Cor oficial Excel */
+    color: white !important;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.btn-excel:hover {
+    background: #0d6334 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.btn-excel:active {
+    transform: translateY(0);
+}
+
+.btn-pdf {
+    background: #dc3545 !important; /* Cor vermelha para PDF */
+    color: white !important;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.btn-pdf:hover {
+    background: #bd2130 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.btn-pdf:active {
+    transform: translateY(0);
+}
+
+.export-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}

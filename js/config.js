@@ -42,7 +42,7 @@ if (typeof supabaseClient !== 'undefined' && !supabaseClient._isIntercepted) {
         // Tabelas que contêm a coluna loja_id no schema relacional
         const tablesWithLojaField = [
             'usuarios', 'clientes', 'produtos', 'categorias', 'entradas', 'saidas',
-            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas'
+            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas'
         ];
         
         if (tablesWithLojaField.includes(tableName)) {
@@ -418,3 +418,50 @@ window.serialJaExiste = serialJaExiste;
 window.registrarSerial = registrarSerial;
 window.marcarSerialComoUsado = marcarSerialComoUsado;
 window.reativarSerial = reativarSerial;
+
+// =====================================================
+// FUNÇÕES DE CONTROLE DE CAIXA
+// =====================================================
+async function obterCaixaAtivo() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('caixas')
+            .select('*')
+            .eq('status', 'aberto')
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (error) {
+            if (error.code === 'PGRST116' || error.status === 404) {
+                console.warn('⚠️ A tabela public.caixas não existe ou não foi configurada ainda.');
+            }
+            return null;
+        }
+
+        return data && data.length > 0 ? data[0] : null;
+    } catch (e) {
+        console.error('Erro ao consultar caixa ativo:', e);
+        return null;
+    }
+}
+
+async function obterUltimoCaixaFechado() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('caixas')
+            .select('*')
+            .eq('status', 'fechado')
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (error) return null;
+        return data && data.length > 0 ? data[0] : null;
+    } catch (e) {
+        console.error('Erro ao consultar último caixa fechado:', e);
+        return null;
+    }
+}
+
+// Exportar funções de caixa
+window.obterCaixaAtivo = obterCaixaAtivo;
+window.obterUltimoCaixaFechado = obterUltimoCaixaFechado;

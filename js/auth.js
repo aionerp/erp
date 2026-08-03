@@ -29,11 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 // Autenticar chamando a RPC segura (bypassa RLS)
-                const { data, error } = await supabaseClient
+                let response = await supabaseClient
                     .rpc('autenticar_usuario', {
                         p_email: email,
                         p_senha: senha
                     });
+                
+                let data = response.data;
+                let error = response.error;
+                
+                // Se a função autenticar_usuario não for encontrada (código PGRST202 ou status 404), tenta login_usuario
+                if (error && (error.code === 'PGRST202' || error.status === 404 || error.message?.includes('autenticar_usuario'))) {
+                    console.log('RPC autenticar_usuario não encontrada. Tentando login_usuario (fallback)...');
+                    const fallbackRes = await supabaseClient
+                        .rpc('login_usuario', {
+                            p_email: email,
+                            p_senha: senha
+                        });
+                    data = fallbackRes.data;
+                    error = fallbackRes.error;
+                }
                 
                 if (error) {
                     console.error('Erro na autenticação:', error);

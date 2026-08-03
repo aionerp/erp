@@ -758,6 +758,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
     
+    // Eventos de Exportação
+    document.getElementById('btnExportExcel')?.addEventListener('click', () => {
+        exportarTabelaParaExcel('estoqueTable', 'relatorio_estoque');
+    });
+    
+    document.getElementById('btnExportPDF')?.addEventListener('click', () => {
+        exportarTabelaParaPDF('estoqueTable', 'Relatório de Estoque', 'Lista de níveis de estoque de produtos');
+    });
+    
     // Inicializar
     await carregarProdutos();
     
