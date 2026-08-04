@@ -84,6 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let produtos = [];
     let clientes = [];
+    let colaboradores = [];
+    let categorias = [];
     let configLoja = {};
     let carrinho = [];
     let formaPagamentoSelecionada = null;
@@ -99,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function carregarDados() {
         try {
-            const [produtosRes, clientesRes, configRes, vendasRes] = await Promise.all([
+            const [produtosRes, clientesRes, configRes, vendasRes, categoriasRes] = await Promise.all([
                 supabaseClient
                     .from('produtos')
                     .select('*')
@@ -117,12 +119,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     .from('saidas')
                     .select('*, clientes(nome)')
                     .order('id', { ascending: false })
-                    .limit(100)
+                    .limit(100),
+                supabaseClient
+                    .from('categorias')
+                    .select('*')
+                    .order('nome')
+                    .then(res => res, err => ({ data: [], error: err }))
             ]);
 
             produtos   = produtosRes.data  || [];
             clientes   = clientesRes.data  || [];
             configLoja = configRes.data?.[0] || {};
+            categorias = (categoriasRes && categoriasRes.data) || [];
+            
+            // Carregar colaboradores de forma tolerante a falhas (só ativos)
+            try {
+                const colaboradoresRes = await supabaseClient
+                    .from('colaboradores')
+                    .select('*')
+                    .neq('ativo', false)
+                    .order('nome', { ascending: true });
+                
+                if (colaboradoresRes.error) throw colaboradoresRes.error;
+                colaboradores = colaboradoresRes.data || [];
+            } catch (colabErr) {
+                console.warn('Erro ao carregar colaboradores, prosseguindo sem eles:', colabErr);
+                colaboradores = [];
+            }
+
+            // Preencher dropdown de colaboradores
+            const colabSelect = document.getElementById('vendaColaborador');
+            if (colabSelect) {
+                colabSelect.innerHTML = '<option value="">-- Sem colaborador vinculado --</option>';
+                colaboradores.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = `${c.nome} ${c.sobrenome || ''} (${c.funcao || 'Colaborador'})`;
+                    colabSelect.appendChild(option);
+                });
+            }
 
             // Contador de produtos no placeholder
             const inputProd = document.getElementById('searchProdutoVenda');
@@ -195,7 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checkoutRestauranteStr) {
                 try {
                     const checkout = JSON.parse(checkoutRestauranteStr);
-                    mostrarNotificacao(`Carregando consumo da ${checkout.numero}: R$ ${checkout.valor.toFixed(2)}`, 'info');
+                    const valorMesa = parseFloat(checkout.valor || 0);
+                    mostrarNotificacao(`Carregando consumo da ${checkout.numero}: R$ ${valorMesa.toFixed(2)}`, 'info');
                     
                     const obsField = document.getElementById('observacao');
                     if (obsField) {
@@ -212,11 +248,32 @@ document.addEventListener('DOMContentLoaded', () => {
                                 categoria: 'Restaurante',
                                 valor_venda: item.valor_venda,
                                 quantidade: item.quantidade,
-                                subtotal: item.valor_venda * item.quantity || item.valor_venda * item.quantidade,
+                                subtotal: item.valor_venda * item.quantidade,
                                 serial: null,
                                 imei: null
                             };
                         });
+
+                        // Verificar se há lançamentos manuais adicionais (valor acumulado > soma dos produtos)
+                        const somaItens = checkout.itens.reduce((s, i) => s + ((i.valor_venda || 0) * (i.quantidade || 1)), 0);
+                        const diferenca = checkout.valor - somaItens;
+                        if (diferenca > 0.01) {
+                            let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
+                            if (!dummyProduct) {
+                                dummyProduct = { id: 999999, codigo: 'REST-MESA' };
+                            }
+                            carrinho.push({
+                                id: dummyProduct.id,
+                                nome: `Lançamentos Adicionais ${checkout.numero}`,
+                                codigo: 'REST-MESA',
+                                categoria: 'Restaurante',
+                                valor_venda: diferenca,
+                                quantidade: 1,
+                                subtotal: diferenca,
+                                serial: null,
+                                imei: null
+                            });
+                        }
                     } else {
                         // Caso contrário (lançamento manual de valor adicional), procuramos ou criamos o produto dummy
                         let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
@@ -251,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     calcularTotais();
                 } catch (e) {
                     console.error('Erro ao processar checkout_restaurante:', e);
+                }
             }
 
             // === VERIFICAR CHECKOUT AGENDAMENTO ===
@@ -258,7 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checkoutAgendamentoStr) {
                 try {
                     const checkout = JSON.parse(checkoutAgendamentoStr);
-                    mostrarNotificacao(`Carregando agendamento: ${checkout.servico_nome} - R$ ${checkout.valor.toFixed(2)}`, 'info');
+                    const valorAgend = parseFloat(checkout.valor || 0);
+                    mostrarNotificacao(`Carregando agendamento: ${checkout.servico_nome} - R$ ${valorAgend.toFixed(2)}`, 'info');
                     
                     const obsField = document.getElementById('observacao');
                     if (obsField) {
@@ -411,6 +470,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('searchProdutoVenda')?.addEventListener('focus', (e) => {
+        const termo = e.target.value.trim();
+        filtrarProdutos(termo);
+    });
+
+    document.getElementById('searchProdutoVenda')?.addEventListener('click', (e) => {
         const termo = e.target.value.trim();
         filtrarProdutos(termo);
     });
@@ -938,6 +1002,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('acrescimo').value         = '0';
         document.getElementById('observacao').value        = '';
         document.getElementById('searchProdutoVenda').value = '';
+        const colabSelect = document.getElementById('vendaColaborador');
+        if (colabSelect) colabSelect.value = '';
 
         document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
         formaPagamentoSelecionada = null;
@@ -1003,7 +1069,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     : acrescimo > 0 ? `Acréscimo: R$ ${acrescimo.toFixed(2)}` : null,
                 usuario_id:       usuario.id,
                 data_finalizacao: new Date().toISOString(),
-                caixa_id:         caixaAtivo.id
+                caixa_id:         caixaAtivo.id,
+                colaborador_id:   document.getElementById('vendaColaborador')?.value ? parseInt(document.getElementById('vendaColaborador').value) : null
             };
 
             let { data: venda, error: vendaError } = await supabaseClient
@@ -1013,10 +1080,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 .single();
 
             if (vendaError) {
-                // Se der erro que indica que a coluna caixa_id não existe no banco, remove e tenta novamente
-                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.code === 'PGRST116')) {
-                    console.warn('⚠️ A coluna caixa_id não existe na tabela public.saidas. Retentando sem vincular caixa_id...');
+                // Se der erro que indica que a coluna caixa_id ou colaborador_id não existe no banco, remove e tenta novamente
+                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.message.includes('colaborador_id') || vendaError.code === 'PGRST116')) {
+                    console.warn('⚠️ Colunas não encontradas na tabela public.saidas. Retentando sem vincular...');
                     delete insertData.caixa_id;
+                    delete insertData.colaborador_id;
                     const retryResult = await supabaseClient
                         .from('saidas')
                         .insert([insertData])
@@ -1246,7 +1314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data: venda } = await supabaseClient
                 .from('saidas')
-                .select('*, clientes(nome,telefone,email,endereco,numero,cidade,estado,cpf_cnpj), usuarios(nome)')
+                .select('*, clientes(nome,telefone,email,endereco,numero,cidade,estado,cpf_cnpj), usuarios!usuario_id(nome)')
                 .eq('id', vendaId)
                 .single();
 
@@ -1640,6 +1708,83 @@ document.addEventListener('DOMContentLoaded', () => {
     // =====================================================
     // INICIALIZAR
     // =====================================================
+
+    // Cadastro Rápido de Produto no PDV
+    document.getElementById('btnAdicionarProdutoRapido')?.addEventListener('click', () => {
+        const modal = document.getElementById('modalNovoProduto');
+        if (!modal) return;
+
+        const select = document.getElementById('rapidoCategoria');
+        if (select) {
+            select.innerHTML = '<option value="">Selecione a Categoria</option>' +
+                categorias.map(c => `<option value="${c.nome}" data-id="${c.id}">${c.nome}</option>`).join('');
+        }
+
+        document.getElementById('produtoRapidoForm').reset();
+        modal.style.display = 'flex';
+    });
+
+    document.getElementById('btnCancelarNovoProduto')?.addEventListener('click', () => {
+        document.getElementById('modalNovoProduto').style.display = 'none';
+    });
+
+    document.querySelector('.close-novo-produto')?.addEventListener('click', () => {
+        document.getElementById('modalNovoProduto').style.display = 'none';
+    });
+
+    document.getElementById('btnSalvarNovoProduto')?.addEventListener('click', async () => {
+        const codigo = document.getElementById('rapidoCodigo').value.trim();
+        const nome = document.getElementById('rapidoNome').value.trim();
+        const valorCompra = parseFloat(document.getElementById('rapidoValorCompra').value) || 0;
+        const valorVenda = parseFloat(document.getElementById('rapidoValorVenda').value) || 0;
+        
+        const catSelect = document.getElementById('rapidoCategoria');
+        const categoria = catSelect.value;
+        const categoriaOption = catSelect.options[catSelect.selectedIndex];
+        const categoriaId = categoriaOption ? parseInt(categoriaOption.getAttribute('data-id')) : null;
+
+        if (!codigo || !nome || !valorVenda) {
+            mostrarNotificacao('Código, Nome e Valor de Venda são obrigatórios!', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('btnSalvarNovoProduto');
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('produtos')
+                .insert([{
+                    codigo,
+                    nome,
+                    valor_compra: valorCompra,
+                    valor_venda: valorVenda,
+                    categoria,
+                    categoria_id: categoriaId,
+                    estoque_total: 0,
+                    ativo: true,
+                    loja_id: usuario.loja_id
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            mostrarNotificacao('Produto cadastrado com sucesso!', 'success');
+            document.getElementById('modalNovoProduto').style.display = 'none';
+
+            // Adicionar ao array de produtos local e selecionar/adicionar ao carrinho
+            produtos.push(data);
+            await selecionarProduto(data.id);
+        } catch (error) {
+            console.error('Erro ao cadastrar produto rápido:', error);
+            mostrarNotificacao('Erro ao cadastrar produto', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Salvar e Adicionar';
+        }
+    });
 
     window.selecionarProduto   = selecionarProduto;
     window.selecionarSugestaoProduto = selecionarSugestaoProduto;

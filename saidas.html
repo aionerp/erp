@@ -561,16 +561,17 @@
 
             <div class="pdv-busca-top">
                 <!-- Cliente Selection -->
-                <div class="top-search-box search-cliente" style="flex: 1;">
-                    <input type="text" id="searchCliente" class="top-search-input" placeholder="👤 Buscar Cliente (opcional)..." autocomplete="off">
-                    <button type="button" id="btnAdicionarClienteRapido" title="Cadastrar Novo Cliente" style="background: #10b981; color: white; border: none; border-radius: 8px; width: 38px; height: 38px; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s;">➕</button>
+                <div class="top-search-box search-cliente" style="flex: 1; display: flex; gap: 8px;">
+                    <input type="text" id="searchCliente" class="top-search-input" placeholder="👤 Buscar Cliente (opcional)..." autocomplete="off" style="flex: 1;">
+                    <button type="button" id="btnAdicionarClienteRapido" title="Cadastrar Novo Cliente" style="background: #10b981; color: white; border: none; border-radius: 8px; width: 38px; height: 38px; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s; box-sizing: border-box;">➕</button>
                     <div id="clienteSuggestions" class="cliente-suggestions"></div>
                 </div>
                 <input type="hidden" id="clienteId">
 
                 <!-- Produto Selection -->
-                <div class="top-search-box search-produto-wrapper" style="flex: 1.5;">
-                    <input type="text" id="searchProdutoVenda" class="top-search-input" placeholder="🔍 Informe o cód. de barras, código ou serial..." autocomplete="off">
+                <div class="top-search-box search-produto-wrapper" style="flex: 1.5; display: flex; gap: 8px;">
+                    <input type="text" id="searchProdutoVenda" class="top-search-input" placeholder="🔍 Informe o cód. de barras, código ou serial..." autocomplete="off" style="flex: 1;">
+                    <button type="button" id="btnAdicionarProdutoRapido" title="Cadastrar Novo Produto" style="background: #1a73e8; color: white; border: none; border-radius: 8px; width: 38px; height: 38px; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s; box-sizing: border-box;">➕</button>
                     <div id="produtoSuggestions" class="produto-suggestions"></div>
                 </div>
             </div>
@@ -681,6 +682,12 @@
                             <span>Cheque</span>
                         </button>
                     </div>
+
+                    <!-- Colaborador / Vendedor -->
+                    <span class="label-section">Colaborador / Vendedor</span>
+                    <select id="vendaColaborador" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background-color: #fff; margin-bottom: 12px; font-size: 13px;">
+                        <option value="">-- Sem colaborador vinculado --</option>
+                    </select>
 
                     <!-- Observação -->
                     <span class="label-section">Observações</span>
@@ -812,6 +819,48 @@
     </div>
 </div>
 
+<!-- ══ Modal: Cadastrar Novo Produto ══════════════ -->
+<div id="modalNovoProduto" class="modal" style="z-index: 11000;">
+    <div class="modal-content" style="max-width:450px; width:90%;">
+        <div class="modal-header">
+            <h2>📦 Cadastrar Novo Produto</h2>
+            <span class="close-novo-produto" style="cursor:pointer; font-size:24px;">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="produtoRapidoForm">
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">Código *</label>
+                    <input type="text" id="rapidoCodigo" required placeholder="Ex: COD-123" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; box-sizing:border-box;">
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">Nome *</label>
+                    <input type="text" id="rapidoNome" required placeholder="Nome do produto" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; box-sizing:border-box;">
+                </div>
+                <div class="form-row" style="display:flex; gap:10px; margin-bottom:12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">Valor Compra (R$)</label>
+                        <input type="number" step="0.01" id="rapidoValorCompra" value="0.00" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">Valor Venda (R$)</label>
+                        <input type="number" step="0.01" id="rapidoValorVenda" value="0.00" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">Categoria</label>
+                    <select id="rapidoCategoria" style="width: 100%; height: 38px; border-radius: 6px; border: 1px solid var(--border); padding: 8px; font-size:13px;">
+                        <option value="">Carregando categorias...</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer" style="display:flex; gap:10px; justify-content:flex-end; padding:15px; border-top:1px solid var(--border);">
+            <button class="btn-warning" id="btnCancelarNovoProduto" style="border:none; padding:10px 20px; border-radius:6px; font-weight:600; cursor:pointer;">Cancelar</button>
+            <button class="btn-success" id="btnSalvarNovoProduto" style="border:none; padding:10px 20px; border-radius:6px; font-weight:600; cursor:pointer; background:#1a73e8; color:#fff;">Salvar e Adicionar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Cancelar Venda -->
 <div id="modalCancelar" class="modal" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;">
     <div class="modal-content" style="background: #fff; border-radius: 8px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); margin: auto;">
@@ -828,9 +877,9 @@
     </div>
 </div>
 
-<script src="js/config.js?v=1.0.9"></script>
-<script src="js/auth-check.js?v=1.0.9"></script>
-<script src="js/saidas.js?v=1.0.9"></script>
-<script src="js/active-nav.js?v=1.0.9"></script>
+<script src="js/config.js?v=1.1.2"></script>
+<script src="js/auth-check.js?v=1.1.2"></script>
+<script src="js/saidas.js?v=1.1.2"></script>
+<script src="js/active-nav.js?v=1.1.2"></script>
 </body>
 </html>

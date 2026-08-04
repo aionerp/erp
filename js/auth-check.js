@@ -71,8 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">${labelVendas}</a></li>
                 <li><a href="fechamento.html">💵 Fechamento de Caixa</a></li>
+                <li><a href="despesas.html">💸 Despesas</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
+                <li><a href="colaboradores.html">👥 Colaboradores</a></li>
                 ${extraLinksHtml}
                 <li><a href="relatorios.html">📈 Relatórios</a></li>
                 <li><a href="usuarios.html">👤 Usuários</a></li>
@@ -297,8 +299,10 @@ function filtrarMenuPorPermissao(usuario) {
         'entradas.html': 'entradas',
         'saidas.html': 'saidas',
         'fechamento.html': 'saidas',
+        'despesas.html': 'financeiro',
         'devolucoes.html': 'saidas',
         'fornecedores.html': 'fornecedores',
+        'colaboradores.html': 'colaboradores',
         'ordem-servico.html': 'ordens_servico',
         'agendamentos.html': 'dashboard',
         'mesas.html': 'saidas',
@@ -335,6 +339,11 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
     
     // Admin tem acesso total
     if (usuario.perfil === 'admin') return true;
+    
+    // Modulo colaboradores e financeiro restrito a admin e gerente
+    if (modulo === 'colaboradores' || modulo === 'financeiro') {
+        return usuario.perfil === 'gerente';
+    }
     
     // Verificar permissões do usuário
     const permissoes = usuario.permissoes || {};

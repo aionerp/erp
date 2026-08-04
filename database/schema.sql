@@ -137,6 +137,7 @@ CREATE TABLE public.entradas (
     usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
     data DATE NOT NULL DEFAULT CURRENT_DATE,
     total NUMERIC(10, 2) DEFAULT 0.00,
+    forma_pagamento VARCHAR(50) DEFAULT 'Dinheiro',
     observacao TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -181,7 +182,8 @@ CREATE TABLE public.saidas (
     motivo_cancelamento TEXT,
     data_finalizacao TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     observacao TEXT,
-    caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL
+    caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL,
+    colaborador_id INTEGER REFERENCES public.colaboradores(id) ON DELETE SET NULL
 );
 
 -- 10. ITENS DE SAÍDA
@@ -257,6 +259,45 @@ CREATE TABLE public.mesas_comandas (
     CONSTRAINT unique_numero_tipo_por_loja UNIQUE (loja_id, numero, tipo)
 );
 
+-- 15. TABELA DE COLABORADORES
+CREATE TABLE public.colaboradores (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    nome VARCHAR(100) NOT NULL,
+    sobrenome VARCHAR(100),
+    data_nascimento DATE,
+    telefone VARCHAR(50),
+    funcao VARCHAR(100),
+    comissao NUMERIC(5, 2) DEFAULT 0.00,
+    ativo BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 16. TABELA DE DESPESAS
+CREATE TABLE public.despesas (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    descricao VARCHAR(255) NOT NULL,
+    valor NUMERIC(10, 2) NOT NULL,
+    data DATE NOT NULL DEFAULT CURRENT_DATE,
+    categoria VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'pago' CHECK (status IN ('pago', 'pendente')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 17. TABELA DE BOLETOS A PAGAR
+CREATE TABLE public.boletos_pagar (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    fornecedor_id INTEGER REFERENCES public.clientes(id) ON DELETE SET NULL,
+    entrada_id INTEGER REFERENCES public.entradas(id) ON DELETE CASCADE,
+    data_vencimento DATE NOT NULL,
+    valor NUMERIC(10, 2) NOT NULL,
+    confirmado BOOLEAN DEFAULT false,
+    data_pagamento DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 15. VIEW COMPATIBILIDADE RETROATIVA
 CREATE OR REPLACE VIEW public.produtos_serial WITH (security_invoker = true) AS 
 SELECT id, produto_id, numero_serie AS serial, imei, disponivel, data_entrada 
@@ -281,6 +322,9 @@ ALTER TABLE public.config_loja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agendamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mesas_comandas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.caixas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.colaboradores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.despesas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.boletos_pagar ENABLE ROW LEVEL SECURITY;
 
 -- Função auxiliar para obter o ID da loja a partir do cabeçalho HTTP
 CREATE OR REPLACE FUNCTION public.obter_loja_id_requisicao()
@@ -325,6 +369,15 @@ CREATE POLICY tenant_mesas_comandas_policy ON public.mesas_comandas
     FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 
 CREATE POLICY tenant_caixas_policy ON public.caixas
+    FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+
+CREATE POLICY tenant_colaboradores_policy ON public.colaboradores
+    FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+
+CREATE POLICY tenant_boletos_pagar_policy ON public.boletos_pagar
+    FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+
+CREATE POLICY tenant_despesas_policy ON public.despesas
     FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 
 -- Políticas para tabelas dependentes (que não contêm loja_id diretamente)

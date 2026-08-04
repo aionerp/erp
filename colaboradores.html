@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colaboradores - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .filters-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .filters-container input {
+            flex: 1;
+            min-width: 250px;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .commission-badge {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body class="hold-transition">
+    <div class="dashboard">
+        <!-- Sidebar renderizada via auth-check.js -->
+        <aside class="sidebar"></aside>
+        
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="user-info">
+                    <span class="user-name" id="userName">Carregando...</span>
+                    <span class="user-perfil" id="userPerfil"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </header>
+            
+            <div class="content">
+                <div class="page-header">
+                    <div>
+                        <h1>👥 Colaboradores / Vendedores</h1>
+                        <p style="font-size: 13px; color: var(--gray); margin-top: 4px;">Gerencie colaboradores, técnicos, vendedores e comissões</p>
+                    </div>
+                    <button class="btn-primary" id="btnNovoColaborador">+ Novo Colaborador</button>
+                </div>
+                
+                <div class="panel-secao">
+                    <div class="filters-container">
+                        <input type="text" id="searchColaborador" placeholder="🔍 Pesquisar colaborador por nome ou função...">
+                        <button class="btn-primary" id="btnPesquisar" style="padding: 10px 20px; border-radius: 8px;">Pesquisar</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Função</th>
+                                    <th>Telefone</th>
+                                    <th>Comissão (%)</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th>Data Nascimento</th>
+                                    <th style="width: 100px; text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="colaboradoresTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--gray); padding: 40px 20px;">Carregando colaboradores...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal Novo/Editar Colaborador -->
+    <div id="modalColaborador" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="modalTitle">Novo Colaborador</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="colaboradorForm">
+                    <input type="hidden" id="colaboradorId">
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="required-label">Nome</label>
+                            <input type="text" id="nome" required placeholder="Nome">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Sobrenome</label>
+                            <input type="text" id="sobrenome" placeholder="Sobrenome">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Data de Nascimento</label>
+                            <input type="date" id="data_nascimento">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Telefone</label>
+                            <input type="text" id="telefone" placeholder="(00) 00000-0000">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Função / Cargo</label>
+                            <input type="text" id="funcao" placeholder="Ex: Vendedor, Técnico, Mecânico">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Comissão (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" id="comissao" value="0.00" placeholder="Ex: 5.00">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                            <input type="checkbox" id="ativo" checked style="width: 18px; height: 18px; margin: 0;">
+                            Colaborador Ativo (Disponível para vendas e comissões)
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-warning" id="btnCancelar">Cancelar</button>
+                <button class="btn-primary" id="btnSalvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js?v=1.1.2"></script>
+    <script src="js/auth-check.js?v=1.1.2"></script>
+    <script src="js/colaboradores.js?v=1.1.2"></script>
+    <script src="js/active-nav.js?v=1.1.2"></script>
+</body>
+</html>

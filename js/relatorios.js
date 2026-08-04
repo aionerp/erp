@@ -62,6 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Data padrão
     const hoje = new Date().toISOString().split('T')[0];
     document.getElementById('movimentoData').value = hoje;
+
+    const trintaDiasAtras = new Date();
+    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+    const trintaDiasAtrasStr = trintaDiasAtras.toISOString().split('T')[0];
+    
+    if (document.getElementById('colabDataInicio')) document.getElementById('colabDataInicio').value = trintaDiasAtrasStr;
+    if (document.getElementById('colabDataFim')) document.getElementById('colabDataFim').value = hoje;
     
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
@@ -69,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarMovimentoDiario();
         carregarFaturamento();
         carregarVendasProduto();
+        carregarComissoesColaborador();
     });
 });
 
@@ -166,9 +174,10 @@ async function carregarDashboard() {
             }
         }
 
-        const [vendasRes, entradasRes, saidasRes, clientesRes, produtosRes] = await Promise.all([
+        const [vendasRes, entradasRes, despesasRes, saidasRes, clientesRes, produtosRes] = await Promise.all([
             qVendas,
             supabaseClient.from('entradas').select('total'),
+            supabaseClient.from('despesas').select('valor'),
             qSaidasRes,
             supabaseClient.from('clientes').select('id', { count: 'exact' }).eq('ativo', true),
             supabaseClient.from('produtos').select('id', { count: 'exact' }).eq('ativo', true)
@@ -176,18 +185,36 @@ async function carregarDashboard() {
         
         const totalVendas = vendasRes.data?.reduce((sum, v) => sum + (v.total || 0), 0) || 0;
         const totalEntradas = entradasRes.data?.reduce((sum, e) => sum + (e.total || 0), 0) || 0;
+        const totalDespesas = despesasRes.data?.reduce((sum, d) => sum + (d.valor || 0), 0) || 0;
         const totalSaidas = saidasRes.data?.length || 0;
         const totalClientes = clientesRes.count || 0;
         const totalProdutos = produtosRes.count || 0;
         
         const ticketMedio = totalSaidas > 0 ? totalVendas / totalSaidas : 0;
+        const resultadoLiquido = totalVendas - totalEntradas - totalDespesas;
         
-        document.getElementById('kpiTotalVendas').textContent = `R$ ${totalVendas.toFixed(2)}`;
-        document.getElementById('kpiTotalEntradas').textContent = totalEntradas.toFixed(2);
+        document.getElementById('kpiTotalVendas').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVendas);
+        document.getElementById('kpiTotalEntradas').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalEntradas);
         document.getElementById('kpiTotalSaidas').textContent = totalSaidas;
         document.getElementById('kpiTotalClientes').textContent = totalClientes;
         document.getElementById('kpiTotalProdutos').textContent = totalProdutos;
-        document.getElementById('kpiTicketMedio').textContent = `R$ ${ticketMedio.toFixed(2)}`;
+        document.getElementById('kpiTicketMedio').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticketMedio);
+        document.getElementById('kpiTotalDespesas').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalDespesas);
+        
+        const resLiqElement = document.getElementById('kpiResultadoLiquido');
+        if (resLiqElement) {
+            resLiqElement.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(resultadoLiquido);
+            const card = document.getElementById('kpiResultadoLiquidoCard');
+            if (card) {
+                if (resultadoLiquido >= 0) {
+                    card.style.borderTopColor = '#28a745';
+                    resLiqElement.style.color = '#28a745';
+                } else {
+                    card.style.borderTopColor = '#dc3545';
+                    resLiqElement.style.color = '#dc3545';
+                }
+            }
+        }
         
         // Gráfico de vendas por mês
         const { data: vendasMes } = await qVendasMes;
@@ -692,6 +719,157 @@ async function carregarVendasProduto() {
     }
 }
 
+async function carregarComissoesColaborador() {
+    const container = document.getElementById('colaboradorContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align: center; padding: 20px;">Calculando comissões...</div>';
+
+    const dataInicio = document.getElementById('colabDataInicio')?.value;
+    const dataFim = document.getElementById('colabDataFim')?.value;
+
+    try {
+        // 1. Obter colaboradores
+        const { data: colabs, error: colabError } = await supabaseClient
+            .from('colaboradores')
+            .select('*');
+
+        if (colabError) throw colabError;
+
+        // 2. Obter vendas com seu respectivo colaborador_id
+        let querySales = supabaseClient
+            .from('saidas')
+            .select('id, total, colaborador_id, cancelado, data')
+            .eq('cancelado', false);
+
+        if (dataInicio) {
+            querySales = querySales.gte('data', dataInicio);
+        }
+        if (dataFim) {
+            querySales = querySales.lte('data', dataFim);
+        }
+
+        const { data: salesList, error: salesErrorList } = await querySales;
+        if (salesErrorList) throw salesErrorList;
+
+        if (!salesList || salesList.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma venda encontrada no período selecionado</div>';
+            // Zera dados de exportação
+            dadosExportacao.colaborador = [];
+            return;
+        }
+
+        // 3. Obter itens de saída para computar serviços e produtos
+        const saleIds = salesList.map(s => s.id);
+        const { data: saleItems, error: itemsError } = await supabaseClient
+            .from('saida_itens')
+            .select('saida_id, produto_id, quantidade, valor_unitario, subtotal, produtos(tipo, nome)')
+            .in('saida_id', saleIds);
+
+        if (itemsError) throw itemsError;
+
+        // 4. Calcular comissão para cada colaborador
+        const reportData = (colabs || []).map(colab => {
+            const colabSales = salesList.filter(s => s.colaborador_id === colab.id);
+            
+            let faturamentoTotal = 0;
+            let comissaoGerada = 0;
+            let qtdVendas = colabSales.length;
+
+            colabSales.forEach(sale => {
+                faturamentoTotal += parseFloat(sale.total || 0);
+
+                const items = (saleItems || []).filter(item => item.saida_id === sale.id);
+                items.forEach(item => {
+                    const subtotalItem = parseFloat(item.subtotal || item.valor_unitario * item.quantidade || 0);
+                    // Checa se o tipo cadastrado é servico
+                    const isServico = item.produtos?.tipo === 'servico';
+
+                    if (isServico) {
+                        // Serviços repassam o valor integral para o comissionado/técnico
+                        comissaoGerada += subtotalItem;
+                    } else {
+                        // Produtos ganham a porcentagem cadastrada
+                        const pctComissao = parseFloat(colab.comissao || 0) / 100;
+                        comissaoGerada += subtotalItem * pctComissao;
+                    }
+                });
+            });
+
+            return {
+                id: colab.id,
+                nome: `${colab.nome} ${colab.sobrenome || ''}`,
+                funcao: colab.funcao || 'Colaborador',
+                comissaoPct: parseFloat(colab.comissao || 0),
+                qtdVendas,
+                faturamentoTotal,
+                comissaoGerada
+            };
+        });
+
+        // Salvar dados globais para exportação
+        dadosExportacao.colaborador = reportData;
+
+        // Renderizar a tabela
+        let html = `
+            <div class="table-container" style="margin-top: 15px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Função</th>
+                            <th style="text-align: center;">Vendas Realizadas</th>
+                            <th style="text-align: right;">Comissão Base (%)</th>
+                            <th style="text-align: right;">Total Faturado (R$)</th>
+                            <th style="text-align: right; color: var(--primary); font-weight: bold;">Comissão Devida (R$)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        let totalFaturadoGeral = 0;
+        let totalComissaoGeral = 0;
+        let totalVendasRealizadas = 0;
+
+        reportData.forEach(row => {
+            totalFaturadoGeral += row.faturamentoTotal;
+            totalComissaoGeral += row.comissaoGerada;
+            totalVendasRealizadas += row.qtdVendas;
+
+            html += `
+                <tr>
+                    <td><strong>${row.nome}</strong></td>
+                    <td>${row.funcao}</td>
+                    <td style="text-align: center;">${row.qtdVendas}</td>
+                    <td style="text-align: right;"><span class="commission-badge">${row.comissaoPct.toFixed(2)}%</span></td>
+                    <td style="text-align: right;">R$ ${row.faturamentoTotal.toFixed(2)}</td>
+                    <td style="text-align: right; font-weight: bold; color: var(--primary);">R$ ${row.comissaoGerada.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        <tr style="background-color: #f9fafb; font-weight: bold; border-top: 2px solid var(--border);">
+                            <td colspan="2">TOTAL GERAL</td>
+                            <td style="text-align: center;">${totalVendasRealizadas}</td>
+                            <td style="text-align: right;">-</td>
+                            <td style="text-align: right;">R$ ${totalFaturadoGeral.toFixed(2)}</td>
+                            <td style="text-align: right; color: var(--primary); font-size: 15px;">R$ ${totalComissaoGeral.toFixed(2)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    } catch (e) {
+        console.error('Erro ao gerar relatório de comissões:', e);
+        container.innerHTML = `<div style="text-align: center; color: red; padding: 20px;">Erro ao carregar dados: ${e.message || e}</div>`;
+    }
+}
+
+window.carregarComissoesColaborador = carregarComissoesColaborador;
+
 // =====================================================
 // EXPORTAÇÕES
 // =====================================================
@@ -781,6 +959,23 @@ function exportarExcel(tipo) {
             nomeArquivo = `vendas_por_produto_${new Date().toISOString().split('T')[0]}`;
             break;
             
+        case 'colaborador':
+            if (!dadosExportacao.colaborador || dadosExportacao.colaborador.length === 0) {
+                mostrarNotificacao('Carregue o relatório de comissões primeiro!', 'warning');
+                return;
+            }
+            dados = [
+                ['RELATÓRIO DE COMISSÕES POR COLABORADOR'],
+                [`Período: ${document.getElementById('colabDataInicio').value || 'Início'} a ${document.getElementById('colabDataFim').value || 'Fim'}`],
+                [''],
+                ['Colaborador', 'Função', 'Vendas Realizadas', 'Comissão Base (%)', 'Total Faturado (R$)', 'Comissão Devida (R$)']
+            ];
+            dadosExportacao.colaborador.forEach(c => {
+                dados.push([c.nome, c.funcao, c.qtdVendas, `${c.comissaoPct.toFixed(2)}%`, `R$ ${c.faturamentoTotal.toFixed(2)}`, `R$ ${c.comissaoGerada.toFixed(2)}`]);
+            });
+            nomeArquivo = `relatorio_comissoes_colaborador_${new Date().toISOString().split('T')[0]}`;
+            break;
+            
         default:
             mostrarNotificacao('Tipo de exportação inválido', 'error');
             return;
@@ -856,6 +1051,16 @@ function exportarPDF(tipo) {
             titulo = 'Relatório de Vendas por Produto';
             const v = dadosExportacao.vendas;
             subtitulo = `Período: ${v?.dataInicio || 'início'} a ${v?.dataFim || 'fim'}`;
+            break;
+            
+        case 'colaborador':
+            if (!dadosExportacao.colaborador || dadosExportacao.colaborador.length === 0) {
+                mostrarNotificacao('Carregue o relatório de comissões primeiro!', 'warning');
+                return;
+            }
+            container = document.getElementById('colaboradorContainer');
+            titulo = 'Relatório de Comissões por Colaborador';
+            subtitulo = `Período: ${document.getElementById('colabDataInicio').value || 'Início'} a ${document.getElementById('colabDataFim').value || 'Fim'}`;
             break;
 
         default:

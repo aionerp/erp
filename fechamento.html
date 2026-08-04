@@ -327,8 +327,12 @@
                                     <span class="kpi-label">Vendas no Dia</span>
                                     <span class="kpi-value" id="kpiVendasDia">R$ 0,00</span>
                                 </div>
+                                <div class="kpi-card despesas-dia" style="border-top-color: #dc2626;">
+                                    <span class="kpi-label">Despesas no Dia</span>
+                                    <span class="kpi-value" id="kpiDespesasDia" style="color: #dc2626;">R$ 0,00</span>
+                                </div>
                                 <div class="kpi-card saldo-total">
-                                    <span class="kpi-label">Total em Caixa</span>
+                                    <span class="kpi-label">Total Líquido</span>
                                     <span class="kpi-value" id="kpiTotalCaixa">R$ 0,00</span>
                                 </div>
                                 <div class="kpi-card descontos">
@@ -361,7 +365,7 @@
                             
                             <!-- Vendas por Plano/Categoria -->
                             <div class="panel-secao">
-                                <h3>📈 Vendas por Plano / Categoria</h3>
+                                <h3>📦 Produtos Vendidos por Categoria</h3>
                                 <table class="tabela-caixa" id="tabelaPlanos">
                                     <thead>
                                         <tr>
@@ -376,21 +380,20 @@
                                 </table>
                             </div>
                             
-                            <!-- Aparelhos Vendidos (IMEI) -->
+                            <!-- Despesas do Dia -->
                             <div class="panel-secao secao-inteira">
-                                <h3>📱 Aparelhos Vendidos (IMEI)</h3>
-                                <table class="tabela-caixa" id="tabelaAparelhos">
+                                <h3>💸 Despesas Registradas no Dia</h3>
+                                <table class="tabela-caixa" id="tabelaDespesas">
                                     <thead>
                                         <tr>
-                                            <th>Produto</th>
-                                            <th>Marca / Modelo</th>
-                                            <th>Número de Série / IMEI</th>
-                                            <th>Data/Hora Venda</th>
-                                            <th style="text-align: right;">Valor Venda (R$)</th>
+                                            <th>Descrição / Categoria</th>
+                                            <th>Data Lançamento</th>
+                                            <th>Status</th>
+                                            <th style="text-align: right;">Valor (R$)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td colspan="5" style="text-align: center; color: var(--gray);">Nenhum aparelho vendido ou carregando...</td></tr>
+                                        <tr><td colspan="4" style="text-align: center; color: var(--gray);">Nenhuma despesa registrada ou carregando...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -417,9 +420,9 @@
         </main>
     </div>
     
-    <script src="js/config.js?v=1.0.9"></script>
-    <script src="js/auth-check.js?v=1.0.9"></script>
-    <script src="js/fechamento.js?v=1.0.9"></script>
-    <script src="js/active-nav.js?v=1.0.9"></script>
+    <script src="js/config.js?v=1.1.2"></script>
+    <script src="js/auth-check.js?v=1.1.2"></script>
+    <script src="js/fechamento.js?v=1.1.2"></script>
+    <script src="js/active-nav.js?v=1.1.2"></script>
 </body>
 </html>

@@ -294,6 +294,11 @@
                         <h3>Vendas por Produto</h3>
                         <p>Ranking de produtos</p>
                     </div>
+                    <div class="card-relatorio" onclick="abrirAba('colaborador')">
+                        <div class="icon">👥</div>
+                        <h3>Comissões</h3>
+                        <p>Faturamento e comissão por colaborador</p>
+                    </div>
                 </div>
                 
                 <!-- Abas de Relatórios -->
@@ -302,6 +307,7 @@
                     <button class="tab-btn" data-tab="movimento" onclick="abrirAba('movimento')">📋 Movimento Diário</button>
                     <button class="tab-btn" data-tab="faturamento" onclick="abrirAba('faturamento')">💰 Faturamento</button>
                     <button class="tab-btn" data-tab="vendas" onclick="abrirAba('vendas')">📦 Vendas por Produto</button>
+                    <button class="tab-btn" data-tab="colaborador" onclick="abrirAba('colaborador')">👥 Comissões</button>
                 </div>
                 
                 <!-- Tab: Dashboard -->
@@ -310,7 +316,7 @@
                         <div class="dashboard-kpi" id="kpiContainer">
                             <div class="kpi-card primary">
                                 <div class="kpi-icon">💰</div>
-                                <div class="kpi-value" id="kpiTotalVendas">R$ 0</div>
+                                <div class="kpi-value" id="kpiTotalVendas">R$ 0,00</div>
                                 <div class="kpi-label">Total de Vendas</div>
                             </div>
                             <div class="kpi-card success">
@@ -319,14 +325,14 @@
                                 <div class="kpi-label">Produtos Vendidos</div>
                             </div>
                             <div class="kpi-card danger">
-                                <div class="kpi-icon">🔄</div>
-                                <div class="kpi-value" id="kpiTotalEntradas">0</div>
-                                <div class="kpi-label">Total de Entradas</div>
+                                <div class="kpi-icon">📥</div>
+                                <div class="kpi-value" id="kpiTotalEntradas">R$ 0,00</div>
+                                <div class="kpi-label">Compras (Entradas)</div>
                             </div>
                             <div class="kpi-card warning">
                                 <div class="kpi-icon">📤</div>
                                 <div class="kpi-value" id="kpiTotalSaidas">0</div>
-                                <div class="kpi-label">Total de Saídas</div>
+                                <div class="kpi-label">Vendas Realizadas</div>
                             </div>
                             <div class="kpi-card info">
                                 <div class="kpi-icon">👥</div>
@@ -335,8 +341,18 @@
                             </div>
                             <div class="kpi-card primary">
                                 <div class="kpi-icon">📊</div>
-                                <div class="kpi-value" id="kpiTicketMedio">R$ 0</div>
+                                <div class="kpi-value" id="kpiTicketMedio">R$ 0,00</div>
                                 <div class="kpi-label">Ticket Médio</div>
+                            </div>
+                            <div class="kpi-card danger" style="border-top-color: #dc3545;">
+                                <div class="kpi-icon">💸</div>
+                                <div class="kpi-value" id="kpiTotalDespesas">R$ 0,00</div>
+                                <div class="kpi-label">Total de Despesas</div>
+                            </div>
+                            <div class="kpi-card success" id="kpiResultadoLiquidoCard" style="border-top-color: #28a745;">
+                                <div class="kpi-icon">📈</div>
+                                <div class="kpi-value" id="kpiResultadoLiquido">R$ 0,00</div>
+                                <div class="kpi-label">Resultado Líquido</div>
                             </div>
                         </div>
                         
@@ -412,6 +428,25 @@
                             </div>
                         </div>
                         <div id="vendasProdutoContainer">
+                            <div style="text-align: center; padding: 20px;">Selecione um período para visualizar</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Comissão por Colaborador -->
+                <div id="tab-colaborador" class="tab-content">
+                    <div class="relatorio-container">
+                        <div class="relatorio-header">
+                            <h2>👥 Comissão por Colaborador</h2>
+                            <div class="filtros-relatorio">
+                                <input type="date" id="colabDataInicio">
+                                <input type="date" id="colabDataFim">
+                                <button class="btn-primary" onclick="carregarComissoesColaborador()">Filtrar</button>
+                                <button class="btn-excel" onclick="exportarExcel('colaborador')">📊 Excel</button>
+                                <button class="btn-pdf" onclick="exportarPDF('colaborador')">📄 PDF</button>
+                            </div>
+                        </div>
+                        <div id="colaboradorContainer">
                             <div style="text-align: center; padding: 20px;">Selecione um período para visualizar</div>
                         </div>
                     </div>

@@ -42,7 +42,7 @@ if (typeof supabaseClient !== 'undefined' && !supabaseClient._isIntercepted) {
         // Tabelas que contêm a coluna loja_id no schema relacional
         const tablesWithLojaField = [
             'usuarios', 'clientes', 'produtos', 'categorias', 'entradas', 'saidas',
-            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas'
+            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas', 'colaboradores', 'despesas', 'boletos_pagar'
         ];
         
         if (tablesWithLojaField.includes(tableName)) {

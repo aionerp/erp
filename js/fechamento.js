@@ -250,6 +250,25 @@ async function carregarVendasCaixa(caixa) {
             if (error) throw error;
             vendas = data || [];
         }
+
+        // Carregar despesas do período do caixa
+        let despesas = [];
+        try {
+            let queryDespesas = supabaseClient
+                .from('despesas')
+                .select('*')
+                .gte('created_at', caixa.data_abertura);
+            if (caixa.data_fechamento) {
+                queryDespesas = queryDespesas.lte('created_at', caixa.data_fechamento);
+            }
+            const { data: despesasData, error: despesasError } = await queryDespesas;
+            if (!despesasError) {
+                despesas = despesasData || [];
+            }
+        } catch (e) {
+            console.warn('Erro ao carregar despesas do caixa:', e);
+        }
+        const totalDespesas = despesas.reduce((s, d) => s + (d.valor || 0), 0);
         
         // Calcular totais
         let totalVendas = 0;
@@ -276,12 +295,15 @@ async function carregarVendasCaixa(caixa) {
         
         // Exibir KPIs
         document.getElementById('kpiVendasDia').textContent = formatarMoeda(totalVendas);
-        document.getElementById('kpiTotalCaixa').textContent = formatarMoeda(caixa.saldo_inicial + totalVendas);
+        if (document.getElementById('kpiDespesasDia')) {
+            document.getElementById('kpiDespesasDia').textContent = formatarMoeda(totalDespesas);
+        }
+        document.getElementById('kpiTotalCaixa').textContent = formatarMoeda(caixa.saldo_inicial + totalVendas - totalDespesas);
         document.getElementById('kpiDescontos').textContent = formatarMoeda(totalDescontos);
         
-        // Sugerir saldo final na gaveta (Saldo Inicial + Vendas em Dinheiro)
-        const saldoFinalEsperado = caixa.saldo_inicial + dinheiroVendas;
-        document.getElementById('saldoFinal').value = saldoFinalEsperado.toFixed(2);
+        // Sugerir saldo final na gaveta (Saldo Inicial + Vendas em Dinheiro - Despesas)
+        const saldoFinalEsperado = caixa.saldo_inicial + dinheiroVendas - totalDespesas;
+        document.getElementById('saldoFinal').value = Math.max(0, saldoFinalEsperado).toFixed(2);
         
         // Se houver vendas, carregar itens
         let itens = [];
@@ -312,44 +334,6 @@ async function carregarVendasCaixa(caixa) {
             categorias[cat].total += item.subtotal || 0;
         });
 
-        // Agrupar aparelhos com IMEI
-        const itensComSerial = itens.filter(i => i.serial_id);
-        let aparelhos = [];
-        if (itensComSerial.length > 0) {
-            const serialIds = itensComSerial.map(i => i.serial_id);
-            let seriais = [];
-            try {
-                const { data, error } = await supabaseClient
-                    .from('produtos_seriais')
-                    .select('*')
-                    .in('id', serialIds);
-                    
-                if (!error) seriais = data || [];
-            } catch (e) {
-                console.error(e);
-            }
-            
-            const seriaisMap = {};
-            seriais.forEach(s => {
-                seriaisMap[s.id] = s;
-            });
-            
-            aparelhos = itensComSerial.map(item => {
-                const serialObj = seriaisMap[item.serial_id];
-                const serialText = serialObj 
-                    ? (serialObj.imei ? `IMEI: ${serialObj.imei}` : `S/N: ${serialObj.numero_serie}`) 
-                    : 'Não localizado';
-                return {
-                    nome: item.produtos?.nome || 'Produto Desconhecido',
-                    marca: item.produtos?.marca || '-',
-                    modelo: item.produtos?.modelo || '-',
-                    serialText: serialText,
-                    valor: item.valor_unitario,
-                    data_venda: formatarDataHora(vendas.find(v => v.id === item.saida_id)?.data_finalizacao)
-                };
-            });
-        }
-        
         // Guardar para impressão
         dadosVendasAtivo = {
             totalVendas,
@@ -357,13 +341,14 @@ async function carregarVendasCaixa(caixa) {
             totalItens,
             formasPagamento,
             categorias,
-            aparelhos
+            totalDespesas,
+            despesas
         };
 
         // Renderizar tabelas na tela
         renderizarFormasPagamento(formasPagamento);
         renderizarVendasPorPlano(categorias);
-        renderizarAparelhosIMEI(aparelhos);
+        renderizarDespesas(despesas);
         
     } catch (e) {
         console.error('Erro ao carregar vendas do caixa:', e);
@@ -421,22 +406,21 @@ function renderizarVendasPorPlano(categorias) {
     }).join('');
 }
 
-function renderizarAparelhosIMEI(aparelhos) {
-    const tbody = document.querySelector('#tabelaAparelhos tbody');
+function renderizarDespesas(despesas) {
+    const tbody = document.querySelector('#tabelaDespesas tbody');
     if (!tbody) return;
     
-    if (aparelhos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--gray);">Nenhum aparelho com IMEI vendido neste caixa</td></tr>`;
+    if (!despesas || despesas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray); padding: 15px;">Nenhuma despesa registrada neste período</td></tr>';
         return;
     }
     
-    tbody.innerHTML = aparelhos.map(ap => `
+    tbody.innerHTML = despesas.map(d => `
         <tr>
-            <td><strong>${ap.nome}</strong></td>
-            <td>${ap.marca} / ${ap.modelo}</td>
-            <td style="font-family: monospace; font-weight: 600; color: #2563eb;">${ap.serialText}</td>
-            <td>${ap.data_venda}</td>
-            <td style="text-align: right; font-weight: 700;">${formatarMoeda(ap.valor)}</td>
+            <td><strong>${d.descricao}</strong><br><small style="color:var(--gray);">${d.categoria || 'Sem categoria'}</small></td>
+            <td>${new Date(d.created_at || d.data).toLocaleDateString('pt-BR')}</td>
+            <td><span class="status-badge ${d.status === 'pago' ? 'aberto' : 'fechado'}" style="padding: 2px 8px; font-size: 11px;">${d.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
+            <td style="text-align: right; font-weight: 700; color: #dc2626;">- ${formatarMoeda(d.valor)}</td>
         </tr>
     `).join('');
 }
@@ -507,7 +491,8 @@ function imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador) {
     const totalVendas = formatarMoeda(dadosVendas.totalVendas);
     const totalDescontos = formatarMoeda(dadosVendas.totalDescontos);
     const totalItens = dadosVendas.totalItens;
-    const totalGeral = formatarMoeda(caixa.saldo_inicial + dadosVendas.totalVendas);
+    const totalDespesas = formatarMoeda(dadosVendas.totalDespesas || 0);
+    const totalGeral = formatarMoeda(caixa.saldo_inicial + dadosVendas.totalVendas - (dadosVendas.totalDespesas || 0));
     
     // Formas de pagamento html
     let pagamentosHtml = '';
@@ -543,6 +528,19 @@ function imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador) {
         `).join('');
     } else {
         planosHtml = '<tr><td colspan="2" class="text-center">Nenhum item vendido</td></tr>';
+    }
+
+    // Despesas html
+    let despesasHtml = '';
+    if (dadosVendas.despesas && dadosVendas.despesas.length > 0) {
+        despesasHtml = dadosVendas.despesas.map(d => `
+            <tr>
+                <td>${d.descricao}</td>
+                <td class="text-right">${formatarMoeda(d.valor)}</td>
+            </tr>
+        `).join('');
+    } else {
+        despesasHtml = '<tr><td colspan="2" class="text-center">Nenhuma despesa</td></tr>';
     }
 
     const janela = window.open('', '_blank');
@@ -684,7 +682,8 @@ function imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador) {
             <div class="kpi-section">
                 <div class="kpi-row"><span>Saldo Inicial:</span><span class="bold">${saldoInicial}</span></div>
                 <div class="kpi-row"><span>Vendas no Dia:</span><span class="bold">${totalVendas}</span></div>
-                <div class="kpi-row"><span>Total Esperado:</span><span class="bold">${totalGeral}</span></div>
+                <div class="kpi-row"><span>Despesas no Dia:</span><span class="bold" style="color:#dc2626;">-${totalDespesas}</span></div>
+                <div class="kpi-row"><span>Total Líquido:</span><span class="bold">${totalGeral}</span></div>
                 <div class="kpi-row"><span>Declarado Caixa:</span><span class="bold">${saldoFinal}</span></div>
                 <div class="kpi-row"><span>Descontos:</span><span class="bold">${totalDescontos}</span></div>
                 <div class="kpi-row"><span>Itens Vendidos:</span><span class="bold">${totalItens}</span></div>
@@ -704,6 +703,25 @@ function imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador) {
                         <tr style="border-top: 1px dashed #000; font-weight: bold;">
                             <td>TOTAL VENDAS</td>
                             <td class="text-right">${totalVendas}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="secao">
+                <h3>💸 Despesas</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descrição</th>
+                            <th class="text-right">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${despesasHtml}
+                        <tr style="border-top: 1px dashed #000; font-weight: bold;">
+                            <td>TOTAL DESPESAS</td>
+                            <td class="text-right">${totalDespesas}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -800,6 +818,23 @@ async function imprimirRelatorioPorCaixa(caixa) {
             vendas = data || [];
         }
 
+        // Buscar despesas para impressão histórica
+        let despesas = [];
+        try {
+            let qDesp = supabaseClient
+                .from('despesas')
+                .select('*')
+                .gte('created_at', caixa.data_abertura);
+            if (caixa.data_fechamento) {
+                qDesp = qDesp.lte('created_at', caixa.data_fechamento);
+            }
+            const { data: despesasData, error: errorDespesas } = await qDesp;
+            if (!errorDespesas) despesas = despesasData || [];
+        } catch (e) {
+            console.error('Erro ao buscar despesas para impressão:', e);
+        }
+        const totalDespesas = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+
         // 3. Totais e agregação
         let totalVendas = 0;
         let totalDescontos = 0;
@@ -878,7 +913,8 @@ async function imprimirRelatorioPorCaixa(caixa) {
             totalItens,
             formasPagamento,
             categorias,
-            aparelhos
+            totalDespesas,
+            despesas
         };
 
         // Chamar impressão

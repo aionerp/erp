@@ -23,14 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (error) throw error;
             listaProdutos = data || [];
-            
-            const select = document.getElementById('lancamentoProdutoSelect');
-            if (select) {
-                select.innerHTML = '<option value="">Selecione um produto...</option>' +
-                    listaProdutos.map(p => `<option value="${p.id}">${p.nome} - R$ ${p.valor_venda.toFixed(2)}</option>`).join('');
-            }
         } catch (error) {
-            console.error('Erro ao carregar lista de produtos no select:', error);
+            console.error('Erro ao carregar lista de produtos:', error);
         }
     }
 
@@ -91,7 +85,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor_acumulado);
             
             return `
-                <div class="mesa-card status-${m.status}" onclick="gerenciarConsumo(${m.id})">
+                <div class="mesa-card status-${m.status}" onclick="gerenciarConsumo(${m.id})" style="position: relative;">
+                    ${m.status === 'livre' ? `
+                        <button onclick="event.stopPropagation(); excluirMesa(${m.id}, '${m.numero}')" 
+                                style="position: absolute; top: 8px; right: 8px; border: none; background: rgba(220,38,38,0.1); color: #dc2626; cursor: pointer; font-size: 11px; padding: 4px 6px; border-radius: 6px; font-weight: bold; transition: background 0.15s;" 
+                                onmouseover="this.style.background='rgba(220,38,38,0.2)'"
+                                onmouseout="this.style.background='rgba(220,38,38,0.1)'"
+                                title="Excluir comanda/serviço">
+                            🗑️
+                        </button>
+                    ` : ''}
                     <div class="mesa-icon">${tipoIcones[m.tipo]}</div>
                     <div class="mesa-numero">${m.numero}</div>
                     <span class="mesa-status status-badge-${m.status}">${statusLabels[m.status]}</span>
@@ -152,9 +155,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('consumoStatus').value = m.status;
         document.getElementById('lancamentoValor').value = '';
 
-        // Reset product dropdown and quantity
-        const prodSelect = document.getElementById('lancamentoProdutoSelect');
-        if (prodSelect) prodSelect.value = '';
+        // Reset product search and quantity
+        const searchInput = document.getElementById('searchProdutoMesa');
+        if (searchInput) searchInput.value = '';
+        const hiddenId = document.getElementById('lancamentoProdutoId');
+        if (hiddenId) hiddenId.value = '';
         const qtdInput = document.getElementById('lancamentoProdutoQtd');
         if (qtdInput) qtdInput.value = '1';
 
@@ -195,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">${it.quantidade}</td>
                     <td style="padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--primary);">${subtotalFormatado}</td>
                     <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">
-                        <button type="button" class="btn-danger" onclick="removerItemMesa(${index = idx})" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none;">🗑️</button>
+                        <button type="button" class="btn-danger" onclick="removerItemMesa(${idx})" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none;">🗑️</button>
                     </td>
                 </tr>
             `;
@@ -360,15 +365,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Lançamento de Produto do Cardápio / Listagem
+    // Sugestões de produtos na mesa
+    document.getElementById('searchProdutoMesa')?.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        const suggestionsContainer = document.getElementById('mesaProdutoSuggestions');
+        if (!suggestionsContainer) return;
+
+        if (!query) {
+            suggestionsContainer.style.display = 'none';
+            suggestionsContainer.innerHTML = '';
+            return;
+        }
+
+        const filtrados = listaProdutos.filter(p => 
+            p.nome.toLowerCase().includes(query) || 
+            (p.codigo || '').toLowerCase().includes(query)
+        ).slice(0, 10);
+
+        if (filtrados.length === 0) {
+            suggestionsContainer.innerHTML = '<div style="padding: 10px; color: var(--gray); font-size: 13px;">Nenhum produto encontrado</div>';
+            suggestionsContainer.style.display = 'block';
+            return;
+        }
+
+        suggestionsContainer.innerHTML = filtrados.map(p => `
+            <div class="suggestion-item" data-id="${p.id}" data-nome="${p.nome}" style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                <span><strong>${p.nome}</strong> <small style="color: var(--gray);">(${p.codigo || 'Sem código'})</small></span>
+                <span style="font-weight: 600; color: var(--primary);">R$ ${p.valor_venda.toFixed(2)}</span>
+            </div>
+        `).join('');
+
+        suggestionsContainer.style.display = 'block';
+
+        suggestionsContainer.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.getElementById('lancamentoProdutoId').value = item.dataset.id;
+                document.getElementById('searchProdutoMesa').value = item.dataset.nome;
+                suggestionsContainer.style.display = 'none';
+                suggestionsContainer.innerHTML = '';
+            });
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const suggestionsContainer = document.getElementById('mesaProdutoSuggestions');
+        if (suggestionsContainer && !e.target.closest('#searchProdutoMesa') && !e.target.closest('#mesaProdutoSuggestions')) {
+            suggestionsContainer.style.display = 'none';
+        }
+    });
+
     document.getElementById('btnLancarProdutoMesa')?.addEventListener('click', async () => {
         const id = parseInt(document.getElementById('consumoMesaId').value);
         const m = mesas.find(item => item.id === id);
         if (!m) return;
 
-        const prodSelect = document.getElementById('lancamentoProdutoSelect');
-        const prodId = parseInt(prodSelect.value);
+        const prodId = parseInt(document.getElementById('lancamentoProdutoId').value);
         if (!prodId) {
-            mostrarNotificacao('Selecione um produto para lançar!', 'error');
+            mostrarNotificacao('Pesquise e selecione um produto para lançar!', 'error');
             return;
         }
 
@@ -423,7 +476,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoValor);
             document.getElementById('consumoStatus').value = novoStatus;
             
-            prodSelect.value = '';
+            document.getElementById('searchProdutoMesa').value = '';
+            document.getElementById('lancamentoProdutoId').value = '';
             qtdInput.value = '1';
 
             renderCarrinhoMesa(itens);
@@ -479,6 +533,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (event.target === document.getElementById('modalConsumo')) {
             document.getElementById('modalConsumo').style.display = 'none';
+        }
+    };
+
+    // Excluir Mesa/Comanda/Serviço
+    window.excluirMesa = async (id, numero) => {
+        if (!confirm(`Deseja realmente excluir a comanda/mesa "${numero}"?`)) return;
+
+        try {
+            const { error } = await supabaseClient
+                .from('mesas_comandas')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            mostrarNotificacao(`Comanda/serviço "${numero}" excluída com sucesso!`, 'success');
+            await carregarMesas();
+        } catch (error) {
+            console.error('Erro ao excluir comanda/serviço:', error);
+            mostrarNotificacao('Erro ao excluir comanda/serviço', 'error');
         }
     };
 

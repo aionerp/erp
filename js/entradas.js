@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!tbody) return;
         
         if (entradas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhuma entrada registrada</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhuma entrada registrada</td></tr>';
             return;
         }
         
@@ -378,6 +378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>Nº ${numeroNota} / Série ${serieNota}</td>
                     <td>${new Date(e.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                     <td>${e.clientes?.nome || 'Não Informado'}</td>
+                    <td><span style="background:#e8f0fe; color:#1a73e8; font-weight:600; padding:2px 8px; border-radius:12px; font-size:11px;">${e.forma_pagamento || 'Dinheiro'}</span></td>
                     <td style="font-weight:bold; color:var(--success);">R$ ${(e.total || 0).toFixed(2)}</td>
                     <td><small>${observacaoLimpa}</small></td>
                     <td>
@@ -575,6 +576,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dataCompra = document.getElementById('dataCompra').value;
         const dataLancamento = document.getElementById('dataLancamento').value;
         const observacaoOriginal = document.getElementById('observacao').value.trim();
+        const formaPagamento = document.getElementById('formaPagamento').value;
+        const dataVencimentoBoleto = document.getElementById('dataVencimentoBoleto').value;
         
         if (!numeroNota) {
             mostrarNotificacao('Informe o número da nota!', 'error');
@@ -586,6 +589,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (!dataCompra || !dataLancamento) {
             mostrarNotificacao('Informe as datas!', 'error');
+            return;
+        }
+        if (formaPagamento === 'Boleto' && !dataVencimentoBoleto) {
+            mostrarNotificacao('Informe a data de vencimento do boleto!', 'error');
             return;
         }
         if (carrinho.length === 0) {
@@ -769,12 +776,256 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('modalDetalhes').style.display = 'none';
     });
     
+    // Forma de Pagamento e Boleto vencimento toggle
+    document.getElementById('formaPagamento')?.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const group = document.getElementById('groupVencimentoBoleto');
+        if (group) {
+            if (val === 'Boleto') {
+                group.style.display = 'block';
+                document.getElementById('dataVencimentoBoleto').setAttribute('required', 'true');
+                const data30Dias = new Date();
+                data30Dias.setDate(data30Dias.getDate() + 30);
+                document.getElementById('dataVencimentoBoleto').value = data30Dias.toISOString().split('T')[0];
+            } else {
+                group.style.display = 'none';
+                document.getElementById('dataVencimentoBoleto').removeAttribute('required');
+                document.getElementById('dataVencimentoBoleto').value = '';
+            }
+        }
+    });
+
+    // Sub-abas de Notas e Boletos
+    document.getElementById('tabNotasFiscaisBtn')?.addEventListener('click', () => {
+        document.getElementById('tabNotasFiscaisBtn').classList.add('active');
+        document.getElementById('tabBoletosBtn').classList.remove('active');
+        document.getElementById('secaoNotasFiscais').style.display = 'block';
+        document.getElementById('secaoBoletos').style.display = 'none';
+        document.getElementById('btnNovaEntrada').style.display = 'inline-block';
+    });
+
+    document.getElementById('tabBoletosBtn')?.addEventListener('click', () => {
+        document.getElementById('tabNotasFiscaisBtn').classList.remove('active');
+        document.getElementById('tabBoletosBtn').classList.add('active');
+        document.getElementById('secaoNotasFiscais').style.display = 'none';
+        document.getElementById('secaoBoletos').style.display = 'block';
+        document.getElementById('btnNovaEntrada').style.display = 'none';
+        carregarBoletos();
+    });
+
+    document.getElementById('btnFiltrarBoletos')?.addEventListener('click', carregarBoletos);
+
+    // Cadastro Rápido de Produto
+    document.getElementById('btnCriarProdutoRapido')?.addEventListener('click', () => {
+        const modal = document.getElementById('modalProdutoRapido');
+        if (!modal) return;
+        const select = document.getElementById('rapidoCategoria');
+        if (select) {
+            select.innerHTML = '<option value="">Selecione a Categoria</option>' +
+                categorias.map(c => `<option value="${c.nome}" data-id="${c.id}">${c.nome}</option>`).join('');
+        }
+        document.getElementById('produtoRapidoForm').reset();
+        modal.style.display = 'flex';
+    });
+
+    document.getElementById('btnCancelarRapido')?.addEventListener('click', () => {
+        document.getElementById('modalProdutoRapido').style.display = 'none';
+    });
+    
+    document.querySelector('.close-rapido')?.addEventListener('click', () => {
+        document.getElementById('modalProdutoRapido').style.display = 'none';
+    });
+
+    document.getElementById('btnSalvarRapido')?.addEventListener('click', async () => {
+        const codigo = document.getElementById('rapidoCodigo').value.trim();
+        const nome = document.getElementById('rapidoNome').value.trim();
+        const valorCompra = parseFloat(document.getElementById('rapidoValorCompra').value) || 0;
+        const valorVenda = parseFloat(document.getElementById('rapidoValorVenda').value) || 0;
+        
+        const catSelect = document.getElementById('rapidoCategoria');
+        const categoria = catSelect.value;
+        const categoriaOption = catSelect.options[catSelect.selectedIndex];
+        const categoriaId = categoriaOption ? parseInt(categoriaOption.getAttribute('data-id')) : null;
+
+        if (!codigo || !nome) {
+            mostrarNotificacao('Código e Nome são obrigatórios!', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('btnSalvarRapido');
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('produtos')
+                .insert([{
+                    codigo,
+                    nome,
+                    valor_compra: valorCompra,
+                    valor_venda: valorVenda,
+                    categoria,
+                    categoria_id: categoriaId,
+                    estoque_total: 0,
+                    ativo: true,
+                    loja_id: usuario.loja_id
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            mostrarNotificacao('Produto cadastrado com sucesso!', 'success');
+            document.getElementById('modalProdutoRapido').style.display = 'none';
+
+            produtos.push(data);
+            renderizarProdutos();
+            adicionarAoCarrinho(data);
+        } catch (error) {
+            console.error('Erro ao cadastrar produto rápido:', error);
+            mostrarNotificacao('Erro ao cadastrar produto', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Salvar Produto';
+        }
+    });
+
+    // Boletos logic
+    let boletosList = [];
+
+    async function carregarBoletos() {
+        const tbody = document.getElementById('boletosTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--gray); padding: 40px 20px;">Carregando boletos...</td></tr>';
+        }
+
+        const status = document.getElementById('filtroStatusBoleto').value;
+        const vencInicio = document.getElementById('filtroBoletoVencInicio').value;
+        const vencFim = document.getElementById('filtroBoletoVencFim').value;
+
+        try {
+            let query = supabaseClient
+                .from('boletos_pagar')
+                .select('*, clientes:fornecedor_id(nome), entradas(observacao)');
+
+            if (status !== 'todos') {
+                query = query.eq('confirmado', status === 'pago');
+            }
+            if (vencInicio) query = query.gte('data_vencimento', vencInicio);
+            if (vencFim) query = query.lte('data_vencimento', vencFim);
+
+            const { data, error } = await query.order('data_vencimento', { ascending: true });
+            if (error) throw error;
+
+            boletosList = data || [];
+            renderizarBoletos();
+        } catch (error) {
+            console.error('Erro ao carregar boletos:', error);
+            mostrarNotificacao('Erro ao carregar boletos a pagar', 'error');
+        }
+    }
+
+    function renderizarBoletos() {
+        const tbody = document.getElementById('boletosTableBody');
+        if (!tbody) return;
+
+        if (boletosList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--gray); padding: 40px 20px;">Nenhum boleto encontrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = boletosList.map(b => {
+            const dataVenc = b.data_vencimento ? b.data_vencimento.split('-').reverse().join('/') : '-';
+            const dataPgto = b.data_pagamento ? b.data_pagamento.split('-').reverse().join('/') : '-';
+            const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(b.valor || 0);
+            
+            const isPago = b.confirmado === true;
+            const statusClass = isPago ? 'status-pago' : 'status-pendente';
+            const statusText = isPago ? 'Confirmado' : 'Pendente';
+
+            let numNota = '-';
+            if (b.entradas?.observacao) {
+                const match = b.entradas.observacao.match(/Nota:\s*([^\s|]+)/);
+                if (match) numNota = match[1];
+            }
+
+            const btnConfirmarHtml = !isPago
+                ? `<button class="btn-success" onclick="confirmarPagamentoBoleto(${b.id})" style="font-size:11px; padding:4px 8px; font-weight:600;">✅ Pagar</button>`
+                : '-';
+
+            return `
+                <tr>
+                    <td><strong>${b.clientes?.nome || 'Fornecedor Excluído'}</strong></td>
+                    <td>Nota #${numNota}</td>
+                    <td>${dataVenc}</td>
+                    <td style="text-align: right; font-weight: 600;">${valorFmt}</td>
+                    <td style="text-align: center;"><span class="badge-status ${statusClass}">${statusText}</span></td>
+                    <td>${dataPgto}</td>
+                    <td style="text-align: center;">${btnConfirmarHtml}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    window.confirmarPagamentoBoleto = async (id) => {
+        const boleto = boletosList.find(b => b.id === id);
+        if (!boleto) return;
+
+        if (!confirm(`Confirmar o pagamento deste boleto de R$ ${boleto.valor.toFixed(2)}?\nIsso gerará automaticamente um lançamento pago nas despesas.`)) return;
+
+        try {
+            const hojeLocal = new Date().toISOString().split('T')[0];
+
+            const { error: errorBoleto } = await supabaseClient
+                .from('boletos_pagar')
+                .update({
+                    confirmado: true,
+                    data_pagamento: hojeLocal
+                })
+                .eq('id', id);
+
+            if (errorBoleto) throw errorBoleto;
+
+            let numNota = '-';
+            if (boleto.entradas?.observacao) {
+                const match = boleto.entradas.observacao.match(/Nota:\s*([^\s|]+)/);
+                if (match) numNota = match[1];
+            }
+
+            const { error: errorDespesa } = await supabaseClient
+                .from('despesas')
+                .insert([{
+                    descricao: `Pagamento do Boleto - Fornecedor: ${boleto.clientes?.nome || 'Fornecedor'} | Nota: #${numNota}`,
+                    valor: boleto.valor,
+                    data: hojeLocal,
+                    categoria: 'Boleto Fornecedor',
+                    status: 'pago',
+                    loja_id: usuario.loja_id
+                }]);
+
+            if (errorDespesa) {
+                console.error('Erro ao gerar despesa:', errorDespesa);
+                mostrarNotificacao('Atenção: Boleto marcado como pago, mas houve um erro ao gerar o lançamento nas despesas.', 'warning');
+            } else {
+                mostrarNotificacao('Boleto pago e despesa gerada com sucesso!', 'success');
+            }
+
+            carregarBoletos();
+        } catch (error) {
+            console.error('Erro ao pagar boleto:', error);
+            mostrarNotificacao('Erro ao processar pagamento do boleto', 'error');
+        }
+    };
+
     window.onclick = (event) => {
         if (event.target === document.getElementById('modalEntrada')) {
             document.getElementById('modalEntrada').style.display = 'none';
         }
         if (event.target === document.getElementById('modalDetalhes')) {
             document.getElementById('modalDetalhes').style.display = 'none';
+        }
+        if (event.target === document.getElementById('modalProdutoRapido')) {
+            document.getElementById('modalProdutoRapido').style.display = 'none';
         }
     };
     

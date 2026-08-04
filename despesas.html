@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despesas - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .filters-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .filters-container input, .filters-container select {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .expense-kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            border-left: 4px solid var(--primary);
+        }
+
+        .kpi-card.pago { border-left-color: var(--success); }
+        .kpi-card.pendente { border-left-color: var(--warning); }
+
+        .kpi-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--gray);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-val {
+            font-size: 24px;
+            font-weight: 800;
+            margin-top: 6px;
+            color: var(--carbon-black);
+        }
+
+        .badge-status {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .status-pago {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pendente {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body class="hold-transition">
+    <div class="dashboard">
+        <!-- Sidebar renderizada via auth-check.js -->
+        <aside class="sidebar"></aside>
+        
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="user-info">
+                    <span class="user-name" id="userName">Carregando...</span>
+                    <span class="user-perfil" id="userPerfil"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </header>
+            
+            <div class="content">
+                <div class="page-header">
+                    <div>
+                        <h1>💸 Despesas (Saídas de Caixa)</h1>
+                        <p style="font-size: 13px; color: var(--gray); margin-top: 4px;">Gerencie suas despesas fixas, variáveis e pagamentos de boletos</p>
+                    </div>
+                    <button class="btn-primary" id="btnNovaDespesa">+ Nova Despesa</button>
+                </div>
+
+                <div class="expense-kpis">
+                    <div class="kpi-card pago">
+                        <div class="kpi-title">Total Pago (Período)</div>
+                        <div class="kpi-val" id="kpiPago">R$ 0,00</div>
+                    </div>
+                    <div class="kpi-card pendente">
+                        <div class="kpi-title">Total Pendente (Período)</div>
+                        <div class="kpi-val" id="kpiPendente">R$ 0,00</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Total Geral Despesas</div>
+                        <div class="kpi-val" id="kpiTotal">R$ 0,00</div>
+                    </div>
+                </div>
+                
+                <div class="panel-secao">
+                    <div class="filters-container">
+                        <input type="text" id="searchDespesa" placeholder="🔍 Buscar por descrição...">
+                        <select id="filtroCategoria">
+                            <option value="">Todas as Categorias</option>
+                            <option value="Aluguel">Aluguel</option>
+                            <option value="Salários">Salários</option>
+                            <option value="Boleto Fornecedor">Boleto Fornecedor</option>
+                            <option value="Água / Luz / Internet">Água / Luz / Internet</option>
+                            <option value="Impostos / Taxas">Impostos / Taxas</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                        <select id="filtroStatus">
+                            <option value="">Todos os Status</option>
+                            <option value="pago">Pago</option>
+                            <option value="pendente">Pendente</option>
+                        </select>
+                        <input type="date" id="filtroDataInicio">
+                        <input type="date" id="filtroDataFim">
+                        <button class="btn-primary" id="btnFiltrar" style="font-weight:600;">Filtrar</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Categoria</th>
+                                    <th style="text-align: right;">Valor</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="width: 120px; text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="despesasTableBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--gray); padding: 40px 20px;">Carregando despesas...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal Novo/Editar Despesa -->
+    <div id="modalDespesa" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="modalTitle">Nova Despesa</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="despesaForm">
+                    <input type="hidden" id="despesaId">
+                    
+                    <div class="form-group">
+                        <label class="required-label">Descrição / Motivo</label>
+                        <input type="text" id="descricao" required placeholder="Ex: Pagamento conta de energia de julho">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="required-label">Valor (R$)</label>
+                            <input type="number" step="0.01" min="0.01" id="valor" required placeholder="0.00">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="required-label">Data</label>
+                            <input type="date" id="data" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Categoria</label>
+                            <select id="categoria" required style="width:100%; height:40px; border-radius:8px; border:1px solid var(--border); padding: 8px;">
+                                <option value="Outros">Outros</option>
+                                <option value="Aluguel">Aluguel</option>
+                                <option value="Salários">Salários</option>
+                                <option value="Boleto Fornecedor">Boleto Fornecedor</option>
+                                <option value="Água / Luz / Internet">Água / Luz / Internet</option>
+                                <option value="Impostos / Taxas">Impostos / Taxas</option>
+                                <option value="Marketing">Marketing</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Status</label>
+                            <select id="status" required style="width:100%; height:40px; border-radius:8px; border:1px solid var(--border); padding: 8px;">
+                                <option value="pago">Pago</option>
+                                <option value="pendente">Pendente</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-warning" id="btnCancelar">Cancelar</button>
+                <button class="btn-primary" id="btnSalvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/despesas.js"></script>
+    <script src="js/active-nav.js"></script>
+</body>
+</html>
