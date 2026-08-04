@@ -16,4 +16,5 @@
 - [x] Adicionar filtro por colaborador, caixa de seleção múltipla (checkbox) na tabela de comissões e painel totalizador de valores selecionados para pagamento em lote (comissionamento em massa)
 - [x] Atualizar relatório de comissões por colaborador (`js/relatorios.js`) para suportar a nova comissão de serviço e preenchimento de comissão calculada
 - [x] Criar script SQL de migração para as colunas de comissão em produtos e vendas
+- [x] Criar script SQL completo e consolidado de banco de dados (`database/schema_completo.sql`) contendo todas as tabelas, RLS, relacionamentos, views e seeds atualizados para replicação em novos clientes
 - [x] Instruir o usuário a rodar a migração no editor SQL do painel do Supabase
