@@ -13,8 +13,8 @@ try {
     console.log('Arquivo env.js não encontrado localmente. Usando fallbacks de ambiente.');
 }
 
-const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'INSIRA_A_URL_DO_SUPABASE_AQUI';
-const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'INSIRA_A_ANON_KEY_DO_SUPABASE_AQUI';
+const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://madaoptvsbnhelamwyzp.supabase.co';
+const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4';
 
 if (!SUPABASE_ANON_KEY) {
     console.warn('⚠️ AVISO DE SEGURANÇA: SUPABASE_ANON_KEY não configurada!');
