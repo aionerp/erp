@@ -166,11 +166,11 @@
             <ul class="sidebar-nav">
                 <li><a href="dashboard.html">📊 Dashboard</a></li>
                 <li><a href="clientes.html">👥 Clientes</a></li>
-                <li><a href="produtos.html">📦 Produtos</a></li>
+                <li><a href="produtos.html">📦 Serviços & Produtos</a></li>
                 <li><a href="categorias.html">🏷️ Categorias</a></li>
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
-                <li><a href="saidas.html">📤 Nova Venda</a></li>
+                <li><a href="saidas.html">💳 PDV / Vendas</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 <li><a href="#">🔧 OS (Sob Pedido)</a></li>
@@ -191,7 +191,7 @@
             
             <div class="content">
                 <div class="produtos-header">
-                    <h1>📦 Produtos</h1>
+                    <h1>📦 Serviços & Produtos</h1>
                     <div class="btn-group">
                         <button class="btn-primary" id="btnNovoProduto">+ Novo Produto</button>
                     </div>
@@ -296,6 +296,22 @@
                         <div class="form-group">
                             <label class="required-label">Valor Venda (R$)</label>
                             <input type="number" step="0.01" id="valor_venda" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Lote e Validade condicional -->
+                    <div id="groupLoteValidade" class="form-row" style="display: none; border: 1px solid #ffeeba; background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div class="form-group">
+                            <label>Lote</label>
+                            <input type="text" id="lote" placeholder="Ex: LOTE123">
+                        </div>
+                        <div class="form-group">
+                            <label>Data de Validade</label>
+                            <input type="date" id="data_validade">
+                        </div>
+                        <div class="form-group">
+                            <label>Alerta de Vencimento (Dias)</label>
+                            <input type="number" id="alerta_vencimento_dias" min="1" value="30">
                         </div>
                     </div>
                     

@@ -199,11 +199,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = {
             dashboard: '📊 Dashboard',
             clientes: '👥 Clientes',
-            produtos: '📦 Produtos',
+            produtos: '📦 Serviços & Produtos',
             categorias: '🏷️ Categorias',
             estoque: '💾 Estoque',
             entradas: '📥 Entradas',
-            saidas: '📤 Saídas',
+            saidas: '💳 PDV / Vendas',
             fornecedores: '🏭 Fornecedores',
             ordens_servico: '🔧 OS',
             relatorios: '📈 Relatórios',

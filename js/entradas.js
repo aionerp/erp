@@ -450,6 +450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <p><strong>Data Compra:</strong> ${new Date(entrada.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
                             <p><strong>Data Lançamento:</strong> ${dataLancamento !== '-' ? new Date(dataLancamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</p>
                             <p><strong>Total da Nota:</strong> <span style="font-weight:bold; color:var(--success);">R$ ${(entrada.total || 0).toFixed(2)}</span></p>
+                            <p><strong>Forma de Pagamento:</strong> <span style="background:#e8f0fe; color:#1a73e8; font-weight:600; padding:2px 8px; border-radius:12px; font-size:11px;">${entrada.forma_pagamento || 'Dinheiro'}</span></p>
                             <p><strong>Observações:</strong> ${obsOriginal || '-'}</p>
                         </div>
                     </div>
@@ -647,16 +648,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             const { data: entrada, error: errorEntrada } = await supabaseClient
                 .from('entradas')
                 .insert([{
+                    loja_id: usuario.loja_id,
                     fornecedor_id: parseInt(fornecedorId),
                     data: dataCompra,
                     observacao: observacaoFormatada,
                     total: totalNotaVal,
-                    usuario_id: usuario.id
+                    usuario_id: usuario.id,
+                    forma_pagamento: formaPagamento
                 }])
                 .select()
                 .single();
             
             if (errorEntrada) throw errorEntrada;
+
+            // Se a forma de pagamento for Boleto, lançar o boleto a pagar
+            if (formaPagamento === 'Boleto') {
+                const { error: errorBoleto } = await supabaseClient
+                    .from('boletos_pagar')
+                    .insert([{
+                        loja_id: usuario.loja_id,
+                        fornecedor_id: parseInt(fornecedorId),
+                        entrada_id: entrada.id,
+                        data_vencimento: dataVencimentoBoleto,
+                        valor: totalNotaVal,
+                        confirmado: false
+                    }]);
+                
+                if (errorBoleto) throw errorBoleto;
+            }
             
             for (const item of carrinho) {
                 const subtotal = item.quantidade * item.valor_compra;

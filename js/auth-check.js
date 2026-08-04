@@ -30,26 +30,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // Determinar ícone da loja baseado nas verticais ativas
         let icone = '🏢';
         if (config.habilitar_seriais && !config.habilitar_agendamentos && !config.habilitar_mesas) icone = '🤖';
-        else if (config.habilitar_agendamentos && !config.habilitar_seriais && !config.habilitar_mesas) icone = '💅';
-        else if (config.habilitar_mesas && !config.habilitar_seriais && !config.habilitar_agendamentos) icone = '🍔';
+        else if (config.habilitar_agendamentos && !config.habilitar_seriais && !config.habilitar_mesas) icone = '📅';
+        else if (config.habilitar_mesas && !config.habilitar_seriais && !config.habilitar_agendamentos) icone = '📋';
         else if (config.habilitar_lotes && !config.habilitar_mesas && !config.habilitar_seriais) icone = '🛒';
         else if (config.habilitar_variacoes) icone = '💍';
         
         // Labels específicas de segmento
-        let labelProdutos = '📦 Produtos';
-        if (config.habilitar_agendamentos) labelProdutos = '💅 Serviços & Produtos';
-        else if (config.habilitar_mesas) labelProdutos = '🍔 Cardápio / Itens';
+        let labelProdutos = '📦 Serviços & Produtos';
+        if (config.habilitar_mesas) labelProdutos = '🍔 Cardápio / Itens';
         
-        let labelVendas = '📤 Nova Venda';
-        if (config.habilitar_mesas) labelVendas = '🍕 PDV / Vendas';
+        let labelVendas = '💳 PDV / Vendas';
         
         // Links extras condicionais
         let extraLinksHtml = '';
         if (config.habilitar_agendamentos) {
-            extraLinksHtml += '<li><a href="agendamentos.html">💅 Agendamentos</a></li>';
+            extraLinksHtml += '<li><a href="agendamentos.html">📅 Agendamentos</a></li>';
         }
         if (config.habilitar_mesas) {
-            extraLinksHtml += '<li><a href="mesas.html">🍔 Comanda/Serviço</a></li>';
+            extraLinksHtml += '<li><a href="mesas.html">📋 Comanda/Serviço</a></li>';
         }
         
         sidebar.innerHTML = `

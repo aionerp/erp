@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhuma categoria encontrada</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Nenhuma categoria encontrada</td></tr>';
             return;
         }
         
@@ -111,6 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${c.exige_serial 
                         ? '<span class="badge-serial badge-serial-obrigatorio">🔢 Serial Obrigatório</span>' 
                         : '<span class="badge-serial">🔢 Serial Opcional</span>'}
+                </td>
+                <td>
+                    ${c.controla_lote_validade 
+                        ? `<span class="badge-lote badge-lote-obrigatorio" style="background:#fff3cd; color:#856404; font-weight:600; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block;">📅 Sim (${c.aviso_vencimento_dias || 30} dias)</span>` 
+                        : '<span class="badge-lote" style="background:#e2e3e5; color:#383d41; font-weight:600; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block;">📅 Não</span>'}
                 </td>
                 <td>
                     ${c.ativo 
@@ -143,6 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('descricao').value = categoria.descricao || '';
         document.getElementById('exige_imei').checked = categoria.exige_imei || false;
         document.getElementById('exige_serial').checked = categoria.exige_serial !== false;
+        document.getElementById('controla_lote_validade').checked = categoria.controla_lote_validade || false;
+        document.getElementById('aviso_vencimento_dias').value = categoria.aviso_vencimento_dias || 30;
+        document.getElementById('groupAvisoVencimento').style.display = categoria.controla_lote_validade ? 'block' : 'none';
         document.getElementById('ativo').checked = categoria.ativo !== false;
         
         document.getElementById('modalCategoria').style.display = 'flex';
@@ -190,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
             descricao: document.getElementById('descricao').value,
             exige_imei: document.getElementById('exige_imei').checked,
             exige_serial: document.getElementById('exige_serial').checked,
+            controla_lote_validade: document.getElementById('controla_lote_validade').checked,
+            aviso_vencimento_dias: parseInt(document.getElementById('aviso_vencimento_dias').value) || 30,
             ativo: document.getElementById('ativo').checked,
             updated_at: new Date().toISOString()
         };
@@ -241,6 +251,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('categoriaForm').reset();
         document.getElementById('categoriaId').value = '';
         document.getElementById('exige_serial').checked = true;
+        document.getElementById('controla_lote_validade').checked = false;
+        document.getElementById('groupAvisoVencimento').style.display = 'none';
         document.getElementById('ativo').checked = true;
         document.getElementById('modalCategoria').style.display = 'flex';
     });
@@ -257,6 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('searchCategoria')?.addEventListener('input', renderizarTabela);
     document.getElementById('filtroStatus')?.addEventListener('change', renderizarTabela);
     document.getElementById('filtroIMEI')?.addEventListener('change', renderizarTabela);
+    
+    document.getElementById('controla_lote_validade')?.addEventListener('change', (e) => {
+        document.getElementById('groupAvisoVencimento').style.display = e.target.checked ? 'block' : 'none';
+    });
     
     window.onclick = (event) => {
         if (event.target === document.getElementById('modalCategoria')) {
