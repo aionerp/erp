@@ -1,7 +1,18 @@
 // js/config.js
 // Configuração do Supabase
 
-// ⚠️ CREDENCIAIS ATUALIZADAS PARA O NOVO BANCO DE DADOS RELACIONAL MULTI-TENANT
+// Tentar carregar env.js de forma síncrona se disponível para preencher window.ENV
+try {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', 'env.js', false); // Síncrono
+    xhr.send();
+    if (xhr.status === 200) {
+        eval(xhr.responseText);
+    }
+} catch (e) {
+    console.log('Arquivo env.js não encontrado localmente. Usando fallbacks de ambiente.');
+}
+
 const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'INSIRA_A_URL_DO_SUPABASE_AQUI';
 const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'INSIRA_A_ANON_KEY_DO_SUPABASE_AQUI';
 
