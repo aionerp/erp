@@ -165,14 +165,42 @@
                     <h1>Controle de Estoque</h1>
                 </div>
                 
-                <div class="filters" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <div style="display: flex; gap: 10px; flex: 1; align-items: center;">
-                        <input type="text" id="searchInput" placeholder="Pesquisar produto..." style="flex: 1; margin-bottom: 0;">
-                        <button class="btn-primary" id="btnAjustar" style="margin-bottom: 0;">✏️ Ajustar Estoque</button>
+                <div class="filters" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <input type="text" id="searchInput" placeholder="Pesquisar por código, nome, marca..." style="flex: 2; min-width: 200px; margin-bottom: 0; padding: 8px 12px;">
+                        
+                        <select id="filtroCategoria" style="flex: 1; min-width: 150px; margin-bottom: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #ced4da;">
+                            <option value="">Todas as Categorias</option>
+                        </select>
+                        
+                        <select id="filtroLote" style="flex: 1; min-width: 150px; margin-bottom: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #ced4da;">
+                            <option value="">Todos (Lote)</option>
+                            <option value="com_lote">📦 Com Lote</option>
+                            <option value="sem_lote">❌ Sem Lote</option>
+                        </select>
+                        
+                        <select id="filtroSaldo" style="flex: 1; min-width: 150px; margin-bottom: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #ced4da;">
+                            <option value="">Todos (Saldo)</option>
+                            <option value="com_saldo">💰 Com Saldo (>0)</option>
+                            <option value="sem_saldo">⚠️ Sem Saldo (<=0)</option>
+                        </select>
+                        
+                        <select id="filtroStatus" style="flex: 1; min-width: 150px; margin-bottom: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #ced4da;">
+                            <option value="">Todos (Status)</option>
+                            <option value="NORMAL">🟢 Normal</option>
+                            <option value="BAIXO">🟡 Baixo</option>
+                            <option value="CRITICO">🟠 Crítico</option>
+                            <option value="ESGOTADO">🔴 Esgotado</option>
+                        </select>
                     </div>
-                    <div class="export-actions">
-                        <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
-                        <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <button class="btn-primary" id="btnAjustar" style="margin-bottom: 0;">✏️ Ajustar Estoque</button>
+                        </div>
+                        <div class="export-actions" style="display: flex; gap: 5px;">
+                            <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
+                            <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -183,6 +211,7 @@
                                 <th>Código</th>
                                 <th>Produto</th>
                                 <th>Categoria</th>
+                                <th>Lote / Validade</th>
                                 <th>Estoque</th>
                                 <th>Mínimo</th>
                                 <th>Status</th>

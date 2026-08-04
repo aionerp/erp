@@ -213,8 +213,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const ctx = canvas.getContext('2d');
         const gradient = ctx.createLinearGradient(0, 0, 0, 240);
-        gradient.addColorStop(0, 'rgba(235, 94, 40, 0.25)');
-        gradient.addColorStop(1, 'rgba(235, 94, 40, 0.00)');
+        gradient.addColorStop(0, 'rgba(10, 77, 104, 0.35)');
+        gradient.addColorStop(1, 'rgba(10, 77, 104, 0.00)');
 
         if (chartSaidasAcumuladas) chartSaidasAcumuladas.destroy();
 
@@ -225,14 +225,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 datasets: [{
                     label: 'Faturamento Mensal',
                     data: dataValues,
-                    borderColor: '#eb5e28',
-                    borderWidth: 3,
+                    borderColor: '#0A4D68',
+                    borderWidth: 3.5,
                     backgroundColor: gradient,
                     fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#eb5e28',
-                    pointRadius: 4,
-                    pointHoverRadius: 6
+                    tension: 0.45,
+                    pointBackgroundColor: '#1D789B',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
                 }]
             },
             options: {
@@ -313,6 +315,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const canvas = document.getElementById('chartMovimentoDiario');
         if (chartMovDiario) chartMovDiario.destroy();
 
+        const ctx = canvas.getContext('2d');
+        const gradientBar = ctx.createLinearGradient(0, 0, 0, 240);
+        gradientBar.addColorStop(0, '#0A4D68');
+        gradientBar.addColorStop(1, '#1D789B');
+
         chartMovDiario = new Chart(canvas, {
             type: 'bar',
             data: {
@@ -320,8 +327,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 datasets: [{
                     label: 'Faturamento do Dia',
                     data: dataValues,
-                    backgroundColor: '#2563eb',
-                    borderRadius: 5,
+                    backgroundColor: gradientBar,
+                    borderRadius: 6,
                     borderSkipped: false
                 }]
             },

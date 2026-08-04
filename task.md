@@ -1,0 +1,19 @@
+- [x] Validar necessidade da migração (Verificado que as colunas não existem no banco de dados e a migração é necessária)
+- [x] Alterar `js/produtos.js` para incluir `data-controla-lote` e `data-aviso-vencimento` na seleção de categoria
+- [x] Alterar `js/produtos.js` para alternar a exibição do contêiner `#groupLoteValidade` dinamicamente no formulário de produtos
+- [x] Alterar `js/produtos.js` para salvar as informações de lote/validade na função `salvarProduto`
+- [x] Alterar `js/produtos.js` para preencher as informações de lote/validade na função `editarProduto`
+- [x] Alterar `js/produtos.js` para ocultar o contêiner e resetar inputs no botão "Novo Produto"
+- [x] Adicionar coluna de "Lote / Validade" na página de controle de estoque (`estoque.html` e `js/estoque.js`)
+- [x] Adicionar seletores de filtro (Lote, Saldo, Categoria, Status) na página de controle de estoque (`estoque.html` e `js/estoque.js`)
+- [x] Manter o nome "📦 Serviços & Produtos" no menu lateral da sidebar para todos os segmentos (removendo "🍔 Cardápio / Itens")
+- [x] Ajustar a entrada de compras (`js/entradas.js`) para exigir e salvar Lote, Validade e Dias de Alerta de Vencimento ao dar entrada em produtos com controle ativo
+- [x] Automatizar geração de código do produto (formato alfanumérico sequencial: `A0001` -> `A9999` -> `B0001`) no cadastro e cadastro rápido
+- [x] Adicionar suporte a múltiplos códigos de barras por produto, incluindo validação de unicidade no banco de dados e pesquisa local
+- [x] Criar scripts SQL de migração para a nova coluna de códigos de barras e padronização dos códigos existentes
+- [x] Adicionar regras e checkbox de comissão para serviços (100% ou valor fixo personalizado) na tela de cadastro de produto e cálculo automático de comissão na venda
+- [x] Criar módulo "Comissões a Pagar" (`comissoes.html` e `js/comissoes.js`) para visualização de saldos de colaboradores, detalhes de vendas/comissões, e pagamento com geração de despesa automática
+- [x] Adicionar filtro por colaborador, caixa de seleção múltipla (checkbox) na tabela de comissões e painel totalizador de valores selecionados para pagamento em lote (comissionamento em massa)
+- [x] Atualizar relatório de comissões por colaborador (`js/relatorios.js`) para suportar a nova comissão de serviço e preenchimento de comissão calculada
+- [x] Criar script SQL de migração para as colunas de comissão em produtos e vendas
+- [x] Instruir o usuário a rodar a migração no editor SQL do painel do Supabase

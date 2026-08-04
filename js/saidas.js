@@ -778,6 +778,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 nome:        produto.nome,
                 codigo:      produto.codigo,
                 categoria:   produto.categoria,
+                tipo:        produto.tipo || 'produto',
+                comissao_habilitada: produto.comissao_habilitada || false,
+                comissao_100_porcento: produto.comissao_100_porcento || false,
+                comissao_valor: produto.comissao_valor || 0,
                 valor_venda: produto.valor_venda || 0,
                 quantidade:  1,
                 desconto:    0,
@@ -1058,6 +1062,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const dataVenda = getDataLocalBrasil();
 
+            // Calcular comissão da venda
+            let comissaoCalculada = 0;
+            const colabIdVal = document.getElementById('vendaColaborador')?.value ? parseInt(document.getElementById('vendaColaborador').value) : null;
+            if (colabIdVal) {
+                const colabObj = colaboradores.find(c => c.id === colabIdVal);
+                const pctColab = colabObj ? parseFloat(colabObj.comissao || 0) / 100 : 0;
+                
+                for (const item of carrinho) {
+                    const subtotalItem = item.subtotal || item.valor_venda * item.quantidade || 0;
+                    const isServico = item.tipo === 'servico';
+                    
+                    if (isServico) {
+                        if (item.comissao_habilitada === true) {
+                            if (item.comissao_100_porcento === true) {
+                                comissaoCalculada += subtotalItem;
+                            } else {
+                                comissaoCalculada += subtotalItem * (parseFloat(item.comissao_valor || 0) / 100);
+                            }
+                        }
+                    } else {
+                        comissaoCalculada += subtotalItem * pctColab;
+                    }
+                }
+            }
+
             let insertData = {
                 cliente_id:       clienteId || null,
                 data:             dataVenda,
@@ -1070,7 +1099,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 usuario_id:       usuario.id,
                 data_finalizacao: new Date().toISOString(),
                 caixa_id:         caixaAtivo.id,
-                colaborador_id:   document.getElementById('vendaColaborador')?.value ? parseInt(document.getElementById('vendaColaborador').value) : null
+                colaborador_id:   colabIdVal,
+                comissao_calculada: comissaoCalculada,
+                comissao_paga:     false
             };
 
             let { data: venda, error: vendaError } = await supabaseClient
@@ -1081,10 +1112,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (vendaError) {
                 // Se der erro que indica que a coluna caixa_id ou colaborador_id não existe no banco, remove e tenta novamente
-                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.message.includes('colaborador_id') || vendaError.code === 'PGRST116')) {
+                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.message.includes('colaborador_id') || vendaError.message.includes('comissao_calculada') || vendaError.code === 'PGRST116')) {
                     console.warn('⚠️ Colunas não encontradas na tabela public.saidas. Retentando sem vincular...');
                     delete insertData.caixa_id;
                     delete insertData.colaborador_id;
+                    delete insertData.comissao_calculada;
+                    delete insertData.comissao_paga;
                     const retryResult = await supabaseClient
                         .from('saidas')
                         .insert([insertData])

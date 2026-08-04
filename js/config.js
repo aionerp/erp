@@ -465,3 +465,64 @@ async function obterUltimoCaixaFechado() {
 // Exportar funções de caixa
 window.obterCaixaAtivo = obterCaixaAtivo;
 window.obterUltimoCaixaFechado = obterUltimoCaixaFechado;
+
+// =====================================================
+// FUNÇÕES DE CÓDIGO ALFANUMÉRICO AUTOMÁTICO (A0001)
+// =====================================================
+
+function nextCode(lastCode) {
+    if (!lastCode) return 'A0001';
+    
+    const match = lastCode.toUpperCase().match(/^([A-Z])(\d{4})$/);
+    if (!match) {
+        return 'A0001';
+    }
+    
+    let letter = match[1];
+    let number = parseInt(match[2], 10);
+    
+    number++;
+    if (number > 9999) {
+        number = 1;
+        let charCode = letter.charCodeAt(0);
+        charCode++;
+        if (charCode > 90) { // Passou de 'Z'
+            letter = 'A';
+        } else {
+            letter = String.fromCharCode(charCode);
+        }
+    }
+    
+    const numberStr = String(number).padStart(4, '0');
+    return `${letter}${numberStr}`;
+}
+
+async function obterProximoCodigoProduto() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('produtos')
+            .select('codigo')
+            .order('id', { ascending: false })
+            .limit(100);
+            
+        if (error) throw error;
+        
+        let ultimoCodigoValido = null;
+        if (data && data.length > 0) {
+            for (const p of data) {
+                if (p.codigo && /^[A-Z]\d{4}$/i.test(p.codigo.trim())) {
+                    ultimoCodigoValido = p.codigo.trim().toUpperCase();
+                    break;
+                }
+            }
+        }
+        
+        return nextCode(ultimoCodigoValido);
+    } catch (e) {
+        console.error('Erro ao obter proximo codigo:', e);
+        return 'A0001';
+    }
+}
+
+window.nextCode = nextCode;
+window.obterProximoCodigoProduto = obterProximoCodigoProduto;

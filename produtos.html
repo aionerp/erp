@@ -264,6 +264,28 @@
                         </div>
                     </div>
                     
+                    <!-- Campos de Comissão para Serviço -->
+                    <div id="groupComissaoServico" style="display: none; background: #e8f4fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #b8daff;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #004085; cursor: pointer;">
+                                    <input type="checkbox" id="comissao_habilitada" style="width: auto; margin-bottom: 0;"> Habilitar Comissão de Serviço?
+                                </label>
+                            </div>
+                            <div id="groupComissaoValores" style="display: none;">
+                                <div class="form-group" style="margin-bottom: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #004085; cursor: pointer;">
+                                        <input type="checkbox" id="comissao_100_porcento" checked style="width: auto; margin-bottom: 0;"> Comissão de 100% (valor integral do serviço)
+                                    </label>
+                                </div>
+                                <div id="divComissaoValorCustom" style="display: none;" class="form-group">
+                                    <label style="font-size: 12px; color: #004085; font-weight: 600; display: block; margin-bottom: 5px;">Porcentagem de Comissão do Colaborador (%)</label>
+                                    <input type="number" step="0.1" id="comissao_valor" placeholder="Ex: 40" style="margin-bottom: 0; width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-row">
                         <div class="form-group">
                             <label>Categoria</label>
@@ -323,6 +345,19 @@
                         <div class="form-group">
                             <label>Imagem URL</label>
                             <input type="text" id="imagem" placeholder="URL da imagem do produto">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Códigos de Barras (Múltiplos)</label>
+                            <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+                                <input type="text" id="barcode_input" placeholder="Digite o código de barras e clique em Adicionar ou pressione Enter" style="flex: 1; margin-bottom: 0;">
+                                <button type="button" class="btn-primary" id="btn_add_barcode" style="margin-bottom: 0; padding: 0 15px;">Adicionar</button>
+                            </div>
+                            <div id="barcodes_list" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; min-height: 42px;">
+                                <span style="color: var(--gray); font-size: 13px; font-style: italic;" id="no_barcodes_placeholder">Nenhum código de barras adicionado</span>
+                            </div>
                         </div>
                     </div>
                     

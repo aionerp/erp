@@ -44,6 +44,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     let seriaisDisponiveis = [];
     
     // =====================================================
+    // CARREGAR CATEGORIAS
+    // =====================================================
+    async function carregarCategorias() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('categorias')
+                .select('*')
+                .eq('ativo', true)
+                .order('nome');
+            
+            if (error) throw error;
+            
+            const selectFiltro = document.getElementById('filtroCategoria');
+            if (selectFiltro) {
+                selectFiltro.innerHTML = '<option value="">Todas as Categorias</option>' +
+                    (data || []).map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar categorias:', error);
+        }
+    }
+
+    // =====================================================
     // CARREGAR PRODUTOS
     // =====================================================
     
@@ -71,17 +94,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         const searchInput = document.getElementById('searchInput');
         const search = searchInput ? searchInput.value.toLowerCase() : '';
         
-        const filtrados = produtos.filter(p => 
-            p.nome?.toLowerCase().includes(search) || 
-            (p.codigo || '').toLowerCase().includes(search) ||
-            (p.marca || '').toLowerCase().includes(search)
-        );
+        const filtroCategoria = document.getElementById('filtroCategoria')?.value || '';
+        const filtroLote = document.getElementById('filtroLote')?.value || '';
+        const filtroSaldo = document.getElementById('filtroSaldo')?.value || '';
+        const filtroStatus = document.getElementById('filtroStatus')?.value || '';
+        
+        const filtrados = produtos.filter(p => {
+            // 1. Pesquisa por texto
+            const matchSearch = p.nome?.toLowerCase().includes(search) || 
+                                (p.codigo || '').toLowerCase().includes(search) ||
+                                (p.marca || '').toLowerCase().includes(search);
+                                
+            // 2. Filtro Categoria
+            const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria;
+            
+            // 3. Filtro Lote
+            const temLote = !!(p.lote || p.data_validade);
+            const matchLote = !filtroLote || 
+                             (filtroLote === 'com_lote' && temLote) || 
+                             (filtroLote === 'sem_lote' && !temLote);
+                             
+            // 4. Filtro Saldo
+            const estoque = p.estoque_total || p.estoque || 0;
+            const matchSaldo = !filtroSaldo ||
+                              (filtroSaldo === 'com_saldo' && estoque > 0) ||
+                              (filtroSaldo === 'sem_saldo' && estoque <= 0);
+                              
+            // 5. Filtro Status
+            const minimo = p.estoque_minimo || 5;
+            let status = '';
+            if (estoque <= 0) { 
+                status = 'ESGOTADO'; 
+            } else if (estoque < minimo) { 
+                status = 'CRITICO'; 
+            } else if (estoque < minimo * 2) { 
+                status = 'BAIXO'; 
+            } else { 
+                status = 'NORMAL'; 
+            }
+            const matchStatus = !filtroStatus || status === filtroStatus;
+            
+            return matchSearch && matchCategoria && matchLote && matchSaldo && matchStatus;
+        });
         
         const tbody = document.getElementById('tableBody');
         if (!tbody) return;
         
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhum produto encontrado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhum produto encontrado</td></tr>';
             return;
         }
         
@@ -90,20 +150,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         tbody.innerHTML = filtrados.map(p => {
             const estoque = p.estoque_total || p.estoque || 0;
             const minimo = p.estoque_minimo || 5;
-            let status = '', statusClass = '';
+            let statusText = '', statusClass = '';
             
             if (estoque <= 0) { 
-                status = 'ESGOTADO'; 
+                statusText = 'ESGOTADO'; 
                 statusClass = 'status-critico'; 
             } else if (estoque < minimo) { 
-                status = 'CRÍTICO'; 
+                statusText = 'CRÍTICO'; 
                 statusClass = 'status-critico'; 
             } else if (estoque < minimo * 2) { 
-                status = 'BAIXO'; 
+                statusText = 'BAIXO'; 
                 statusClass = 'status-baixo'; 
             } else { 
-                status = 'NORMAL'; 
+                statusText = 'NORMAL'; 
                 statusClass = 'status-normal'; 
+            }
+            
+            let loteValidadeText = '-';
+            if (p.lote || p.data_validade) {
+                const loteStr = p.lote ? `Lote: <strong>${p.lote}</strong>` : 'Lote: -';
+                let dataStr = 'Val: -';
+                let validadeBadge = '';
+                if (p.data_validade) {
+                    const dataFormatada = p.data_validade.split('-').reverse().join('/');
+                    dataStr = `Val: <strong>${dataFormatada}</strong>`;
+                    
+                    const hoje = new Date();
+                    hoje.setHours(0,0,0,0);
+                    const [ano, mes, dia] = p.data_validade.split('-').map(Number);
+                    const dataVal = new Date(ano, mes - 1, dia);
+                    const diffTime = dataVal - hoje;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    const alertaDias = p.alerta_vencimento_dias !== null && p.alerta_vencimento_dias !== undefined ? p.alerta_vencimento_dias : 30;
+                    
+                    if (diffDays < 0) {
+                        validadeBadge = `<br><span class="badge-vencido" style="background:#f8d7da; color:#721c24; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:600; display:inline-block; margin-top:3px;">🔴 Vencido (${Math.abs(diffDays)}d)</span>`;
+                    } else if (diffDays <= alertaDias) {
+                        validadeBadge = `<br><span class="badge-alerta-venc" style="background:#fff3cd; color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:600; display:inline-block; margin-top:3px;">⚠️ Vence em ${diffDays}d</span>`;
+                    }
+                }
+                loteValidadeText = `${loteStr}<br><small>${dataStr}</small>${validadeBadge}`;
             }
             
             return `
@@ -114,9 +201,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <small class="serial-badge">${p.marca || ''} ${p.modelo || ''}</small>
                     </td>
                     <td>${p.categoria || '-'}</td>
+                    <td>${loteValidadeText}</td>
                     <td style="font-weight:bold; ${estoque < minimo ? 'color:#dc3545' : 'color:#28a745'}">${estoque} unid.</td>
                     <td>${minimo}</td>
-                    <td><span class="status-estoque ${statusClass}">${status}</span></td>
+                    <td><span class="status-estoque ${statusClass}">${statusText}</span></td>
                     <td>
                         ${podeAjustar ? `<button class="btn-warning" onclick="ajustarEstoque(${p.id})" title="Ajustar Estoque">✏️ Ajustar</button>` : ''}
                         <button class="btn-info" onclick="verHistorico(${p.id})" title="Ver Histórico" style="margin-left:5px;">📜 Histórico</button>
@@ -685,6 +773,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =====================================================
     
     document.getElementById('searchInput')?.addEventListener('input', renderizarTabela);
+    document.getElementById('filtroCategoria')?.addEventListener('change', renderizarTabela);
+    document.getElementById('filtroLote')?.addEventListener('change', renderizarTabela);
+    document.getElementById('filtroSaldo')?.addEventListener('change', renderizarTabela);
+    document.getElementById('filtroStatus')?.addEventListener('change', renderizarTabela);
     
     document.getElementById('btnAjustar')?.addEventListener('click', () => {
         if (!verificarPermissao('estoque', 'ajustar')) {
@@ -768,6 +860,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     // Inicializar
+    await carregarCategorias();
     await carregarProdutos();
     
     window.ajustarEstoque = ajustarEstoque;

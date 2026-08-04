@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     let produtos = [];
+    let produtoBarcodes = [];
     let seriais = [];
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -117,17 +118,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectFiltro) selectFiltro.innerHTML = options;
             if (selectProduto) {
                 selectProduto.innerHTML = '<option value="">Selecione uma categoria</option>' +
-                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei}" data-exige-serial="${c.exige_serial || c.exige_imei}">${c.nome}</option>`).join('');
+                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei}" data-exige-serial="${c.exige_serial || c.exige_imei}" data-controla-lote="${c.controla_lote_validade || false}" data-aviso-vencimento="${c.aviso_vencimento_dias || 30}">${c.nome}</option>`).join('');
                 
                 selectProduto.addEventListener('change', (e) => {
                     const selectedOption = e.target.options[e.target.selectedIndex];
                     if (!selectedOption || selectedOption.value === "") {
                         document.getElementById('seriaisContainer').style.display = 'none';
+                        const groupLoteValidade = document.getElementById('groupLoteValidade');
+                        if (groupLoteValidade) groupLoteValidade.style.display = 'none';
                         return;
                     }
                     const exigeIMEI = selectedOption.getAttribute('data-exige-imei') === 'true';
                     const exigeSerial = selectedOption.getAttribute('data-exige-serial') === 'true' || exigeIMEI;
                     exigeIMEIActual = exigeIMEI;
+                    
+                    const controlaLote = selectedOption.getAttribute('data-controla-lote') === 'true';
+                    const avisoVencimento = selectedOption.getAttribute('data-aviso-vencimento') || '30';
+                    
+                    const groupLoteValidade = document.getElementById('groupLoteValidade');
+                    if (groupLoteValidade) {
+                        groupLoteValidade.style.display = controlaLote ? 'grid' : 'none';
+                        if (controlaLote) {
+                            document.getElementById('alerta_vencimento_dias').value = avisoVencimento;
+                        }
+                    }
                     
                     const seriaisContainer = document.getElementById('seriaisContainer');
                     const avisoIMEI = document.getElementById('avisoIMEI');
@@ -324,7 +338,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let filtrados = produtos.filter(p => {
             const matchSearch = p.nome?.toLowerCase().includes(search) || 
                                p.codigo?.toLowerCase().includes(search) ||
-                               p.marca?.toLowerCase().includes(search);
+                               p.marca?.toLowerCase().includes(search) ||
+                               (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(search)));
             const matchCategoria = !categoria || p.categoria === categoria;
             return matchSearch && matchCategoria;
         });
@@ -470,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('produtoId').value = produto.id;
         document.getElementById('codigo').value = produto.codigo || '';
         document.getElementById('nome').value = produto.nome || '';
-        document.getElementById('categoria').value = produto.categoria || '';
         document.getElementById('marca').value = produto.marca || '';
         document.getElementById('modelo').value = produto.modelo || '';
         document.getElementById('descricao').value = produto.descricao || '';
@@ -480,11 +494,38 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('garantia_dias').value = produto.garantia_dias || 0;
         document.getElementById('imagem').value = produto.imagem || '';
         
+        produtoBarcodes = Array.isArray(produto.codigos_barras) ? [...produto.codigos_barras] : [];
+        renderBarcodes();
+        document.getElementById('barcode_input').value = '';
+        
+        const categoriaSelect = document.getElementById('categoria');
+        if (categoriaSelect) {
+            categoriaSelect.value = produto.categoria || '';
+            categoriaSelect.dispatchEvent(new Event('change'));
+        }
+        
+        document.getElementById('lote').value = produto.lote || '';
+        document.getElementById('data_validade').value = produto.data_validade || '';
+        document.getElementById('alerta_vencimento_dias').value = produto.alerta_vencimento_dias || 30;
+        
         const tipoSelect = document.getElementById('produtoTipo');
         if (tipoSelect) {
             tipoSelect.value = produto.tipo || 'produto';
             tipoSelect.dispatchEvent(new Event('change'));
         }
+        
+        const chkHabilitada = document.getElementById('comissao_habilitada');
+        if (chkHabilitada) {
+            chkHabilitada.checked = produto.comissao_habilitada || false;
+            chkHabilitada.dispatchEvent(new Event('change'));
+        }
+        const chk100 = document.getElementById('comissao_100_porcento');
+        if (chk100) {
+            chk100.checked = produto.comissao_100_porcento !== false;
+            chk100.dispatchEvent(new Event('change'));
+        }
+        const inputComissaoValor = document.getElementById('comissao_valor');
+        if (inputComissaoValor) inputComissaoValor.value = produto.comissao_valor || '';
         
         document.getElementById('quantidade_estoque').value = 0;
         document.getElementById('quantidade_estoque').disabled = true;
@@ -539,6 +580,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = document.getElementById('produtoId').value;
         const quantidadeEstoque = parseInt(document.getElementById('quantidade_estoque').value);
         
+        const selectProduto = document.getElementById('categoria');
+        const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
+        const controlaLote = selectedOption?.getAttribute('data-controla-lote') === 'true';
+        
         const dadosProduto = {
             codigo: document.getElementById('codigo').value,
             nome: document.getElementById('nome').value,
@@ -552,8 +597,33 @@ document.addEventListener('DOMContentLoaded', () => {
             estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 5,
             garantia_dias: parseInt(document.getElementById('garantia_dias').value) || 0,
             imagem: document.getElementById('imagem').value,
+            codigos_barras: produtoBarcodes,
             updated_at: new Date().toISOString()
         };
+        
+        if (controlaLote) {
+            dadosProduto.lote = document.getElementById('lote').value.trim() || null;
+            dadosProduto.data_validade = document.getElementById('data_validade').value || null;
+            dadosProduto.alerta_vencimento_dias = parseInt(document.getElementById('alerta_vencimento_dias').value) || 30;
+        } else {
+            dadosProduto.lote = null;
+            dadosProduto.data_validade = null;
+            dadosProduto.alerta_vencimento_dias = null;
+        }
+
+        if (dadosProduto.tipo === 'servico') {
+            const chkHabilitada = document.getElementById('comissao_habilitada');
+            dadosProduto.comissao_habilitada = chkHabilitada ? chkHabilitada.checked : false;
+            
+            const chk100 = document.getElementById('comissao_100_porcento');
+            dadosProduto.comissao_100_porcento = chk100 ? chk100.checked : false;
+            
+            dadosProduto.comissao_valor = parseFloat(document.getElementById('comissao_valor').value) || 0;
+        } else {
+            dadosProduto.comissao_habilitada = false;
+            dadosProduto.comissao_100_porcento = false;
+            dadosProduto.comissao_valor = 0;
+        }
         
         if (!dadosProduto.codigo || !dadosProduto.nome) {
             mostrarNotificacao('Preencha código e nome do produto!', 'error');
@@ -575,8 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                const selectProduto = document.getElementById('categoria');
-                const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
                 const exigeSerial = (usuario.config_loja?.habilitar_seriais !== false) && 
                                     (selectedOption?.getAttribute('data-exige-serial') === 'true' || 
                                      selectedOption?.getAttribute('data-exige-imei') === 'true');
@@ -713,9 +781,39 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalProdutoTitle').textContent = 'Novo Produto';
         document.getElementById('produtoForm').reset();
         document.getElementById('produtoId').value = '';
+        
+        produtoBarcodes = [];
+        renderBarcodes();
+        document.getElementById('barcode_input').value = '';
+        
+        // Obter e preencher o próximo código de forma automática
+        obterProximoCodigoProduto().then(proximoCodigo => {
+            document.getElementById('codigo').value = proximoCodigo;
+        });
+        
         document.getElementById('quantidade_estoque').value = 1;
         document.getElementById('quantidade_estoque').disabled = false;
         exigeIMEIActual = false;
+        
+        const groupLoteValidade = document.getElementById('groupLoteValidade');
+        if (groupLoteValidade) groupLoteValidade.style.display = 'none';
+        
+        document.getElementById('lote').value = '';
+        document.getElementById('data_validade').value = '';
+        document.getElementById('alerta_vencimento_dias').value = '30';
+        
+        const checkComissao = document.getElementById('comissao_habilitada');
+        if (checkComissao) {
+            checkComissao.checked = false;
+            checkComissao.dispatchEvent(new Event('change'));
+        }
+        const checkComissao100 = document.getElementById('comissao_100_porcento');
+        if (checkComissao100) {
+            checkComissao100.checked = true;
+            checkComissao100.dispatchEvent(new Event('change'));
+        }
+        const valComissao = document.getElementById('comissao_valor');
+        if (valComissao) valComissao.value = '';
         
         const tipoSelect = document.getElementById('produtoTipo');
         if (tipoSelect) {
@@ -747,9 +845,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (seriaisContainer) seriaisContainer.style.display = 'none';
             document.getElementById('quantidade_estoque').value = '1';
             document.getElementById('estoque_minimo').value = '0';
+            
+            const groupComissaoServico = document.getElementById('groupComissaoServico');
+            if (groupComissaoServico) groupComissaoServico.style.display = 'block';
         } else {
             if (estoqueRow) estoqueRow.style.display = 'block';
             if (minEstoqueRow) minEstoqueRow.style.display = 'block';
+            
+            const groupComissaoServico = document.getElementById('groupComissaoServico');
+            if (groupComissaoServico) groupComissaoServico.style.display = 'none';
             
             const selectProduto = document.getElementById('categoria');
             const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
@@ -760,6 +864,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    document.getElementById('comissao_habilitada')?.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        const group = document.getElementById('groupComissaoValores');
+        if (group) group.style.display = checked ? 'block' : 'none';
+    });
+
+    document.getElementById('comissao_100_porcento')?.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        const customDiv = document.getElementById('divComissaoValorCustom');
+        if (customDiv) customDiv.style.display = checked ? 'none' : 'block';
+    });
+
     document.getElementById('quantidade_estoque')?.addEventListener('input', (e) => {
         const selectProduto = document.getElementById('categoria');
         const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
@@ -769,6 +885,78 @@ document.addEventListener('DOMContentLoaded', () => {
             if (quantidade > 0) {
                 gerarCamposSerial(quantidade, exigeIMEIActual);
             }
+        }
+    });
+    
+    function renderBarcodes() {
+        const list = document.getElementById('barcodes_list');
+        if (!list) return;
+        
+        list.innerHTML = '';
+        
+        if (produtoBarcodes.length === 0) {
+            list.innerHTML = '<span style="color: var(--gray); font-size: 13px; font-style: italic;" id="no_barcodes_placeholder">Nenhum código de barras adicionado</span>';
+            return;
+        }
+        
+        list.innerHTML = produtoBarcodes.map((code, index) => `
+            <span class="barcode-tag" style="background: #007bff; color: white; padding: 4px 10px; border-radius: 20px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                <code>${code}</code>
+                <span onclick="removerBarcode(${index})" style="cursor: pointer; font-weight: bold; background: rgba(255,255,255,0.2); width: 16px; height: 16px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 10px;">✕</span>
+            </span>
+        `).join('');
+    }
+
+    window.removerBarcode = (index) => {
+        produtoBarcodes.splice(index, 1);
+        renderBarcodes();
+    };
+
+    async function adicionarBarcode() {
+        const input = document.getElementById('barcode_input');
+        if (!input) return;
+        const code = input.value.trim();
+        if (!code) return;
+
+        if (produtoBarcodes.includes(code)) {
+            mostrarNotificacao('Este código de barras já foi adicionado para este produto!', 'error');
+            return;
+        }
+
+        // Validar unicidade no banco de dados para outros produtos
+        try {
+            const currentProductId = document.getElementById('produtoId').value;
+            let query = supabaseClient
+                .from('produtos')
+                .select('id, nome')
+                .contains('codigos_barras', JSON.stringify([code]));
+
+            if (currentProductId) {
+                query = query.neq('id', currentProductId);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                mostrarNotificacao(`Este código de barras já está em uso pelo produto "${data[0].nome}"!`, 'error');
+                return;
+            }
+
+            produtoBarcodes.push(code);
+            input.value = '';
+            renderBarcodes();
+        } catch (err) {
+            console.error('Erro ao validar código de barras:', err);
+            mostrarNotificacao('Erro ao validar código de barras', 'error');
+        }
+    }
+
+    document.getElementById('btn_add_barcode')?.addEventListener('click', adicionarBarcode);
+    document.getElementById('barcode_input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            adicionarBarcode();
         }
     });
     

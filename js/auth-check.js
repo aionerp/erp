@@ -37,7 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Labels específicas de segmento
         let labelProdutos = '📦 Serviços & Produtos';
-        if (config.habilitar_mesas) labelProdutos = '🍔 Cardápio / Itens';
         
         let labelVendas = '💳 PDV / Vendas';
         
@@ -73,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 <li><a href="colaboradores.html">👥 Colaboradores</a></li>
+                <li><a href="comissoes.html">💸 Comissões a Pagar</a></li>
                 ${extraLinksHtml}
                 <li><a href="relatorios.html">📈 Relatórios</a></li>
                 <li><a href="usuarios.html">👤 Usuários</a></li>

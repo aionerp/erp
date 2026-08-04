@@ -739,7 +739,7 @@ async function carregarComissoesColaborador() {
         // 2. Obter vendas com seu respectivo colaborador_id
         let querySales = supabaseClient
             .from('saidas')
-            .select('id, total, colaborador_id, cancelado, data')
+            .select('id, total, colaborador_id, cancelado, data, comissao_calculada')
             .eq('cancelado', false);
 
         if (dataInicio) {
@@ -763,7 +763,7 @@ async function carregarComissoesColaborador() {
         const saleIds = salesList.map(s => s.id);
         const { data: saleItems, error: itemsError } = await supabaseClient
             .from('saida_itens')
-            .select('saida_id, produto_id, quantidade, valor_unitario, subtotal, produtos(tipo, nome)')
+            .select('saida_id, produto_id, quantidade, valor_unitario, subtotal, produtos(tipo, nome, comissao_habilitada, comissao_100_porcento, comissao_valor)')
             .in('saida_id', saleIds);
 
         if (itemsError) throw itemsError;
@@ -779,21 +779,28 @@ async function carregarComissoesColaborador() {
             colabSales.forEach(sale => {
                 faturamentoTotal += parseFloat(sale.total || 0);
 
-                const items = (saleItems || []).filter(item => item.saida_id === sale.id);
-                items.forEach(item => {
-                    const subtotalItem = parseFloat(item.subtotal || item.valor_unitario * item.quantidade || 0);
-                    // Checa se o tipo cadastrado é servico
-                    const isServico = item.produtos?.tipo === 'servico';
+                if (sale.comissao_calculada !== undefined && sale.comissao_calculada !== null && parseFloat(sale.comissao_calculada) > 0) {
+                    comissaoGerada += parseFloat(sale.comissao_calculada);
+                } else {
+                    const items = (saleItems || []).filter(item => item.saida_id === sale.id);
+                    items.forEach(item => {
+                        const subtotalItem = parseFloat(item.subtotal || item.valor_unitario * item.quantidade || 0);
+                        const isServico = item.produtos?.tipo === 'servico';
 
-                    if (isServico) {
-                        // Serviços repassam o valor integral para o comissionado/técnico
-                        comissaoGerada += subtotalItem;
-                    } else {
-                        // Produtos ganham a porcentagem cadastrada
-                        const pctComissao = parseFloat(colab.comissao || 0) / 100;
-                        comissaoGerada += subtotalItem * pctComissao;
-                    }
-                });
+                        if (isServico) {
+                            if (item.produtos?.comissao_habilitada === true) {
+                                if (item.produtos?.comissao_100_porcento === true) {
+                                    comissaoGerada += subtotalItem;
+                                } else {
+                                    comissaoGerada += (parseFloat(item.produtos?.comissao_valor || 0) * item.quantidade);
+                                }
+                            }
+                        } else {
+                            const pctComissao = parseFloat(colab.comissao || 0) / 100;
+                            comissaoGerada += subtotalItem * pctComissao;
+                        }
+                    });
+                }
             });
 
             return {

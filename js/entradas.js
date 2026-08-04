@@ -171,11 +171,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         return false;
     }
     
+    async function produtoControlaLote(produto) {
+        const cat = categorias.find(c => c.nome === produto.categoria);
+        if (cat?.controla_lote_validade === true) return true;
+        return false;
+    }
+    
+    function obterAlertaVencimentoPadrao(produto) {
+        const cat = categorias.find(c => c.nome === produto.categoria);
+        return cat?.aviso_vencimento_dias || 30;
+    }
+    
     async function adicionarAoCarrinho(produto) {
         const existente = carrinho.find(item => item.id === produto.id);
         
         const exigeSerial = await produtoExigeSerial(produto);
         const exigeIMEI = await produtoExigeIMEI(produto);
+        const controlaLote = await produtoControlaLote(produto);
+        const alertaPadrao = obterAlertaVencimentoPadrao(produto);
         
         if (existente) {
             existente.quantidade += 1;
@@ -193,6 +206,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 quantidade: 1,
                 exige_serial: exigeSerial,
                 exige_imei: exigeIMEI,
+                controla_lote: controlaLote,
+                lote: produto.lote || '',
+                data_validade: produto.data_validade || '',
+                alerta_vencimento_dias: produto.alerta_vencimento_dias || alertaPadrao,
                 seriais: exigeSerial ? [{ serial: '', imei: '' }] : []
             });
         }
@@ -261,6 +278,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             }
             
+            let loteHtml = '';
+            if (item.controla_lote) {
+                loteHtml = `
+                    <div class="lote-inputs-container" style="margin-top: 10px; padding: 10px; border: 1px solid #ffeeba; background: #fff3cd; border-radius: 6px;">
+                        <strong style="font-size:11px; color:#856404; display:block; margin-bottom:5px;">
+                            📅 Controle de Lote e Validade
+                        </strong>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                            <div>
+                                <label style="font-size:10px; font-weight:600; display:block; color:#856404;">Lote *</label>
+                                <input type="text" 
+                                       placeholder="Ex: LOTE123" 
+                                       value="${item.lote || ''}" 
+                                       style="width: 100%; padding: 5px 8px; border-radius: 4px; border: 1px solid #ced4da; font-size:12px;"
+                                       oninput="atualizarLoteField(${item.id}, 'lote', this.value)">
+                            </div>
+                            <div>
+                                <label style="font-size:10px; font-weight:600; display:block; color:#856404;">Validade *</label>
+                                <input type="date" 
+                                       value="${item.data_validade || ''}" 
+                                       style="width: 100%; padding: 5px 8px; border-radius: 4px; border: 1px solid #ced4da; font-size:12px;"
+                                       oninput="atualizarLoteField(${item.id}, 'data_validade', this.value)">
+                            </div>
+                            <div>
+                                <label style="font-size:10px; font-weight:600; display:block; color:#856404;">Aviso (dias) *</label>
+                                <input type="number" 
+                                       min="1"
+                                       value="${item.alerta_vencimento_dias || 30}" 
+                                       style="width: 100%; padding: 5px 8px; border-radius: 4px; border: 1px solid #ced4da; font-size:12px;"
+                                       oninput="atualizarLoteField(${item.id}, 'alerta_vencimento_dias', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
             return `
                 <div class="carrinho-item" data-id="${item.id}">
                     <div class="carrinho-item-header">
@@ -293,6 +346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                     
                     ${serialHtml}
+                    ${loteHtml}
                 </div>
             `;
         }).join('');
@@ -338,6 +392,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!item || !item.seriais[index]) return;
         
         item.seriais[index][campo] = valor.trim();
+    };
+    
+    window.atualizarLoteField = (id, campo, valor) => {
+        const item = carrinho.find(i => i.id === id);
+        if (item) {
+            if (campo === 'alerta_vencimento_dias') {
+                item[campo] = parseInt(valor) || 30;
+            } else {
+                item[campo] = valor;
+            }
+        }
     };
     
     function atualizarTotais() {
@@ -621,6 +686,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     todosSeriais.push(s.serial);
                 }
             }
+            if (item.controla_lote) {
+                if (!item.lote || item.lote.trim() === '') {
+                    mostrarNotificacao(`Preencha o Lote do produto "${item.nome}"!`, 'error');
+                    return;
+                }
+                if (!item.data_validade) {
+                    mostrarNotificacao(`Preencha a Data de Validade do produto "${item.nome}"!`, 'error');
+                    return;
+                }
+            }
         }
         
         if (todosSeriais.length > 0) {
@@ -699,12 +774,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const estoqueAtual = produtoObj?.estoque_total || 0;
                 const novoEstoque = estoqueAtual + item.quantidade;
                 
+                const updatePayload = {
+                    estoque_total: novoEstoque,
+                    ultima_movimentacao: new Date().toISOString()
+                };
+                
+                if (item.controla_lote) {
+                    updatePayload.lote = item.lote;
+                    updatePayload.data_validade = item.data_validade;
+                    updatePayload.alerta_vencimento_dias = item.alerta_vencimento_dias;
+                }
+                
                 await supabaseClient
                     .from('produtos')
-                    .update({
-                        estoque_total: novoEstoque,
-                        ultima_movimentacao: new Date().toISOString()
-                    })
+                    .update(updatePayload)
                     .eq('id', item.id);
                 
                 if (item.exige_serial) {
@@ -844,6 +927,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 categorias.map(c => `<option value="${c.nome}" data-id="${c.id}">${c.nome}</option>`).join('');
         }
         document.getElementById('produtoRapidoForm').reset();
+        
+        // Obter e preencher o próximo código de forma automática
+        obterProximoCodigoProduto().then(proximoCodigo => {
+            document.getElementById('rapidoCodigo').value = proximoCodigo;
+        });
+        
         modal.style.display = 'flex';
     });
 
@@ -1054,6 +1143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.atualizarQtd = atualizarQtd;
     window.atualizarPreco = atualizarPreco;
     window.atualizarSerial = atualizarSerial;
+    window.atualizarLoteField = atualizarLoteField;
     window.verDetalhes = verDetalhes;
     window.excluirEntrada = excluirEntrada;
 });
