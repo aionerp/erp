@@ -15,6 +15,43 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = 'index.html';
         return;
     }
+
+    // Validar permissão de página imediatamente para evitar bypass de URL
+    const linksMapPaginas = {
+        'dashboard.html': 'dashboard',
+        'clientes.html': 'clientes',
+        'produtos.html': 'produtos',
+        'categorias.html': 'categorias',
+        'estoque.html': 'estoque',
+        'entradas.html': 'entradas',
+        'saidas.html': 'saidas',
+        'fechamento.html': 'saidas',
+        'despesas.html': 'financeiro',
+        'devolucoes.html': 'saidas',
+        'fornecedores.html': 'fornecedores',
+        'colaboradores.html': 'colaboradores',
+        'comissoes.html': 'relatorios',
+        'ordem-servico.html': 'ordens_servico',
+        'agendamentos.html': 'dashboard',
+        'mesas.html': 'saidas',
+        'relatorios.html': 'relatorios',
+        'usuarios.html': 'usuarios'
+    };
+
+    const moduloAtual = linksMapPaginas[currentPage];
+    if (moduloAtual) {
+        const podeVer = verificarPermissaoUsuario(usuario, moduloAtual, 'ver');
+        if (!podeVer) {
+            console.warn(`Acesso negado para a página ${currentPage}. Redirecionando...`);
+            const proximaPagina = obterPrimeiraPaginaPermitida(usuario);
+            if (proximaPagina && proximaPagina !== currentPage) {
+                window.location.href = proximaPagina;
+            } else {
+                window.location.href = 'index.html';
+            }
+            return;
+        }
+    }
     
     const config = usuario.config_loja || {
         habilitar_seriais: true,
@@ -301,6 +338,7 @@ function filtrarMenuPorPermissao(usuario) {
         'devolucoes.html': 'saidas',
         'fornecedores.html': 'fornecedores',
         'colaboradores.html': 'colaboradores',
+        'comissoes.html': 'relatorios',
         'ordem-servico.html': 'ordens_servico',
         'agendamentos.html': 'dashboard',
         'mesas.html': 'saidas',
@@ -338,11 +376,6 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
     // Admin tem acesso total
     if (usuario.perfil === 'admin') return true;
     
-    // Modulo colaboradores e financeiro restrito a admin e gerente
-    if (modulo === 'colaboradores' || modulo === 'financeiro') {
-        return usuario.perfil === 'gerente';
-    }
-    
     // Verificar permissões do usuário
     const permissoes = usuario.permissoes || {};
     
@@ -359,6 +392,8 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
                 saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
                 fornecedores: { ver: true, criar: true, editar: true, excluir: false },
                 ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+                colaboradores: { ver: true, criar: true, editar: true, excluir: false },
+                financeiro: { ver: true, criar: true, editar: true, excluir: false },
                 relatorios: { ver: true, exportar: true },
                 usuarios: { ver: false, criar: false, editar: false, excluir: false }
             },
@@ -372,6 +407,8 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
                 saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             },
@@ -385,6 +422,8 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
                 saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             },
@@ -398,6 +437,8 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
                 saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             }

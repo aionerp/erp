@@ -227,6 +227,8 @@ function temPermissao(modulo, acao = 'ver') {
                 saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
                 fornecedores: { ver: true, criar: true, editar: true, excluir: false },
                 ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+                colaboradores: { ver: true, criar: true, editar: true, excluir: false },
+                financeiro: { ver: true, criar: true, editar: true, excluir: false },
                 relatorios: { ver: true, exportar: true },
                 usuarios: { ver: false, criar: false, editar: false, excluir: false }
             },
@@ -240,6 +242,8 @@ function temPermissao(modulo, acao = 'ver') {
                 saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             },
@@ -253,6 +257,8 @@ function temPermissao(modulo, acao = 'ver') {
                 saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             },
@@ -266,6 +272,8 @@ function temPermissao(modulo, acao = 'ver') {
                 saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
                 fornecedores: { ver: false },
                 ordens_servico: { ver: false },
+                colaboradores: { ver: false },
+                financeiro: { ver: false },
                 relatorios: { ver: false },
                 usuarios: { ver: false }
             }
@@ -277,6 +285,42 @@ function temPermissao(modulo, acao = 'ver') {
     
     return permissoes[modulo]?.[acao] || false;
 }
+
+/**
+ * Obtém a primeira página que o usuário tem permissão para visualizar
+ * @param {object} usuario - Objeto do usuário logado
+ * @returns {string} - Nome do arquivo HTML correspondente
+ */
+function obterPrimeiraPaginaPermitida(usuario) {
+    if (!usuario) return 'index.html';
+    
+    if (usuario.perfil === 'admin') return 'dashboard.html';
+    
+    const paginas = [
+        { href: 'dashboard.html', modulo: 'dashboard' },
+        { href: 'clientes.html', modulo: 'clientes' },
+        { href: 'produtos.html', modulo: 'produtos' },
+        { href: 'categorias.html', modulo: 'categorias' },
+        { href: 'estoque.html', modulo: 'estoque' },
+        { href: 'entradas.html', modulo: 'entradas' },
+        { href: 'saidas.html', modulo: 'saidas' },
+        { href: 'despesas.html', modulo: 'financeiro' },
+        { href: 'fornecedores.html', modulo: 'fornecedores' },
+        { href: 'colaboradores.html', modulo: 'colaboradores' },
+        { href: 'relatorios.html', modulo: 'relatorios' },
+        { href: 'usuarios.html', modulo: 'usuarios' }
+    ];
+    
+    for (const p of paginas) {
+        if (temPermissao(p.modulo, 'ver')) {
+            return p.href;
+        }
+    }
+    
+    return 'index.html';
+}
+
+window.obterPrimeiraPaginaPermitida = obterPrimeiraPaginaPermitida;
 
 /**
  * Verifica se o usuário tem permissão e redireciona se não tiver

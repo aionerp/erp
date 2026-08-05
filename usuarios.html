@@ -9,10 +9,13 @@
     <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
     <style>
         .permissoes-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
             margin: 15px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 5px;
         }
         
         .permissoes-card {

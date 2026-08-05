@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
             entradas: { ver: true, criar: true, excluir: true },
             saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
             fornecedores: { ver: true, criar: true, editar: true, excluir: true },
+            ordens_servico: { ver: true, criar: true, editar: true, excluir: true },
+            colaboradores: { ver: true, criar: true, editar: true, excluir: true },
+            financeiro: { ver: true, criar: true, editar: true, excluir: true },
             relatorios: { ver: true, exportar: true },
             usuarios: { ver: true, criar: true, editar: true, excluir: true }
         },
@@ -68,6 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
             entradas: { ver: true, criar: true, excluir: false },
             saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
             fornecedores: { ver: true, criar: true, editar: true, excluir: false },
+            ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+            colaboradores: { ver: true, criar: true, editar: true, excluir: false },
+            financeiro: { ver: true, criar: true, editar: true, excluir: false },
             relatorios: { ver: true, exportar: true },
             usuarios: { ver: false, criar: false, editar: false, excluir: false }
         },
@@ -75,38 +81,63 @@ document.addEventListener('DOMContentLoaded', () => {
             dashboard: { ver: true },
             clientes: { ver: true, criar: true, editar: true, excluir: false },
             produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false },
+            categorias: { ver: false, criar: false, editar: false, excluir: false },
             estoque: { ver: true, ajustar: false },
-            entradas: { ver: false },
+            entradas: { ver: false, criar: false, excluir: false },
             saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false },
-            relatorios: { ver: false },
-            usuarios: { ver: false }
+            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+            ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
+            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+            financeiro: { ver: false, criar: false, editar: false, excluir: false },
+            relatorios: { ver: false, exportar: false },
+            usuarios: { ver: false, criar: false, editar: false, excluir: false }
         },
         tecnico: {
             dashboard: { ver: true },
             clientes: { ver: true, criar: true, editar: true, excluir: false },
             produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false },
-            estoque: { ver: false },
-            entradas: { ver: false },
+            categorias: { ver: false, criar: false, editar: false, excluir: false },
+            estoque: { ver: false, ajustar: false },
+            entradas: { ver: false, criar: false, excluir: false },
             saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false },
-            relatorios: { ver: false },
-            usuarios: { ver: false }
+            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+            ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+            financeiro: { ver: false, criar: false, editar: false, excluir: false },
+            relatorios: { ver: false, exportar: false },
+            usuarios: { ver: false, criar: false, editar: false, excluir: false }
         },
         basico: {
             dashboard: { ver: false },
             clientes: { ver: true, criar: false, editar: false, excluir: false },
             produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false },
-            estoque: { ver: false },
-            entradas: { ver: false },
+            categorias: { ver: false, criar: false, editar: false, excluir: false },
+            estoque: { ver: false, ajustar: false },
+            entradas: { ver: false, criar: false, excluir: false },
             saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false },
-            relatorios: { ver: false },
-            usuarios: { ver: false }
+            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+            ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
+            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+            financeiro: { ver: false, criar: false, editar: false, excluir: false },
+            relatorios: { ver: false, exportar: false },
+            usuarios: { ver: false, criar: false, editar: false, excluir: false }
         }
+    };
+
+    const LISTA_TODAS_PERMISSOES = {
+        dashboard: { ver: false },
+        clientes: { ver: false, criar: false, editar: false, excluir: false },
+        produtos: { ver: false, criar: false, editar: false, excluir: false },
+        categorias: { ver: false, criar: false, editar: false, excluir: false },
+        estoque: { ver: false, ajustar: false },
+        entradas: { ver: false, criar: false, excluir: false },
+        saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
+        fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+        ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
+        colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+        financeiro: { ver: false, criar: false, editar: false, excluir: false },
+        relatorios: { ver: false, exportar: false },
+        usuarios: { ver: false, criar: false, editar: false, excluir: false }
     };
     
     // =====================================================
@@ -193,8 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function carregarPermissoes(perfil, customPermissoes = null) {
         const container = document.getElementById('permissoesContainer');
-        const defaultPermissoes = PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.basico;
-        const usuarioIdAberto = document.getElementById('usuarioId').value;
+        const schemaPermissoes = LISTA_TODAS_PERMISSOES;
         
         const labels = {
             dashboard: '📊 Dashboard',
@@ -206,35 +236,53 @@ document.addEventListener('DOMContentLoaded', () => {
             saidas: '💳 PDV / Vendas',
             fornecedores: '🏭 Fornecedores',
             ordens_servico: '🔧 OS',
+            colaboradores: '👥 Colaboradores',
+            financeiro: '💸 Financeiro / Despesas',
             relatorios: '📈 Relatórios',
             usuarios: '👤 Usuários'
         };
         
-        container.innerHTML = Object.entries(defaultPermissoes).map(([modulo, permissoesModulo]) => {
-            const permissoesHtml = Object.entries(permissoesModulo).map(([acao, defaultValor]) => {
+        container.innerHTML = Object.entries(schemaPermissoes).map(([modulo, permissoesModulo]) => {
+            const permissoesHtml = Object.entries(permissoesModulo).map(([acao, _]) => {
+                // Obter o valor padrão do perfil
+                const perfilDefaultVal = PERMISSOES_POR_PERFIL[perfil]?.[modulo]?.[acao] !== undefined
+                    ? PERMISSOES_POR_PERFIL[perfil][modulo][acao]
+                    : (PERMISSOES_POR_PERFIL.basico[modulo]?.[acao] || false);
+
+                // Priorizar valor customizado se existir
                 const valor = (customPermissoes && customPermissoes[modulo] && customPermissoes[modulo][acao] !== undefined)
                     ? customPermissoes[modulo][acao]
-                    : defaultValor;
+                    : perfilDefaultVal;
 
                 const acaoLabels = {
                     ver: 'Visualizar',
-                    criar: 'Cadastrar',
+                    criar: 'Cadastrar / Criar',
                     editar: 'Editar',
-                    excluir: 'Excluir',
-                    cancelar: 'Cancelar',
-                    ajustar: 'Ajustar',
-                    exportar: 'Exportar',
+                    excluir: 'Excluir / Deletar',
+                    cancelar: 'Cancelar Venda',
+                    ajustar: 'Ajustar Estoque',
+                    exportar: 'Exportar Relatórios',
                     ver_vendas_outros: 'Visualizar Venda de Outros Usuários'
                 };
-                const labelText = acaoLabels[acao] || acao.charAt(0).toUpperCase() + acao.slice(1);
+                
+                // Rótulos específicos para tornar intuitivo
+                let labelText = acaoLabels[acao] || acao.charAt(0).toUpperCase() + acao.slice(1);
+                if (modulo === 'entradas') {
+                    if (acao === 'criar') labelText = 'Permite dar Entrada (Compras)';
+                    if (acao === 'excluir') labelText = 'Cancela Entrada';
+                    if (acao === 'ver') labelText = 'Visualiza Relatório de Compras / Entradas';
+                } else if (modulo === 'saidas') {
+                    if (acao === 'criar') labelText = 'Permite realizar Vendas';
+                    if (acao === 'cancelar') labelText = 'Cancela Vendas';
+                    if (acao === 'ver') labelText = 'Visualiza Relatório de Vendas / PDV';
+                }
                 
                 return `
-                <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-weight: normal; cursor: pointer;">
+                <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: normal; cursor: pointer; font-size: 13px;">
                     <input type="checkbox" 
                            data-modulo="${modulo}" 
                            data-acao="${acao}"
                            ${valor ? 'checked' : ''} 
-                           ${usuarioIdAberto ? '' : 'disabled'}
                            class="checkbox-permissao"
                     >
                     ${labelText}
@@ -243,9 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join('');
             
             return `
-                <div class="permissoes-card">
-                    <h4>${labels[modulo] || modulo}</h4>
-                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px;">
+                <div class="permissoes-card" style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; color: #333; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">
+                        ${labels[modulo] || modulo}
+                    </h4>
+                    <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 5px;">
                         ${permissoesHtml}
                     </div>
                 </div>
@@ -334,22 +384,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Coletar permissões marcadas nos checkboxes
-        let permissoes = PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.basico;
-        
-        // Se estamos editando, permitir customizar permissões
-        if (id) {
-            permissoes = {};
-            const checkboxes = document.querySelectorAll('.checkbox-permissao');
-            checkboxes.forEach(checkbox => {
-                const modulo = checkbox.getAttribute('data-modulo');
-                const acao = checkbox.getAttribute('data-acao');
-                
-                if (!permissoes[modulo]) {
-                    permissoes[modulo] = {};
-                }
-                permissoes[modulo][acao] = checkbox.checked;
-            });
-        }
+        let permissoes = {};
+        const checkboxes = document.querySelectorAll('.checkbox-permissao');
+        checkboxes.forEach(checkbox => {
+            const modulo = checkbox.getAttribute('data-modulo');
+            const acao = checkbox.getAttribute('data-acao');
+            
+            if (!permissoes[modulo]) {
+                permissoes[modulo] = {};
+            }
+            permissoes[modulo][acao] = checkbox.checked;
+        });
         
         const dados = {
             nome: nome,

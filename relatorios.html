@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ajuda.css">
     <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
     <style>
         .relatorios-grid {
@@ -373,7 +374,7 @@
                 <div id="tab-movimento" class="tab-content">
                     <div class="relatorio-container">
                         <div class="relatorio-header">
-                            <h2>📋 Movimento Diário</h2>
+                            <h2>📊 Movimento Diário <span class="ajuda-btn" data-help-id="movimento_diario" title="Ajuda sobre Movimento Diário">ℹ️</span></h2>
                             <div class="filtros-relatorio">
                                 <select id="filtroUsuarioMovimento" style="display:none; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;"></select>
                                 <input type="date" id="movimentoData">
@@ -392,9 +393,11 @@
                 <div id="tab-faturamento" class="tab-content">
                     <div class="relatorio-container">
                         <div class="relatorio-header">
-                            <h2>💰 Faturamento</h2>
+                            <h2>💰 Faturamento <span class="ajuda-btn" data-help-id="faturamento" title="Ajuda sobre Faturamento">ℹ️</span></h2>
                             <div class="filtros-relatorio">
                                 <select id="filtroUsuarioFaturamento" style="display:none; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;"></select>
+                                <input type="date" id="faturamentoDataInicio">
+                                <input type="date" id="faturamentoDataFim">
                                 <select id="faturamentoPlano">
                                     <option value="diario">Diário</option>
                                     <option value="semanal" selected>Semanal</option>
@@ -458,6 +461,7 @@
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
     <script src="js/relatorios.js"></script>
+    <script src="js/ajuda.js"></script>
 <script src="js/active-nav.js"></script>`n</body>
 </html>
 

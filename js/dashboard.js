@@ -97,11 +97,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             document.getElementById('kpiTotalClientes').textContent = totalClientes !== null ? totalClientes : 0;
 
-            // 2. Carregar todas as vendas não canceladas
-            const { data: saidasData, error: errorSaidas } = await supabaseClient
+            // 2. Carregar todas as vendas não canceladas (respeitando a permissão de ver vendas de outros)
+            const verOutros = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
+            let querySaidas = supabaseClient
                 .from('saidas')
                 .select('*')
                 .eq('cancelado', false);
+            
+            if (!verOutros && usuario?.id) {
+                querySaidas = querySaidas.eq('usuario_id', usuario.id);
+            }
+            
+            const { data: saidasData, error: errorSaidas } = await querySaidas;
 
             if (errorSaidas) throw errorSaidas;
             vendas = saidasData || [];
@@ -368,15 +375,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!container) return;
 
         try {
-            // Buscar itens vendidos e suas vendas correspondentes
+            // Buscar itens vendidos e suas vendas correspondentes (respeitando permissões)
             const { data: itensData, error } = await supabaseClient
                 .from('saida_itens')
-                .select('quantidade, subtotal, produto_id, produtos(nome, codigo), saidas(cancelado)');
+                .select('quantidade, subtotal, produto_id, produtos(nome, codigo), saidas(cancelado, usuario_id)');
 
             if (error) throw error;
 
             // Filtrar apenas itens de vendas ativas (cancelado = false)
-            const itensVendasAtivas = (itensData || []).filter(item => item.saidas && item.saidas.cancelado === false);
+            const verOutrosRank = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
+            const itensVendasAtivas = (itensData || []).filter(item => {
+                if (!item.saidas || item.saidas.cancelado === true) return false;
+                if (!verOutrosRank && usuario?.id && item.saidas.usuario_id !== usuario.id) return false;
+                return true;
+            });
 
             // Agrupar estatísticas por produto
             const rankingMap = {};
@@ -445,6 +457,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function carregarEntradasRecentes() {
         const tbody = document.getElementById('entradasRecentesBody');
         if (!tbody) return;
+
+        // Ocultar card de entradas se o usuário não tiver permissão
+        if (typeof temPermissao === 'function' && !temPermissao('entradas', 'ver')) {
+            const card = tbody.closest('.dashboard-card');
+            if (card) card.style.display = 'none';
+            return;
+        }
 
         try {
             const { data: entradasData, error } = await supabaseClient

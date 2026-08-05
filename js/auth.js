@@ -3,9 +3,10 @@
 
 // Aguardar DOM carregar
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar se já está logado - se sim, ir para dashboard
+    // Verificar se já está logado - se sim, ir para a primeira página permitida
     if (sessionStorage.getItem('usuario')) {
-        window.location.href = 'dashboard.html';
+        const usuario = JSON.parse(sessionStorage.getItem('usuario'));
+        window.location.href = obterPrimeiraPaginaPermitida(usuario);
         return;
     }
     
@@ -97,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 mostrarNotificacao(`Bem-vindo, ${userData.nome}!`, 'success');
                 
                 setTimeout(() => {
-                    window.location.href = 'dashboard.html';
+                    window.location.href = obterPrimeiraPaginaPermitida(usuarioLogado);
                 }, 500);
                 
             } catch (error) {

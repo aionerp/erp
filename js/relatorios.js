@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (document.getElementById('colabDataInicio')) document.getElementById('colabDataInicio').value = trintaDiasAtrasStr;
     if (document.getElementById('colabDataFim')) document.getElementById('colabDataFim').value = hoje;
+    if (document.getElementById('faturamentoDataInicio')) document.getElementById('faturamentoDataInicio').value = trintaDiasAtrasStr;
+    if (document.getElementById('faturamentoDataFim')) document.getElementById('faturamentoDataFim').value = hoje;
     
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
@@ -356,7 +358,7 @@ async function carregarMovimentoDiario() {
         
         const totalEntradas = entradas.reduce((sum, e) => sum + (e.total || 0), 0);
         const totalSaidas = saidas.reduce((sum, s) => sum + (s.total || 0), 0);
-        const saldo = totalEntradas - totalSaidas;
+        const saldo = totalSaidas - totalEntradas;
         
         let html = `
             <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
@@ -442,6 +444,8 @@ async function carregarMovimentoDiario() {
 async function carregarFaturamento() {
     try {
         const plano = document.getElementById('faturamentoPlano').value;
+        const dataInicio = document.getElementById('faturamentoDataInicio')?.value;
+        const dataFim = document.getElementById('faturamentoDataFim')?.value;
         const container = document.getElementById('faturamentoContainer');
         container.innerHTML = '<div style="text-align: center; padding: 20px;">Carregando...</div>';
         dadosCarregados.faturamento = false;
@@ -454,6 +458,9 @@ async function carregarFaturamento() {
             .select('data, total')
             .eq('cancelado', false)
             .order('data', { ascending: true });
+
+        if (dataInicio) qVendas = qVendas.gte('data', dataInicio);
+        if (dataFim) qVendas = qVendas.lte('data', dataFim);
 
         if (!verOutros) {
             qVendas = qVendas.eq('usuario_id', usuarioLogado.id);
@@ -503,7 +510,7 @@ async function carregarFaturamento() {
         const total = valores.reduce((sum, v) => sum + v, 0);
         
         // Armazenar para exportação
-        dadosExportacao.faturamento = { labels, valores, total, plano };
+        dadosExportacao.faturamento = { labels, valores, total, plano, dataInicio, dataFim };
         
         let html = `
             <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
@@ -881,6 +888,13 @@ window.carregarComissoesColaborador = carregarComissoesColaborador;
 // EXPORTAÇÕES
 // =====================================================
 
+function formatarDataISO(dataStr) {
+    if (!dataStr) return '';
+    const partes = dataStr.split('-');
+    if (partes.length !== 3) return dataStr;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
 function exportarExcel(tipo) {
     if (!temPermissao('relatorios', 'exportar')) {
         mostrarNotificacao('Você não tem permissão para exportar dados!', 'error');
@@ -933,7 +947,8 @@ function exportarExcel(tipo) {
             const fat = dadosExportacao.faturamento;
             dados = [
                 ['RELATÓRIO DE FATURAMENTO'],
-                [`Período: ${fat.plano}`],
+                [`Plano: ${fat.plano.toUpperCase()}`],
+                [`Período: ${formatarDataISO(fat.dataInicio) || 'Início'} a ${formatarDataISO(fat.dataFim) || 'Fim'}`],
                 [''],
                 ['Período', 'Valor (R$)', '% do Total']
             ];
@@ -1046,7 +1061,8 @@ function exportarPDF(tipo) {
             }
             container = document.getElementById('faturamentoContainer');
             titulo = 'Relatório de Faturamento';
-            subtitulo = `Período: ${dadosExportacao.faturamento?.plano || ''}`;
+            const fatData = dadosExportacao.faturamento;
+            subtitulo = `Plano: ${fatData?.plano || ''} | Período: ${formatarDataISO(fatData?.dataInicio) || 'Início'} a ${formatarDataISO(fatData?.dataFim) || 'Fim'}`;
             break;
 
         case 'vendas':
