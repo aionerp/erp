@@ -78,3 +78,36 @@ ALTER TABLE public.boletos_pagar ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_boletos_pagar_policy ON public.boletos_pagar;
 CREATE POLICY tenant_boletos_pagar_policy ON public.boletos_pagar
     FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+
+
+-- 5. CÓDIGOS DE BARRAS MÚLTIPLOS EM PRODUTOS
+ALTER TABLE public.produtos ADD COLUMN IF NOT EXISTS codigos_barras JSONB DEFAULT '[]'::jsonb;
+
+
+-- 6. COMISSÕES DE PRODUTOS E VENDAS
+ALTER TABLE public.produtos 
+    ADD COLUMN IF NOT EXISTS comissao_habilitada BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS comissao_100_porcento BOOLEAN DEFAULT true,
+    ADD COLUMN IF NOT EXISTS comissao_valor NUMERIC DEFAULT 0;
+
+ALTER TABLE public.saidas 
+    ADD COLUMN IF NOT EXISTS comissao_calculada NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS comissao_paga BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS comissao_paga_data TIMESTAMP WITH TIME ZONE;
+
+
+-- 7. CONTROLE DE LOTE E VALIDADE POR CATEGORIA E PRODUTOS
+ALTER TABLE public.categorias 
+    ADD COLUMN IF NOT EXISTS controla_lote_validade BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS aviso_vencimento_dias INTEGER DEFAULT 30;
+
+ALTER TABLE public.produtos 
+    ADD COLUMN IF NOT EXISTS data_validade DATE,
+    ADD COLUMN IF NOT EXISTS lote VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS alerta_vencimento_dias INTEGER DEFAULT 30;
+
+
+-- 8. TERMOS DE GARANTIA E TROCA NA CONFIGURAÇÃO DA LOJA
+ALTER TABLE public.config_loja 
+    ADD COLUMN IF NOT EXISTS termo_garantia TEXT,
+    ADD COLUMN IF NOT EXISTS termo_troca TEXT;

@@ -297,6 +297,8 @@ CREATE TABLE public.config_loja (
     habilitar_mesas BOOLEAN DEFAULT false,
     habilitar_lotes BOOLEAN DEFAULT false,
     habilitar_variacoes BOOLEAN DEFAULT false,
+    termo_garantia TEXT,
+    termo_troca TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
