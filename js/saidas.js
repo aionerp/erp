@@ -168,62 +168,429 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // === VERIFICAR STATUS DO CAIXA DIÁRIO ===
             let caixaAtivo = null;
-            try {
-                caixaAtivo = await obterCaixaAtivo();
-            } catch (e) {
-                console.warn('Erro ao consultar caixa ativo:', e);
+
+            // Injetar estilos do spinner se não existirem
+            const styleIdSpinner = 'spinner-keyframes-styles';
+            if (!document.getElementById(styleIdSpinner)) {
+                const style = document.createElement('style');
+                style.id = styleIdSpinner;
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
             }
 
-            const bannerCaixa = document.getElementById('bannerCaixaFechado');
-            const inputCli = document.getElementById('searchCliente');
-            const btnFinalizar = document.getElementById('btnFinalizarVenda');
+            // Criar modal do Caixa no PDV se não existir
+            if (!document.getElementById('modalCaixaPDV')) {
+                const modalHtml = `
+                <div id="modalCaixaPDV" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999; display:none; backdrop-filter: blur(4px); transition: all 0.3s ease;">
+                    <div style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:450px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; box-sizing:border-box; font-family:inherit;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                            <h2 id="modalCaixaPDVTitle" style="font-size:18px; font-weight:700; color:#1f2937; margin:0;"></h2>
+                            <span id="closeModalCaixaPDV" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
+                        </div>
+                        <div id="modalCaixaPDVBody" style="max-height: 420px; overflow-y: auto; margin-bottom: 15px; padding-right: 5px;">
+                            <!-- Dinâmico -->
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:12px;">
+                            <button id="btnCancelCaixaPDV" style="padding:8px 16px; border-radius:8px; border:1px solid #d1d5db; cursor:pointer; font-weight:600; background:#f9fafb; color:#374151;">Cancelar</button>
+                            <button id="btnConfirmCaixaPDV" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:var(--primary); color:#fff;"></button>
+                        </div>
+                    </div>
+                </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-            if (!caixaAtivo) {
-                // Se caixa estiver fechado, criar ou exibir o banner
-                if (!bannerCaixa) {
-                    const banner = document.createElement('div');
-                    banner.id = 'bannerCaixaFechado';
-                    banner.style.backgroundColor = '#f8d7da';
-                    banner.style.color = '#721c24';
-                    banner.style.border = '1px solid #f5c6cb';
-                    banner.style.padding = '12px 20px';
-                    banner.style.borderRadius = '8px';
-                    banner.style.marginBottom = '15px';
-                    banner.style.fontWeight = '700';
-                    banner.style.fontSize = '14px';
-                    banner.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa no menu <a href="fechamento.html" style="color:#721c24; text-decoration:underline;">Fechamento Diário</a>.';
-                    
-                    const containerPDV = document.querySelector('.pdv-busca-top');
-                    if (containerPDV && containerPDV.parentNode) {
-                        containerPDV.parentNode.insertBefore(banner, containerPDV);
+                // Adicionar listener para fechar o modal
+                document.getElementById('closeModalCaixaPDV').addEventListener('click', fecharModalCaixaPDV);
+                document.getElementById('btnCancelCaixaPDV').addEventListener('click', fecharModalCaixaPDV);
+            }
+
+            function fecharModalCaixaPDV() {
+                document.getElementById('modalCaixaPDV').style.display = 'none';
+            }
+
+            async function atualizarBotoesEStatusCaixa() {
+                try {
+                    caixaAtivo = await obterCaixaAtivo();
+                } catch (e) {
+                    console.warn('Erro ao consultar caixa ativo:', e);
+                }
+
+                const bannerCaixa = document.getElementById('bannerCaixaFechado');
+                const inputCli = document.getElementById('searchCliente');
+                const btnFinalizar = document.getElementById('btnFinalizarVenda');
+                const btnCaixa = document.getElementById('btnCaixaPDV');
+
+                if (btnCaixa) {
+                    btnCaixa.style.display = 'inline-flex';
+                    if (!caixaAtivo) {
+                        btnCaixa.innerHTML = '🔑 Abrir Caixa';
+                        btnCaixa.style.backgroundColor = '#10b981';
+                        btnCaixa.style.color = '#fff';
+                    } else {
+                        btnCaixa.innerHTML = '🔒 Fechar Caixa';
+                        btnCaixa.style.backgroundColor = '#ef4444';
+                        btnCaixa.style.color = '#fff';
+                    }
+                }
+
+                if (!caixaAtivo) {
+                    // Se caixa estiver fechado, criar ou exibir o banner
+                    if (!bannerCaixa) {
+                        const banner = document.createElement('div');
+                        banner.id = 'bannerCaixaFechado';
+                        banner.style.backgroundColor = '#f8d7da';
+                        banner.style.color = '#721c24';
+                        banner.style.border = '1px solid #f5c6cb';
+                        banner.style.padding = '12px 20px';
+                        banner.style.borderRadius = '8px';
+                        banner.style.marginBottom = '15px';
+                        banner.style.fontWeight = '700';
+                        banner.style.fontSize = '14px';
+                        banner.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+                        
+                        const containerPDV = document.querySelector('.pdv-busca-top');
+                        if (containerPDV && containerPDV.parentNode) {
+                            containerPDV.parentNode.insertBefore(banner, containerPDV);
+                        }
+                    } else {
+                        bannerCaixa.style.display = 'block';
+                        bannerCaixa.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+                    }
+
+                    // Desabilitar controles
+                    if (inputProd) inputProd.disabled = true;
+                    if (inputCli) inputCli.disabled = true;
+                    if (btnFinalizar) {
+                        btnFinalizar.disabled = true;
+                        btnFinalizar.style.backgroundColor = '#ccc';
+                        btnFinalizar.style.cursor = 'not-allowed';
+                        btnFinalizar.textContent = '🔒 Caixa Fechado';
                     }
                 } else {
-                    bannerCaixa.style.display = 'block';
-                }
-
-                // Desabilitar controles
-                if (inputProd) inputProd.disabled = true;
-                if (inputCli) inputCli.disabled = true;
-                if (btnFinalizar) {
-                    btnFinalizar.disabled = true;
-                    btnFinalizar.style.backgroundColor = '#ccc';
-                    btnFinalizar.style.cursor = 'not-allowed';
-                    btnFinalizar.textContent = '🔒 Caixa Fechado';
-                }
-            } else {
-                // Caixa aberto, esconder banner se existir
-                if (bannerCaixa) {
-                    bannerCaixa.style.display = 'none';
-                }
-                if (inputProd) inputProd.disabled = false;
-                if (inputCli) inputCli.disabled = false;
-                if (btnFinalizar) {
-                    btnFinalizar.disabled = false;
-                    btnFinalizar.style.backgroundColor = '';
-                    btnFinalizar.style.cursor = '';
-                    btnFinalizar.textContent = '✅ Finalizar Venda';
+                    // Caixa aberto, esconder banner se existir
+                    if (bannerCaixa) {
+                        bannerCaixa.style.display = 'none';
+                    }
+                    if (inputProd) inputProd.disabled = false;
+                    if (inputCli) inputCli.disabled = false;
+                    if (btnFinalizar) {
+                        btnFinalizar.disabled = false;
+                        btnFinalizar.style.backgroundColor = '';
+                        btnFinalizar.style.cursor = '';
+                        btnFinalizar.textContent = '✅ Finalizar Venda';
+                    }
                 }
             }
+
+            async function abrirModalCaixaPDVDinamico() {
+                const modal = document.getElementById('modalCaixaPDV');
+                const modalTitle = document.getElementById('modalCaixaPDVTitle');
+                const modalBody = document.getElementById('modalCaixaPDVBody');
+                const btnConfirm = document.getElementById('btnConfirmCaixaPDV');
+
+                modal.style.display = 'flex';
+
+                if (!caixaAtivo) {
+                    // Modo Abertura
+                    modalTitle.textContent = '🔑 Abertura de Caixa';
+                    modalBody.innerHTML = `
+                        <div style="padding: 5px 0;">
+                            <p style="font-size: 13px; color: #4b5563; margin-bottom: 15px; line-height: 1.5;">Informe o valor inicial em dinheiro disponível na gaveta para troco.</p>
+                            <div style="margin-bottom: 12px;">
+                                <label style="display:block; font-size: 13px; font-weight:600; margin-bottom:6px; color:#374151;">Saldo Inicial em Dinheiro (R$):</label>
+                                <input type="number" id="pdvSaldoInicial" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px; font-weight:600; box-sizing:border-box;" value="0.00" step="0.01" min="0">
+                            </div>
+                        </div>
+                    `;
+                    btnConfirm.style.display = 'block';
+                    btnConfirm.textContent = 'Confirmar Abertura';
+                    btnConfirm.onclick = async () => {
+                        const val = parseFloat(document.getElementById('pdvSaldoInicial').value || 0);
+                        if (isNaN(val) || val < 0) {
+                            mostrarNotificacao('Informe um valor inicial válido!', 'error');
+                            return;
+                        }
+                        btnConfirm.disabled = true;
+                        btnConfirm.textContent = 'Abrindo...';
+                        try {
+                            const { data, error } = await supabaseClient
+                                .from('caixas')
+                                .insert({
+                                    loja_id: usuario.loja_id,
+                                    saldo_inicial: val,
+                                    usuario_abertura_id: usuario.id,
+                                    status: 'aberto'
+                                })
+                                .select();
+                            if (error) throw error;
+                            mostrarNotificacao('🎉 Caixa aberto com sucesso!', 'success');
+                            fecharModalCaixaPDV();
+                            await atualizarBotoesEStatusCaixa();
+                        } catch (e) {
+                            console.error(e);
+                            mostrarNotificacao('Erro ao abrir caixa: ' + e.message, 'error');
+                        } finally {
+                            btnConfirm.disabled = false;
+                            btnConfirm.textContent = 'Confirmar Abertura';
+                        }
+                    };
+                } else {
+                    // Modo Fechamento - Carregar dados
+                    modalTitle.textContent = '🔒 Fechamento de Caixa';
+                    modalBody.innerHTML = `
+                        <div style="text-align: center; padding: 20px 0;">
+                            <div style="border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+                            <p style="font-size: 13px; color: #6b7280;">Carregando resumo do caixa ativo...</p>
+                        </div>
+                    `;
+                    btnConfirm.style.display = 'none';
+
+                    let vendasCaixa = [];
+                    let despesasCaixa = [];
+                    try {
+                        // Buscar vendas vinculadas ao caixa
+                        const { data: vData, error: vErr } = await supabaseClient
+                            .from('saidas')
+                            .select('total, forma_pagamento, cancelado')
+                            .eq('caixa_id', caixaAtivo.id);
+                        
+                        if (vErr) throw vErr;
+                        vendasCaixa = vData || [];
+
+                        // Buscar despesas pagas no período do caixa
+                        const { data: dData, error: dErr } = await supabaseClient
+                            .from('financeiro')
+                            .select('valor, status')
+                            .eq('loja_id', usuario.loja_id)
+                            .gte('created_at', caixaAtivo.data_abertura);
+                        
+                        if (dErr) throw dErr;
+                        despesasCaixa = dData || [];
+                    } catch (e) {
+                        console.warn('Erro ao obter dados consolidados:', e);
+                    }
+
+                    // Processar os valores
+                    let totalVendas = 0;
+                    let dinheiroVendas = 0;
+                    let cartaoVendas = 0;
+                    let pixVendas = 0;
+                    let prazoVendas = 0;
+                    
+                    vendasCaixa.forEach(v => {
+                        if (v.cancelado) return;
+                        const t = parseFloat(v.total || 0);
+                        totalVendas += t;
+                        if (v.forma_pagamento) {
+                            const fp = v.forma_pagamento.toLowerCase();
+                            if (fp.includes('dinheiro')) dinheiroVendas += t;
+                            else if (fp.includes('cartao') || fp.includes('cartão') || fp.includes('credito') || fp.includes('debito')) cartaoVendas += t;
+                            else if (fp.includes('pix')) pixVendas += t;
+                            else prazoVendas += t;
+                        } else {
+                            dinheiroVendas += t;
+                        }
+                    });
+
+                    let totalDespesas = 0;
+                    despesasCaixa.forEach(d => {
+                        if (d.status === 'pago') {
+                            totalDespesas += parseFloat(d.valor || 0);
+                        }
+                    });
+
+                    const saldoInicial = parseFloat(caixaAtivo.saldo_inicial || 0);
+                    const saldoEsperadoGaveta = saldoInicial + dinheiroVendas - totalDespesas;
+
+                    modalBody.innerHTML = `
+                        <div style="font-size: 13px; color: #374151;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                                <div style="background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                                    <div style="font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase;">Saldo Inicial</div>
+                                    <div style="font-size:13px; font-weight:700;">R$ ${saldoInicial.toFixed(2)}</div>
+                                </div>
+                                <div style="background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                                    <div style="font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase;">Vendas Totais</div>
+                                    <div style="font-size:13px; font-weight:700; color:#10b981;">R$ ${totalVendas.toFixed(2)}</div>
+                                </div>
+                                <div style="background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                                    <div style="font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase;">Vendas Dinheiro</div>
+                                    <div style="font-size:13px; font-weight:700;">R$ ${dinheiroVendas.toFixed(2)}</div>
+                                </div>
+                                <div style="background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                                    <div style="font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase;">Despesas Pagas</div>
+                                    <div style="font-size:13px; font-weight:700; color:#ef4444;">R$ ${totalDespesas.toFixed(2)}</div>
+                                </div>
+                            </div>
+                            
+                            <div style="background:#eff6ff; padding:12px; border-radius:8px; border:1px solid #bfdbfe; margin-bottom:15px; text-align:center;">
+                                <div style="font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Saldo Esperado em Gaveta</div>
+                                <div style="font-size:18px; font-weight:800; color:#1d4ed8; margin-top:2px;">R$ ${saldoEsperadoGaveta.toFixed(2)}</div>
+                                <small style="font-size:10px; color:#3b82f6;">(Saldo Inicial + Vendas em Dinheiro - Despesas)</small>
+                            </div>
+
+                            <div style="margin-bottom: 5px;">
+                                <label style="display:block; font-size: 13px; font-weight:600; margin-bottom:6px; color:#374151;">Saldo Final em Dinheiro Real:</label>
+                                <input type="number" id="pdvSaldoFinal" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px; font-weight:600; box-sizing:border-box;" value="${saldoEsperadoGaveta.toFixed(2)}" step="0.01" min="0">
+                                <small style="font-size:11px; color:#6b7280; display:block; margin-top:4px;">Conte o dinheiro físico real do caixa e insira acima.</small>
+                            </div>
+                        </div>
+                    `;
+
+                    btnConfirm.style.display = 'block';
+                    btnConfirm.textContent = 'Confirmar Fechamento';
+                    btnConfirm.onclick = async () => {
+                        const valFinal = parseFloat(document.getElementById('pdvSaldoFinal').value || 0);
+                        if (isNaN(valFinal) || valFinal < 0) {
+                            mostrarNotificacao('Informe um valor final válido!', 'error');
+                            return;
+                        }
+
+                        if (!confirm('Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.')) {
+                            return;
+                        }
+
+                        btnConfirm.disabled = true;
+                        btnConfirm.textContent = 'Fechando...';
+                        try {
+                            const dataFechamento = new Date().toISOString();
+                            const { data, error } = await supabaseClient
+                                .from('caixas')
+                                .update({
+                                    data_fechamento: dataFechamento,
+                                    saldo_final: valFinal,
+                                    usuario_fechamento_id: usuario.id,
+                                    status: 'fechado'
+                                })
+                                .eq('id', caixaAtivo.id)
+                                .select();
+                            
+                            if (error) throw error;
+                            
+                            const dataAberturaLocal = caixaAtivo.data_abertura;
+                            
+                            mostrarNotificacao('🔒 Caixa fechado com sucesso!', 'success');
+                            fecharModalCaixaPDV();
+                            await atualizarBotoesEStatusCaixa();
+
+                            // Perguntar sobre impressão
+                            if (confirm('Deseja imprimir o Relatório de Fechamento de Caixa?')) {
+                                const nomeOperador = usuario.nome || 'Operador';
+                                const dadosVendas = {
+                                    totalVendas,
+                                    dinheiroVendas,
+                                    cartaoVendas,
+                                    pixVendas,
+                                    prazoVendas,
+                                    totalDespesas
+                                };
+                                const caixaParaImpressao = {
+                                    data_abertura: dataAberturaLocal,
+                                    data_fechamento: dataFechamento,
+                                    saldo_inicial: saldoInicial,
+                                    saldo_final: valFinal
+                                };
+                                imprimirRelatorioFechamentoRapido(caixaParaImpressao, dadosVendas, nomeOperador);
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            mostrarNotificacao('Erro ao fechar caixa: ' + e.message, 'error');
+                        } finally {
+                            btnConfirm.disabled = false;
+                            btnConfirm.textContent = 'Confirmar Fechamento';
+                        }
+                    };
+                }
+            }
+
+            function imprimirRelatorioFechamentoRapido(caixa, dadosVendas, nomeOperador) {
+                const win = window.open('', '_blank');
+                if (!win) {
+                    mostrarNotificacao('Pop-up bloqueado! Permita pop-ups para imprimir o cupom.', 'warning');
+                    return;
+                }
+
+                const dataHoraAbertura = new Date(caixa.data_abertura).toLocaleString('pt-BR');
+                const dataHoraFechamento = new Date(caixa.data_fechamento).toLocaleString('pt-BR');
+                const saldoInicial = formatarMoeda(caixa.saldo_inicial);
+                const saldoFinal = formatarMoeda(caixa.saldo_final);
+                const totalVendas = formatarMoeda(dadosVendas.totalVendas);
+                const dinheiroVendas = formatarMoeda(dadosVendas.dinheiroVendas);
+                const cartaoVendas = formatarMoeda(dadosVendas.cartaoVendas);
+                const pixVendas = formatarMoeda(dadosVendas.pixVendas);
+                const prazoVendas = formatarMoeda(dadosVendas.prazoVendas);
+                const totalDespesas = formatarMoeda(dadosVendas.totalDespesas);
+                const totalGeral = formatarMoeda(caixa.saldo_inicial + dadosVendas.totalVendas - dadosVendas.totalDespesas);
+
+                win.document.write(`
+                    <html>
+                    <head>
+                        <title>Relatório de Fechamento de Caixa</title>
+                        <style>
+                            body { font-family: monospace; font-size: 12px; margin: 10px; color: #000; line-height: 1.4; }
+                            .text-center { text-align: center; }
+                            .bold { font-weight: bold; }
+                            .hr { border-bottom: 1px dashed #000; margin: 8px 0; }
+                            .flex-row { display: flex; justify-content: space-between; }
+                            .kpi-row { display: flex; justify-content: space-between; font-size: 13px; margin: 3px 0; }
+                            @media print {
+                                .no-print { display: none; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="no-print" style="margin-bottom: 15px; text-align: center;">
+                            <button onclick="window.print()" style="padding: 6px 12px; font-weight: bold; cursor: pointer;">Imprimir Relatório</button>
+                            <button onclick="window.close()" style="padding: 6px 12px; cursor: pointer; margin-left: 5px;">Fechar</button>
+                        </div>
+                        <div class="text-center bold" style="font-size: 14px;">FECHAMENTO DE CAIXA</div>
+                        <div class="text-center">${usuario.loja_nome || 'Aion ERP'}</div>
+                        <div class="hr"></div>
+                        <div class="flex-row"><span>Operador:</span><span class="bold">${nomeOperador}</span></div>
+                        <div class="flex-row"><span>Abertura:</span><span>${dataHoraAbertura}</span></div>
+                        <div class="flex-row"><span>Fechamento:</span><span>${dataHoraFechamento}</span></div>
+                        <div class="hr"></div>
+                        <div class="bold">RESUMO FINANCEIRO DE VENDAS</div>
+                        <div class="flex-row"><span>Dinheiro:</span><span>${dinheiroVendas}</span></div>
+                        <div class="flex-row"><span>Cartão:</span><span>${cartaoVendas}</span></div>
+                        <div class="flex-row"><span>PIX:</span><span>${pixVendas}</span></div>
+                        <div class="flex-row"><span>Prazo/Convênio:</span><span>${prazoVendas}</span></div>
+                        <div class="flex-row bold"><span>Total Vendas:</span><span>${totalVendas}</span></div>
+                        <div class="hr"></div>
+                        <div class="bold">SALDO DO CAIXA</div>
+                        <div class="kpi-row"><span>Saldo Inicial (+)</span><span>${saldoInicial}</span></div>
+                        <div class="kpi-row"><span>Total Vendas (+)</span><span>${totalVendas}</span></div>
+                        <div class="kpi-row" style="color: red;"><span>Despesas (-)</span><span>${totalDespesas}</span></div>
+                        <div class="hr"></div>
+                        <div class="kpi-row bold" style="font-size: 14px;"><span>Saldo Final Geral:</span><span>${totalGeral}</span></div>
+                        <div class="kpi-row bold" style="font-size: 14px; margin-top: 10px;"><span>Declarado Gaveta:</span><span>${saldoFinal}</span></div>
+                        <div class="hr"></div>
+                        <div class="text-center" style="margin-top: 20px;">Assinatura do Operador</div>
+                        <div style="border-bottom: 1px solid #000; width: 80%; margin: 40px auto 0;"></div>
+                        <script>
+                            window.onload = function() {
+                                window.print();
+                            }
+                        </script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+            }
+
+            // Registrar listeners
+            const btnCaixa = document.getElementById('btnCaixaPDV');
+            if (btnCaixa) {
+                btnCaixa.addEventListener('click', abrirModalCaixaPDVDinamico);
+            }
+
+            // Executar primeira checagem de caixa
+            await atualizarBotoesEStatusCaixa();
 
             // === VERIFICAR CHECKOUT RESTAURANTE (MESA/COMANDA/SERVICO) ===
             const checkoutRestauranteStr = sessionStorage.getItem('checkout_restaurante');

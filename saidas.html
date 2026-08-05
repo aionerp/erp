@@ -554,7 +554,10 @@
             <!-- Cabeçalho / Barra de Busca superior -->
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <div>
-                    <h1 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;">🛒 PDV — Nova Venda</h1>
+                    <h1 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;display:flex;align-items:center;gap:12px;">
+                        <span>🛒 PDV — Nova Venda</span>
+                        <button id="btnCaixaPDV" style="padding: 5px 12px; font-size: 13px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; transition: all 0.2s; align-items: center; gap: 6px; border: none;"></button>
+                    </h1>
                 </div>
                 <div id="statusVenda" style="font-size:13px;color:var(--gray);text-align:right;"></div>
             </div>
