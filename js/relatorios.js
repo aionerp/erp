@@ -5,19 +5,22 @@
 let chartVendasMes = null;
 let chartTopProdutos = null;
 let chartFaturamento = null;
+let chartLucroObj = null;
 
 // Flag para controle de carregamento
 let dadosCarregados = {
     movimento: false,
     faturamento: false,
-    vendas: false
+    vendas: false,
+    lucro: false
 };
 
 // Variáveis para armazenar dados brutos para exportação
 let dadosExportacao = {
     movimento: null,
     faturamento: null,
-    vendas: null
+    vendas: null,
+    lucro: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -71,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('colabDataFim')) document.getElementById('colabDataFim').value = hoje;
     if (document.getElementById('faturamentoDataInicio')) document.getElementById('faturamentoDataInicio').value = trintaDiasAtrasStr;
     if (document.getElementById('faturamentoDataFim')) document.getElementById('faturamentoDataFim').value = hoje;
+    if (document.getElementById('lucroDataInicio')) document.getElementById('lucroDataInicio').value = trintaDiasAtrasStr;
+    if (document.getElementById('lucroDataFim')) document.getElementById('lucroDataFim').value = hoje;
     
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
@@ -79,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarFaturamento();
         carregarVendasProduto();
         carregarComissoesColaborador();
+        carregarRelatorioLucro();
     });
 });
 
@@ -885,6 +891,300 @@ async function carregarComissoesColaborador() {
 window.carregarComissoesColaborador = carregarComissoesColaborador;
 
 // =====================================================
+// GANHO X CUSTO (LUCRO)
+// =====================================================
+
+async function carregarRelatorioLucro() {
+    const dataInicio = document.getElementById('lucroDataInicio')?.value;
+    const dataFim = document.getElementById('lucroDataFim')?.value;
+    const container = document.getElementById('lucroContainer');
+    
+    if (!dataInicio || !dataFim) {
+        mostrarNotificacao('Selecione o período de início e fim!', 'warning');
+        return;
+    }
+    
+    container.innerHTML = '<div style="text-align: center; padding: 20px;">Carregando dados...</div>';
+    
+    try {
+        // 1. Obter todas as saídas não canceladas no período
+        let querySaidas = supabaseClient
+            .from('saidas')
+            .select('id, data')
+            .eq('cancelado', false)
+            .gte('data', dataInicio)
+            .lte('data', dataFim);
+            
+        const { data: saidas, error: errorSaidas } = await querySaidas;
+        
+        if (errorSaidas) throw errorSaidas;
+        
+        if (!saidas || saidas.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma venda encontrada para o período selecionado.</div>';
+            
+            // Reset KPIs
+            document.getElementById('kpiLucroReceita').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroCusto').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroLiquido').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroMargem').textContent = '0,00%';
+            
+            if (chartLucroObj) {
+                chartLucroObj.destroy();
+                chartLucroObj = null;
+            }
+            dadosCarregados.lucro = false;
+            return;
+        }
+        
+        const saidaIds = saidas.map(s => s.id);
+        const dataMap = {};
+        saidas.forEach(s => {
+            dataMap[s.id] = s.data;
+        });
+        
+        // 2. Buscar itens vendidos para essas saídas
+        const { data: itens, error: errorItens } = await supabaseClient
+            .from('saida_itens')
+            .select('saida_id, quantidade, valor_unitario, subtotal, produtos(nome, codigo, valor_compra)')
+            .in('saida_id', saidaIds);
+            
+        if (errorItens) throw errorItens;
+        
+        if (!itens || itens.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhum produto vendido encontrado para o período selecionado.</div>';
+            
+            document.getElementById('kpiLucroReceita').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroCusto').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroLiquido').textContent = 'R$ 0,00';
+            document.getElementById('kpiLucroMargem').textContent = '0,00%';
+            
+            if (chartLucroObj) {
+                chartLucroObj.destroy();
+                chartLucroObj = null;
+            }
+            dadosCarregados.lucro = false;
+            return;
+        }
+        
+        // 3. Agregar custos e lucros
+        let receitaTotal = 0;
+        let custoTotal = 0;
+        const resumoProdutos = {};
+        const resumoDatas = {};
+        
+        itens.forEach(item => {
+            const qtd = item.quantidade || 0;
+            const rev = item.subtotal || 0;
+            const prod = item.produtos || {};
+            const custoUnit = prod.valor_compra || 0;
+            const custoItem = qtd * custoUnit;
+            const lucroItem = rev - custoItem;
+            
+            receitaTotal += rev;
+            custoTotal += custoItem;
+            
+            // Agrupar por produto
+            const prodKey = prod.nome || 'Produto Desconhecido';
+            if (!resumoProdutos[prodKey]) {
+                resumoProdutos[prodKey] = {
+                    codigo: prod.codigo || '-',
+                    quantidade: 0,
+                    receita: 0,
+                    custo: 0,
+                    lucro: 0
+                };
+            }
+            resumoProdutos[prodKey].quantidade += qtd;
+            resumoProdutos[prodKey].receita += rev;
+            resumoProdutos[prodKey].custo += custoItem;
+            resumoProdutos[prodKey].lucro += lucroItem;
+            
+            // Agrupar por data
+            const dataVenda = dataMap[item.saida_id] ? dataMap[item.saida_id].split('T')[0] : 'Sem Data';
+            if (!resumoDatas[dataVenda]) {
+                resumoDatas[dataVenda] = { receita: 0, custo: 0, lucro: 0 };
+            }
+            resumoDatas[dataVenda].receita += rev;
+            resumoDatas[dataVenda].custo += custoItem;
+            resumoDatas[dataVenda].lucro += lucroItem;
+        });
+        
+        const lucroTotal = receitaTotal - custoTotal;
+        const margemTotal = receitaTotal > 0 ? (lucroTotal / receitaTotal) * 100 : 0;
+        
+        // Atualizar KPIs
+        const formatarMoedaLocal = (valor) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+        };
+        
+        document.getElementById('kpiLucroReceita').textContent = formatarMoedaLocal(receitaTotal);
+        document.getElementById('kpiLucroCusto').textContent = formatarMoedaLocal(custoTotal);
+        document.getElementById('kpiLucroLiquido').textContent = formatarMoedaLocal(lucroTotal);
+        document.getElementById('kpiLucroMargem').textContent = `${margemTotal.toFixed(2)}%`;
+        
+        // Armazenar para exportação
+        dadosExportacao.lucro = {
+            receitaTotal,
+            custoTotal,
+            lucroTotal,
+            margemTotal,
+            dataInicio,
+            dataFim,
+            produtos: Object.entries(resumoProdutos).map(([nome, info]) => ({ nome, ...info }))
+        };
+        dadosCarregados.lucro = true;
+        
+        // Renderizar tabela detalhada
+        let htmlTable = `
+            <table class="dashboard-simple-table" id="lucroTable">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Produto</th>
+                        <th style="text-align: center;">Qtd Vendida</th>
+                        <th style="text-align: right;">Preço Venda Médio</th>
+                        <th style="text-align: right;">Custo Médio Unit.</th>
+                        <th style="text-align: right;">Receita (Ganho)</th>
+                        <th style="text-align: right;">Custo Total</th>
+                        <th style="text-align: right;">Lucro Líquido</th>
+                        <th style="text-align: center;">Margem (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        Object.entries(resumoProdutos).forEach(([nome, info]) => {
+            const vendaMedia = info.quantidade > 0 ? (info.receita / info.quantidade) : 0;
+            const custoUnit = info.quantidade > 0 ? (info.custo / info.quantidade) : 0;
+            const margem = info.receita > 0 ? (info.lucro / info.receita) * 100 : 0;
+            
+            htmlTable += `
+                <tr>
+                    <td><strong>${info.codigo}</strong></td>
+                    <td><strong>${nome}</strong></td>
+                    <td style="text-align: center;">${info.quantidade}</td>
+                    <td style="text-align: right;">${formatarMoedaLocal(vendaMedia)}</td>
+                    <td style="text-align: right;">${formatarMoedaLocal(custoUnit)}</td>
+                    <td style="text-align: right;">${formatarMoedaLocal(info.receita)}</td>
+                    <td style="text-align: right; color: var(--danger);">${formatarMoedaLocal(info.custo)}</td>
+                    <td style="text-align: right; color: ${info.lucro >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: bold;">
+                        ${formatarMoedaLocal(info.lucro)}
+                    </td>
+                    <td style="text-align: center; font-weight: 600;">${margem.toFixed(1)}%</td>
+                </tr>
+            `;
+        });
+        
+        const totalQtdVendida = itens.reduce((sum, item) => sum + (item.quantidade || 0), 0);
+        htmlTable += `
+                    <tr style="font-weight: bold; background: #faf9f6; border-top: 2px solid var(--border);">
+                        <td colspan="2">TOTAL</td>
+                        <td style="text-align: center;">${totalQtdVendida}</td>
+                        <td style="text-align: right;">-</td>
+                        <td style="text-align: right;">-</td>
+                        <td style="text-align: right;">${formatarMoedaLocal(receitaTotal)}</td>
+                        <td style="text-align: right; color: var(--danger);">${formatarMoedaLocal(custoTotal)}</td>
+                        <td style="text-align: right; color: ${lucroTotal >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatarMoedaLocal(lucroTotal)}</td>
+                        <td style="text-align: center;">${margemTotal.toFixed(1)}%</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+        
+        container.innerHTML = htmlTable;
+        
+        // Renderizar gráfico
+        renderizarGraficoLucro(resumoDatas);
+        
+    } catch (e) {
+        console.error('Erro ao gerar relatório de lucro:', e);
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--danger);">Erro ao carregar dados do relatório.</div>';
+        dadosCarregados.lucro = false;
+    }
+}
+
+function renderizarGraficoLucro(resumoDatas) {
+    const canvas = document.getElementById('chartLucro');
+    if (!canvas) return;
+    
+    // Sort dates ascending
+    const datasOrdenadas = Object.keys(resumoDatas).sort();
+    const receitas = datasOrdenadas.map(d => resumoDatas[d].receita);
+    const custos = datasOrdenadas.map(d => resumoDatas[d].custo);
+    const lucros = datasOrdenadas.map(d => resumoDatas[d].lucro);
+    
+    // Formatar datas para exibir dd/mm
+    const labelsFormatados = datasOrdenadas.map(d => {
+        const parts = d.split('-');
+        return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+    });
+    
+    if (chartLucroObj) {
+        chartLucroObj.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    chartLucroObj = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labelsFormatados,
+            datasets: [
+                {
+                    label: 'Receita (Ganho)',
+                    data: receitas,
+                    backgroundColor: '#0A4D68',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Custo',
+                    data: custos,
+                    backgroundColor: '#6b7280',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Lucro Líquido',
+                    data: lucros,
+                    backgroundColor: '#00A86B',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'R$ ' + value;
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+window.carregarRelatorioLucro = carregarRelatorioLucro;
+
+// =====================================================
 // EXPORTAÇÕES
 // =====================================================
 
@@ -997,6 +1297,32 @@ function exportarExcel(tipo) {
             });
             nomeArquivo = `relatorio_comissoes_colaborador_${new Date().toISOString().split('T')[0]}`;
             break;
+
+        case 'lucro':
+            if (!dadosCarregados.lucro || !dadosExportacao.lucro) {
+                mostrarNotificacao('Carregue o relatório de lucro primeiro!', 'warning');
+                return;
+            }
+            const luc = dadosExportacao.lucro;
+            dados = [
+                ['RELATÓRIO DE GANHO X CUSTO (LUCRO REAL)'],
+                [`Período: ${formatarDataISO(luc.dataInicio)} a ${formatarDataISO(luc.dataFim)}`],
+                [''],
+                ['Receita Total (Ganho)', `R$ ${luc.receitaTotal.toFixed(2)}`],
+                ['Custo Total (Médio)', `R$ ${luc.custoTotal.toFixed(2)}`],
+                ['Lucro Líquido', `R$ ${luc.lucroTotal.toFixed(2)}`],
+                ['Margem Média', `${luc.margemTotal.toFixed(2)}%`],
+                [''],
+                ['Código', 'Produto', 'Qtd Vendida', 'Preço Venda Médio', 'Custo Médio Unit', 'Receita (Ganho)', 'Custo Total', 'Lucro Líquido', 'Margem (%)']
+            ];
+            luc.produtos.forEach(p => {
+                const vMedio = p.quantidade > 0 ? (p.receita / p.quantidade) : 0;
+                const cMedio = p.quantidade > 0 ? (p.custo / p.quantidade) : 0;
+                const marg = p.receita > 0 ? (p.lucro / p.receita) * 100 : 0;
+                dados.push([p.codigo, p.nome, p.quantidade, `R$ ${vMedio.toFixed(2)}`, `R$ ${cMedio.toFixed(2)}`, `R$ ${p.receita.toFixed(2)}`, `R$ ${p.custo.toFixed(2)}`, `R$ ${p.lucro.toFixed(2)}`, `${marg.toFixed(1)}%`]);
+            });
+            nomeArquivo = `relatorio_ganho_custo_lucro_${new Date().toISOString().split('T')[0]}`;
+            break;
             
         default:
             mostrarNotificacao('Tipo de exportação inválido', 'error');
@@ -1084,6 +1410,17 @@ function exportarPDF(tipo) {
             container = document.getElementById('colaboradorContainer');
             titulo = 'Relatório de Comissões por Colaborador';
             subtitulo = `Período: ${document.getElementById('colabDataInicio').value || 'Início'} a ${document.getElementById('colabDataFim').value || 'Fim'}`;
+            break;
+
+        case 'lucro':
+            if (!dadosCarregados.lucro) {
+                mostrarNotificacao('Carregue o relatório de lucro primeiro!', 'warning');
+                return;
+            }
+            container = document.getElementById('lucroContainer');
+            titulo = 'Relatório de Ganho X Custo (Lucro Real)';
+            const lData = dadosExportacao.lucro;
+            subtitulo = `Período: ${formatarDataISO(lData?.dataInicio) || 'Início'} a ${formatarDataISO(lData?.dataFim) || 'Fim'}`;
             break;
 
         default:
@@ -1362,5 +1699,6 @@ window.abrirAba = abrirAba;
 window.carregarMovimentoDiario = carregarMovimentoDiario;
 window.carregarFaturamento = carregarFaturamento;
 window.carregarVendasProduto = carregarVendasProduto;
+window.carregarRelatorioLucro = carregarRelatorioLucro;
 window.exportarExcel = exportarExcel;
 window.exportarPDF = exportarPDF;

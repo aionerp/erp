@@ -415,6 +415,30 @@
                             </button>
                         </div>
                     </div>
+                    
+                    <!-- Histórico de Caixas Fechados -->
+                    <div class="panel-secao" style="margin-top: 20px;">
+                        <h3>📋 Histórico de Caixas Fechados</h3>
+                        <p style="font-size: 13px; color: var(--gray); margin-bottom: 15px;">Abaixo estão os relatórios e registros de todos os caixas que já foram fechados anteriormente no sistema.</p>
+                        
+                        <div style="overflow-x: auto; max-height: 400px;">
+                            <table class="tabela-caixa" id="tabelaHistoricoCaixas">
+                                <thead>
+                                    <tr>
+                                        <th>Caixa ID</th>
+                                        <th>Abertura</th>
+                                        <th>Fechamento</th>
+                                        <th>Fundo Inicial</th>
+                                        <th>Saldo Final</th>
+                                        <th style="text-align: center;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historicoCaixasBody">
+                                    <tr><td colspan="6" style="text-align: center; color: var(--gray);">Carregando histórico...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>

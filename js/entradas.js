@@ -768,15 +768,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const { data: produtoObj } = await supabaseClient
                     .from('produtos')
-                    .select('estoque_total')
+                    .select('estoque_total, valor_compra')
                     .eq('id', item.id)
                     .single();
                 
                 const estoqueAtual = produtoObj?.estoque_total || 0;
+                const custoAtual = produtoObj?.valor_compra || 0;
                 const novoEstoque = estoqueAtual + item.quantidade;
+                
+                // Calcular Custo Médio Ponderado (Weighted Average Cost)
+                let novoCustoMedio = 0;
+                if (estoqueAtual <= 0) {
+                    novoCustoMedio = item.valor_compra;
+                } else {
+                    const totalQtd = estoqueAtual + item.quantidade;
+                    novoCustoMedio = ((estoqueAtual * custoAtual) + (item.quantidade * item.valor_compra)) / totalQtd;
+                }
                 
                 const updatePayload = {
                     estoque_total: novoEstoque,
+                    valor_compra: novoCustoMedio,
                     ultima_movimentacao: new Date().toISOString()
                 };
                 

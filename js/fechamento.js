@@ -56,6 +56,9 @@ async function inicializarPagina() {
         // Caixa está fechado
         exibirCaixaFechado();
     }
+
+    // Carregar histórico de caixas fechados
+    carregarHistoricoCaixas();
 }
 
 function exibirMensagemConfiguracaoSQL() {
@@ -923,5 +926,79 @@ async function imprimirRelatorioPorCaixa(caixa) {
     } catch (e) {
         console.error('Erro ao gerar relatório de fechamento:', e);
         mostrarNotificacao('Erro ao carregar dados do relatório para impressão', 'error');
+    }
+}
+
+async function carregarHistoricoCaixas() {
+    const tbody = document.getElementById('historicoCaixasBody');
+    if (!tbody) return;
+    
+    try {
+        const { data: caixas, error } = await supabaseClient
+            .from('caixas')
+            .select('*')
+            .eq('status', 'fechado')
+            .order('id', { ascending: false });
+            
+        if (error) throw error;
+        
+        if (!caixas || caixas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--gray);">Nenhum caixa fechado registrado.</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        
+        caixas.forEach(caixa => {
+            const tr = document.createElement('tr');
+            
+            const tdId = document.createElement('td');
+            tdId.textContent = `#${caixa.id}`;
+            tdId.style.fontWeight = 'bold';
+            
+            const tdAbertura = document.createElement('td');
+            tdAbertura.textContent = formatarDataHora(caixa.data_abertura);
+            
+            const tdFechamento = document.createElement('td');
+            tdFechamento.textContent = formatarDataHora(caixa.data_fechamento);
+            
+            const tdInicial = document.createElement('td');
+            tdInicial.textContent = formatarMoeda(caixa.saldo_inicial);
+            
+            const tdFinal = document.createElement('td');
+            tdFinal.textContent = formatarMoeda(caixa.saldo_final || 0);
+            
+            const tdAcoes = document.createElement('td');
+            tdAcoes.style.textAlign = 'center';
+            
+            const btnPrint = document.createElement('button');
+            btnPrint.className = 'btn-acao-caixa btn-abrir';
+            btnPrint.style.background = 'var(--primary)';
+            btnPrint.style.padding = '6px 12px';
+            btnPrint.style.fontSize = '12px';
+            btnPrint.style.display = 'inline-flex';
+            btnPrint.style.margin = '0 auto';
+            btnPrint.style.width = 'auto';
+            btnPrint.style.height = 'auto';
+            btnPrint.style.lineHeight = 'normal';
+            btnPrint.innerHTML = '🖨️ Relatório';
+            btnPrint.onclick = () => {
+                imprimirRelatorioPorCaixa(caixa);
+            };
+            
+            tdAcoes.appendChild(btnPrint);
+            
+            tr.appendChild(tdId);
+            tr.appendChild(tdAbertura);
+            tr.appendChild(tdFechamento);
+            tr.appendChild(tdInicial);
+            tr.appendChild(tdFinal);
+            tr.appendChild(tdAcoes);
+            
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error('Erro ao carregar histórico de caixas:', e);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Erro ao carregar histórico.</td></tr>';
     }
 }

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importação de Dados - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        .import-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .import-card {
+            flex: 1;
+            min-width: 220px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .import-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            transition: background-color 0.25s;
+        }
+
+        .import-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary);
+        }
+
+        .import-card:hover::before {
+            background: var(--primary-light);
+        }
+
+        .import-card.active {
+            border: 1px solid var(--primary);
+            background-color: rgba(10, 77, 104, 0.03);
+            box-shadow: 0 4px 20px rgba(10, 77, 104, 0.08);
+        }
+
+        .import-card.active::before {
+            background: var(--primary);
+        }
+
+        .import-card-icon {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 12px;
+            transition: transform 0.25s ease;
+        }
+
+        .import-card:hover .import-card-icon {
+            transform: scale(1.15);
+        }
+
+        .import-card h4 {
+            margin: 6px 0;
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--dark);
+        }
+
+        .import-card p {
+            font-size: 13px;
+            color: var(--gray);
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* Drag and Drop Zone */
+        #drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 45px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #fbfbfb;
+            color: var(--gray);
+        }
+
+        #drop-zone.dragover {
+            background: rgba(10, 77, 104, 0.05);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        #drop-zone h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+            color: var(--dark);
+        }
+
+        /* Log window styles */
+        .log-item {
+            margin-bottom: 4px;
+            word-break: break-all;
+        }
+
+        .log-success { color: #4ec9b0; }
+        .log-error { color: #f44747; }
+        .log-warning { color: #dcdcaa; }
+        .log-info { color: #9cdcfe; }
+
+        /* Estilos de Validação */
+        .validation-card {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .validation-card.valid {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .validation-card.invalid {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body class="hold-transition">
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📦 Estoque Eletrônicos</h2>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="clientes.html">👥 Clientes</a></li>
+                <li><a href="produtos.html">📦 Serviços & Produtos</a></li>
+                <li><a href="categorias.html">🏷️ Categorias</a></li>
+                <li><a href="estoque.html">💾 Estoque</a></li>
+                <li><a href="entradas.html">📥 Entradas</a></li>
+                <li><a href="saidas.html">💳 PDV / Vendas</a></li>
+                <li><a href="fechamento.html">💵 Fechamento Diário</a></li>
+                <li><a href="devolucoes.html">🔄 Devoluções</a></li>
+                <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
+                <li><a href="#">🔧 OS (Sob Pedido)</a></li>
+                <li><a href="relatorios.html">📈 Relatórios</a></li>
+                <li><a href="usuarios.html">👤 Usuários</a></li>
+                <li><a href="configuracao.html">⚙️ Configurações</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="user-info">
+                    <span class="user-name" id="userName">Carregando...</span>
+                    <span class="user-perfil" id="userPerfil"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="page-header" style="margin-bottom: 20px;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: var(--dark);">📥 Importação de Dados</h1>
+                        <p style="margin: 5px 0 0; font-size: 13px; color: var(--gray);">Importe em lote Produtos, Clientes ou Fornecedores a partir de planilhas Excel ou arquivos CSV.</p>
+                    </div>
+                </div>
+
+                <div class="import-layout">
+                    <!-- PASSO 1: Selecionar Entidade -->
+                    <div class="panel-secao">
+                        <h3>1. Selecione o Tipo de Dado a Importar</h3>
+                        <p style="font-size: 13px; color: var(--gray); margin-bottom: 20px;">Escolha qual cadastro você deseja alimentar no banco de dados.</p>
+                        
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div class="import-card" id="card-produtos" onclick="selecionarEntidade('produtos')">
+                                <span class="import-card-icon">📦</span>
+                                <h4>Produtos & Serviços</h4>
+                                <p>Importe produtos, estoque inicial, marca, preços e códigos de barra/seriais.</p>
+                            </div>
+                            
+                            <div class="import-card" id="card-clientes" onclick="selecionarEntidade('clientes')">
+                                <span class="import-card-icon">👥</span>
+                                <h4>Clientes</h4>
+                                <p>Importe sua base de clientes com contato, CPF/CNPJ, e endereço completo.</p>
+                            </div>
+                            
+                            <div class="import-card" id="card-fornecedores" onclick="selecionarEntidade('fornecedores')">
+                                <span class="import-card-icon">🏭</span>
+                                <h4>Fornecedores</h4>
+                                <p>Importe fornecedores para facilitar notas de compra e gestão de suprimentos.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASSO 2: Planilha Modelo (Preencher) -->
+                    <div class="panel-secao" id="secao-modelo" style="display: none;">
+                        <h3>2. Baixe o Modelo e Preencha</h3>
+                        <p style="font-size: 13px; color: var(--gray); margin-bottom: 15px;">Para evitar erros de mapeamento, utilize as planilhas modelo oficiais abaixo. Preencha as colunas necessárias e salve o arquivo.</p>
+                        
+                        <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                            <button onclick="baixarModeloFormato('xlsx')" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 6px;">
+                                📊 Baixar Modelo Excel (.xlsx)
+                            </button>
+                            <button onclick="baixarModeloFormato('csv')" class="btn-primary" style="background-color: var(--info); display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 6px;">
+                                📄 Baixar Modelo CSV (.csv)
+                            </button>
+                        </div>
+
+                        <!-- Info de Colunas -->
+                        <div id="colunas-info" style="margin-top: 15px; padding: 15px; background: #faf9f6; border-radius: 8px; border-left: 4px solid var(--primary); font-size: 13px; line-height: 1.6;">
+                            <!-- Injetado por JS -->
+                        </div>
+                    </div>
+
+                    <!-- PASSO 3: Envio de Arquivo & Pré-visualização -->
+                    <div class="panel-secao" id="secao-upload" style="display: none;">
+                        <h3>3. Envie o Arquivo Preenchido</h3>
+                        <p style="font-size: 13px; color: var(--gray); margin-bottom: 15px;">Selecione ou solte o arquivo preenchido (.xlsx, .xls ou .csv) para fazermos a leitura preliminar.</p>
+                        
+                        <div id="drop-zone">
+                            <span style="font-size: 40px; display: block; margin-bottom: 10px;">📁</span>
+                            <h3>Arraste o arquivo aqui ou clique para buscar</h3>
+                            <p style="font-size: 12px; margin: 0;">Suporta planilhas do Excel (.xlsx, .xls) ou arquivos de texto (.csv)</p>
+                            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" style="display: none;">
+                        </div>
+
+                        <!-- Pré-visualização -->
+                        <div id="preview-container" style="display: none; margin-top: 25px;">
+                            <h4 style="margin-bottom: 10px; font-weight: 700; color: var(--dark); display: flex; justify-content: space-between; align-items: center;">
+                                <span>🔍 Pré-visualização das 10 primeiras linhas</span>
+                                <span id="txt-total-linhas" style="font-size: 13px; font-weight: 600; color: var(--primary);"></span>
+                            </h4>
+                            <div style="overflow-x: auto; max-height: 320px; border: 1px solid var(--border); border-radius: 8px; background: white;">
+                                <table class="tabela-caixa" id="tabela-preview" style="margin: 0; min-width: 800px;">
+                                    <!-- Cabeçalho e linhas injetados via JS -->
+                                </table>
+                            </div>
+
+                            <!-- Alertas de validação -->
+                            <div id="validacao-resumo" class="validation-card"></div>
+
+                            <!-- Ações finais -->
+                            <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                                <button id="btn-iniciar-importacao" class="btn-acao-caixa btn-abrir" style="margin: 0;">
+                                    🚀 Confirmar e Iniciar Importação
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASSO 4: Processamento -->
+                    <div class="panel-secao" id="secao-progresso" style="display: none;">
+                        <h3>⚙️ Processamento em Andamento</h3>
+                        <p id="txt-progresso-status" style="font-size: 13px; color: var(--gray); margin-bottom: 12px;">Processando itens...</p>
+                        
+                        <!-- Barra de progresso -->
+                        <div style="width: 100%; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; margin-bottom: 20px; position: relative;">
+                            <div id="bar-progresso-fill" style="height: 100%; width: 0%; background: var(--success); transition: width 0.1s ease; border-radius: 10px;"></div>
+                            <div id="txt-progresso-percent" style="position: absolute; width: 100%; text-align: center; top: 0; left: 0; height: 100%; line-height: 20px; font-size: 11px; font-weight: bold; color: var(--dark);">0%</div>
+                        </div>
+
+                        <!-- Contadores -->
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <div style="flex: 1; padding: 15px; background: #e2f0d9; color: #385723; border-radius: 8px; text-align: center; border: 1px solid #c8e2b1;">
+                                <strong style="font-size: 12px; text-transform: uppercase;">Importados com Sucesso</strong>
+                                <div id="txt-sucesso-count" style="font-size: 26px; font-weight: bold; margin-top: 5px;">0</div>
+                            </div>
+                            <div style="flex: 1; padding: 15px; background: #fce4d6; color: #c65911; border-radius: 8px; text-align: center; border: 1px solid #f8cbad;">
+                                <strong style="font-size: 12px; text-transform: uppercase;">Falhas / Ignorados</strong>
+                                <div id="txt-erro-count" style="font-size: 26px; font-weight: bold; margin-top: 5px;">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Console Logs -->
+                        <h4 style="margin-bottom: 8px; font-weight: 700; font-size: 14px;">📜 Console de Processamento</h4>
+                        <div id="log-container" style="background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 8px; max-height: 220px; overflow-y: auto; line-height: 1.6; border: 1px solid #2d2d2d; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
+                            <!-- Linhas de log -->
+                        </div>
+
+                        <div id="progresso-acoes" style="margin-top: 20px; display: none; justify-content: flex-end;">
+                            <button id="btn-concluir" class="btn-acao-caixa btn-abrir" style="margin: 0; background-color: var(--primary);">
+                                ✅ Concluir e Voltar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/importacao.js"></script>
+    <script src="js/active-nav.js"></script>
+</body>
+</html>

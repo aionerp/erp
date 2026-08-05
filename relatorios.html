@@ -300,6 +300,11 @@
                         <h3>Comissões</h3>
                         <p>Faturamento e comissão por colaborador</p>
                     </div>
+                    <div class="card-relatorio" onclick="abrirAba('lucro')">
+                        <div class="icon">📈</div>
+                        <h3>Ganho X Custo</h3>
+                        <p>Análise de custos e lucro real</p>
+                    </div>
                 </div>
                 
                 <!-- Abas de Relatórios -->
@@ -309,6 +314,7 @@
                     <button class="tab-btn" data-tab="faturamento" onclick="abrirAba('faturamento')">💰 Faturamento</button>
                     <button class="tab-btn" data-tab="vendas" onclick="abrirAba('vendas')">📦 Vendas por Produto</button>
                     <button class="tab-btn" data-tab="colaborador" onclick="abrirAba('colaborador')">👥 Comissões</button>
+                    <button class="tab-btn" data-tab="lucro" onclick="abrirAba('lucro')">📈 Ganho X Custo</button>
                 </div>
                 
                 <!-- Tab: Dashboard -->
@@ -451,6 +457,66 @@
                         </div>
                         <div id="colaboradorContainer">
                             <div style="text-align: center; padding: 20px;">Selecione um período para visualizar</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Ganho X Custo (Lucro) -->
+                <div id="tab-lucro" class="tab-content">
+                    <div class="relatorio-container">
+                        <div class="relatorio-header">
+                            <h2>📊 Ganho X Custo (Análise de Lucro)</h2>
+                            <div class="filtros-relatorio">
+                                <input type="date" id="lucroDataInicio">
+                                <input type="date" id="lucroDataFim">
+                                <button class="btn-primary" onclick="carregarRelatorioLucro()">Filtrar</button>
+                                <button class="btn-excel" onclick="exportarExcel('lucro')">📊 Excel</button>
+                                <button class="btn-pdf" onclick="exportarPDF('lucro')">📄 PDF</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Explicação do Cálculo -->
+                        <div style="background: #eef2f7; border-left: 4px solid var(--info); padding: 15px; border-radius: 8px; margin-bottom: 25px; font-size: 13px; color: var(--dark); line-height: 1.6; box-shadow: var(--shadow-sm);">
+                            <strong style="display: block; margin-bottom: 6px; color: var(--primary);">ℹ️ Entendendo este Relatório</strong>
+                            <span style="display: block;">
+                                <strong>Receita (Ganho):</strong> Total faturado com as vendas no período (exclui cancelamentos).<br>
+                                <strong>Custo Total (Médio):</strong> Quantidade vendida multiplicada pelo custo unitário médio do produto no momento atual.<br>
+                                <strong>Custo Médio Ponderado:</strong> Atualizado automaticamente em cada entrada de nota fiscal usando a fórmula:<br>
+                                <code style="display: inline-block; background: rgba(0,0,0,0.05); padding: 3px 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; font-family: monospace; font-weight: 600;">((Estoque Anterior × Custo Anterior) + (Qtd Nova × Custo Novo)) / Estoque Total Novo</code>
+                            </span>
+                        </div>
+                        
+                        <!-- KPIs de Lucro -->
+                        <div class="dashboard-kpi" id="lucroKpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                            <div class="kpi-card primary" style="border-top: 4px solid var(--primary); padding: 15px; background: white; border-radius: 8px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: var(--gray);">Receita Total (Ganho)</div>
+                                <div class="kpi-value" id="kpiLucroReceita" style="font-size: 22px; font-weight: bold; color: var(--dark);">R$ 0,00</div>
+                            </div>
+                            <div class="kpi-card info" style="border-top: 4px solid var(--info); padding: 15px; background: white; border-radius: 8px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: var(--gray);">Custo Total (Médio)</div>
+                                <div class="kpi-value" id="kpiLucroCusto" style="font-size: 22px; font-weight: bold; color: var(--dark);">R$ 0,00</div>
+                            </div>
+                            <div class="kpi-card success" style="border-top: 4px solid var(--success); padding: 15px; background: white; border-radius: 8px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: var(--gray);">Lucro Líquido</div>
+                                <div class="kpi-value" id="kpiLucroLiquido" style="font-size: 22px; font-weight: bold; color: var(--success);">R$ 0,00</div>
+                            </div>
+                            <div class="kpi-card warning" style="border-top: 4px solid var(--warning); padding: 15px; background: white; border-radius: 8px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: var(--gray);">Margem de Lucro</div>
+                                <div class="kpi-value" id="kpiLucroMargem" style="font-size: 22px; font-weight: bold; color: var(--dark);">0,00%</div>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico comparativo -->
+                        <div class="panel-secao" style="margin-bottom: 25px;">
+                            <h3>📊 Comparativo Comercial (Receita x Custo x Lucro)</h3>
+                            <div style="position: relative; height: 260px;">
+                                <canvas id="chartLucro" style="max-height: 260px;"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Tabela Detalhada -->
+                        <div id="lucroContainer">
+                            <div style="text-align: center; padding: 20px;">Selecione um período e clique em Filtrar para carregar</div>
                         </div>
                     </div>
                 </div>

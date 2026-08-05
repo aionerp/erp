@@ -158,7 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: '🏢 Empresa',
                 items: [
                     { label: '🏢 Dados da Empresa', href: 'javascript:void(0)', onclick: 'abrirModalConfigLoja()', modulo: 'usuarios' },
-                    { label: '👤 Usuários', href: 'usuarios.html', modulo: 'usuarios' }
+                    { label: '👤 Usuários', href: 'usuarios.html', modulo: 'usuarios' },
+                    { label: '📥 Importação de Dados', href: 'importacao.html', modulo: 'usuarios' }
                 ]
             },
             {
@@ -192,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: '💰 Faturamento',
                 items: [
                     { label: labelVendas, href: 'saidas.html', modulo: 'saidas' },
+                    { label: '💵 Fechamento de Caixa', href: 'fechamento.html', modulo: 'saidas' },
                     { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },
                     { label: '💸 Comissões a Pagar', href: 'comissoes.html', modulo: 'relatorios' },
                     { label: '📅 Agendamento', href: 'agendamentos.html', modulo: 'dashboard', condicao: config.habilitar_agendamentos },

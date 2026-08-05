@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!tbody) return;
         
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhum produto encontrado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Nenhum produto encontrado</td></tr>';
             return;
         }
         
@@ -194,6 +194,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 loteValidadeText = `${loteStr}<br><small>${dataStr}</small>${validadeBadge}`;
             }
             
+            const custoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor_compra || 0);
+            const vendaFormatada = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor_venda || 0);
+
             return `
                 <tr>
                     <td>${p.codigo || p.id}</td>
@@ -203,17 +206,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </td>
                     <td>${p.categoria || '-'}</td>
                     <td>${loteValidadeText}</td>
+                    <td>${custoFormatado}</td>
+                    <td>${vendaFormatada}</td>
                     <td style="font-weight:bold; ${estoque < minimo ? 'color:#dc3545' : 'color:#28a745'}">${estoque} unid.</td>
                     <td>${minimo}</td>
                     <td><span class="status-estoque ${statusClass}">${statusText}</span></td>
                     <td>
-                        ${podeAjustar ? `<button class="btn-warning" onclick="ajustarEstoque(${p.id})" title="Ajustar Estoque">✏️ Ajustar</button>` : ''}
-                        <button class="btn-info" onclick="verHistorico(${p.id})" title="Ver Histórico" style="margin-left:5px;">📜 Histórico</button>
+                        <div class="dropdown-acoes" style="position: relative; display: inline-block;">
+                            <button class="btn-acoes-dropdown" onclick="toggleDropdownAcoes(event, ${p.id})" style="background: #0A4D68; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s;">⚡ Ações ▾</button>
+                            <div id="dropdown-acoes-${p.id}" class="dropdown-acoes-content" style="display: none; position: absolute; right: 0; background-color: white; min-width: 190px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15); z-index: 100; border-radius: 4px; border: 1px solid #ced4da; margin-top: 2px;">
+                                ${podeAjustar ? `<a href="#" onclick="event.preventDefault(); ajustarEstoque(${p.id})" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='white'" style="color: #333; padding: 10px 14px; text-decoration: none; display: block; font-size: 13px; text-align: left; border-bottom: 1px solid #eee; transition: background 0.2s;">✏️ Ajuste de Saldo</a>` : ''}
+                                <a href="#" onclick="event.preventDefault(); verHistorico(${p.id})" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='white'" style="color: #333; padding: 10px 14px; text-decoration: none; display: block; font-size: 13px; text-align: left; transition: background 0.2s;">📜 Histórico de movimento</a>
+                            </div>
+                        </div>
                     </td>
                 </tr>
             `;
         }).join('');
     }
+
+    window.toggleDropdownAcoes = (event, id) => {
+        event.stopPropagation();
+        document.querySelectorAll('.dropdown-acoes-content').forEach(el => {
+            if (el.id !== `dropdown-acoes-${id}`) {
+                el.style.display = 'none';
+            }
+        });
+        const dropdown = document.getElementById(`dropdown-acoes-${id}`);
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    };
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.dropdown-acoes-content').forEach(el => {
+            el.style.display = 'none';
+        });
+    });
     
     // =====================================================
     // VERIFICAR SE PRODUTO EXIGE SERIAL
@@ -381,7 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     window.ajustarEstoque = async (id) => {
         if (!verificarPermissao('estoque', 'ajustar')) {
-            mostrarNotificacao('Você não tem permissão para ajustar estoque!', 'error');
+            mostrarNotificacao('Você não tem permissão para realizar o ajuste de saldo!', 'error');
             return;
         }
         
@@ -590,7 +619,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     async function salvarAjuste() {
         if (!verificarPermissao('estoque', 'ajustar')) {
-            mostrarNotificacao('Você não tem permissão para ajustar estoque!', 'error');
+            mostrarNotificacao('Você não tem permissão para realizar o ajuste de saldo!', 'error');
             return;
         }
         
@@ -760,12 +789,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }]);
             }
             
-            mostrarNotificacao(`✅ Estoque atualizado! Novo estoque: ${novoEstoque}`, 'success');
+            mostrarNotificacao(`✅ Saldo atualizado! Novo saldo: ${novoEstoque}`, 'success');
             document.getElementById('modal').style.display = 'none';
             await carregarProdutos();
         } catch (error) {
-            console.error('Erro ao ajustar estoque:', error);
-            mostrarNotificacao('Erro ao ajustar estoque: ' + error.message, 'error');
+            console.error('Erro ao ajustar saldo:', error);
+            mostrarNotificacao('Erro ao ajustar saldo: ' + error.message, 'error');
         }
     }
     
@@ -781,7 +810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.getElementById('btnAjustar')?.addEventListener('click', () => {
         if (!verificarPermissao('estoque', 'ajustar')) {
-            mostrarNotificacao('Você não tem permissão para ajustar estoque!', 'error');
+            mostrarNotificacao('Você não tem permissão para realizar o ajuste de saldo!', 'error');
             return;
         }
         
@@ -792,9 +821,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             produtoSelect.style.width = '100%';
             produtoSelect.style.marginBottom = '15px';
             produtoSelect.innerHTML = '<option value="">Selecione um produto</option>' +
-                produtos.map(p => `<option value="${p.id}">${p.nome} (Estoque: ${p.estoque_total || p.estoque || 0})</option>`).join('');
+                produtos.map(p => `<option value="${p.id}">${p.nome} (Saldo: ${p.estoque_total || p.estoque || 0})</option>`).join('');
             
-            mostrarNotificacaoComSelect('Selecione o produto para ajustar:', produtoSelect, (produtoId) => {
+            mostrarNotificacaoComSelect('Selecione o produto para ajustar o saldo:', produtoSelect, (produtoId) => {
                 if (produtoId) ajustarEstoque(parseInt(produtoId));
             });
         } else {
