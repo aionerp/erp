@@ -72,20 +72,193 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (config.habilitar_lotes && !config.habilitar_mesas && !config.habilitar_seriais) icone = '🛒';
         else if (config.habilitar_variacoes) icone = '💍';
         
+        // Injetar estilos customizados para os cabeçalhos de grupo e submenus
+        const styleId = 'sidebar-accordion-styles';
+        if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .sidebar-group-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 14px;
+                    color: rgba(255, 252, 242, 0.55);
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 1.2px;
+                    cursor: pointer;
+                    user-select: none;
+                    transition: color var(--transition-fast), background-color var(--transition-fast);
+                    margin-top: 10px;
+                    margin-bottom: 2px;
+                    border-radius: var(--radius-sm);
+                }
+                .sidebar-group-header:hover {
+                    color: var(--floral-white);
+                    background: rgba(255, 255, 255, 0.04);
+                }
+                .sidebar-group-header.active {
+                    color: var(--floral-white);
+                }
+                .sidebar-group-header .arrow {
+                    font-size: 9px;
+                    transition: transform 0.25s ease;
+                    opacity: 0.7;
+                }
+                .sidebar-group-header.active .arrow {
+                    transform: rotate(180deg);
+                    opacity: 1;
+                }
+                .sidebar-subnav {
+                    list-style: none;
+                    padding-left: 14px !important;
+                    margin: 0;
+                    display: none;
+                }
+                .sidebar-subnav.open {
+                    display: block;
+                }
+                .sidebar-subnav li a {
+                    font-size: 13px !important;
+                    padding: 8px 12px !important;
+                    opacity: 0.85;
+                }
+                .sidebar-subnav li a:hover {
+                    opacity: 1;
+                    transform: translateX(3px) !important;
+                }
+                .sidebar-subnav li a.active {
+                    background: rgba(235, 94, 40, 0.2) !important;
+                    color: var(--floral-white) !important;
+                    box-shadow: none !important;
+                }
+                .sidebar-subnav li a.active::after {
+                    width: 30% !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         // Labels específicas de segmento
-        let labelProdutos = '📦 Serviços & Produtos';
+        const labelProdutos = '📦 Serviços e Produtos';
+        const labelVendas = '💳 PDV/Vendas';
         
-        let labelVendas = '💳 PDV / Vendas';
-        
-        // Links extras condicionais
-        let extraLinksHtml = '';
-        if (config.habilitar_agendamentos) {
-            extraLinksHtml += '<li><a href="agendamentos.html">📅 Agendamentos</a></li>';
-        }
-        if (config.habilitar_mesas) {
-            extraLinksHtml += '<li><a href="mesas.html">📋 Comanda/Serviço</a></li>';
-        }
-        
+        // Definição da estrutura do menu solicitada pelo usuário
+        const menuStructure = [
+            {
+                type: 'link',
+                label: '📊 Dashboard',
+                href: 'dashboard.html',
+                modulo: 'dashboard'
+            },
+            {
+                type: 'group',
+                label: '🏢 Empresa',
+                items: [
+                    { label: '⚙️ Configurações do ERP', href: 'javascript:void(0)', onclick: 'abrirModalConfigLoja()', modulo: 'usuarios' },
+                    { label: '👤 Usuários', href: 'usuarios.html', modulo: 'usuarios' }
+                ]
+            },
+            {
+                type: 'group',
+                label: '👥 CRM',
+                items: [
+                    { label: '👥 Clientes', href: 'clientes.html', modulo: 'clientes' },
+                    { label: '🏭 Fornecedores', href: 'fornecedores.html', modulo: 'fornecedores' },
+                    { label: '👥 Colaboradores', href: 'colaboradores.html', modulo: 'colaboradores' }
+                ]
+            },
+            {
+                type: 'group',
+                label: '📦 Suprimentos',
+                items: [
+                    { label: '💾 Estoque', href: 'estoque.html', modulo: 'estoque' },
+                    { label: labelProdutos, href: 'produtos.html', modulo: 'produtos' }
+                ]
+            },
+            {
+                type: 'group',
+                label: '📥 Compras',
+                items: [
+                    { label: '📥 Entradas', href: 'entradas.html', modulo: 'entradas' },
+                    { label: '🔄 Devoluções', href: 'devolucoes.html', modulo: 'saidas' }
+                ]
+            },
+            {
+                type: 'group',
+                label: '💰 Faturamento',
+                items: [
+                    { label: labelVendas, href: 'saidas.html', modulo: 'saidas' },
+                    { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },
+                    { label: '💸 Comissões a Pagar', href: 'comissoes.html', modulo: 'relatorios' },
+                    { label: '📅 Agendamento', href: 'agendamentos.html', modulo: 'dashboard', condicao: config.habilitar_agendamentos },
+                    { label: '📋 Comanda/Serviço', href: 'mesas.html', modulo: 'saidas', condicao: config.habilitar_mesas }
+                ]
+            },
+            {
+                type: 'group',
+                label: '📈 Relatórios',
+                items: [
+                    { label: '📊 Acessar', href: 'relatorios.html', modulo: 'relatorios' }
+                ]
+            }
+        ];
+
+        let menuHtml = '';
+        menuStructure.forEach((item, index) => {
+            if (item.type === 'link') {
+                const podeVer = verificarPermissaoUsuario(usuario, item.modulo, 'ver');
+                if (podeVer) {
+                    const isActive = currentPage === item.href;
+                    menuHtml += `
+                        <li>
+                            <a href="${item.href}" class="${isActive ? 'active' : ''}">
+                                ${item.label}
+                            </a>
+                        </li>
+                    `;
+                }
+            } else if (item.type === 'group') {
+                // Filtrar os itens permitidos e com condição ativa
+                const visibleItems = item.items.filter(subItem => {
+                    if (subItem.condicao === false) return false;
+                    return verificarPermissaoUsuario(usuario, subItem.modulo, subItem.action || 'ver');
+                });
+                
+                if (visibleItems.length > 0) {
+                    // Verificar se o item ativo está neste grupo
+                    const isAnyActive = visibleItems.some(subItem => currentPage === subItem.href);
+                    
+                    const subItemsHtml = visibleItems.map(subItem => {
+                        const isActive = currentPage === subItem.href;
+                        const clickAttr = subItem.onclick ? `onclick="${subItem.onclick}"` : '';
+                        const hrefAttr = subItem.href;
+                        return `
+                            <li>
+                                <a href="${hrefAttr}" ${clickAttr} class="${isActive ? 'active' : ''}">
+                                    ${subItem.label}
+                                </a>
+                            </li>
+                        `;
+                    }).join('');
+                    
+                    menuHtml += `
+                        <li class="sidebar-group-item">
+                            <div class="sidebar-group-header ${isAnyActive ? 'active' : ''}" data-group-index="${index}">
+                                <span>${item.label}</span>
+                                <span class="arrow">▼</span>
+                            </div>
+                            <ul class="sidebar-subnav ${isAnyActive ? 'open' : ''}" id="subnav-${index}">
+                                ${subItemsHtml}
+                            </ul>
+                        </li>
+                    `;
+                }
+            }
+        });
+
         sidebar.innerHTML = `
             <div class="sidebar-header" style="padding: 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
                 <h2 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -96,33 +269,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     by AionLabs
                 </div>
             </div>
-            <ul class="sidebar-nav">
-                <li><a href="dashboard.html">📊 Dashboard</a></li>
-                <li><a href="clientes.html">👥 Clientes</a></li>
-                <li><a href="produtos.html">${labelProdutos}</a></li>
-                <li><a href="categorias.html">🏷️ Categorias</a></li>
-                <li><a href="estoque.html">💾 Estoque</a></li>
-                <li><a href="entradas.html">📥 Entradas</a></li>
-                <li><a href="saidas.html">${labelVendas}</a></li>
-                <li><a href="fechamento.html">💵 Fechamento de Caixa</a></li>
-                <li><a href="despesas.html">💸 Despesas</a></li>
-                <li><a href="devolucoes.html">🔄 Devoluções</a></li>
-                <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
-                <li><a href="colaboradores.html">👥 Colaboradores</a></li>
-                <li><a href="comissoes.html">💸 Comissões a Pagar</a></li>
-                ${extraLinksHtml}
-                <li><a href="relatorios.html">📈 Relatórios</a></li>
-                <li><a href="usuarios.html">👤 Usuários</a></li>
+            <ul class="sidebar-nav" style="overflow-y: auto; max-height: calc(100vh - 120px);">
+                ${menuHtml}
             </ul>
         `;
+
+        // Adicionar eventos de toggle para os cabeçalhos de grupo
+        sidebar.querySelectorAll('.sidebar-group-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const groupIndex = header.getAttribute('data-group-index');
+                const subnav = document.getElementById(`subnav-${groupIndex}`);
+                if (subnav) {
+                    const isOpen = subnav.classList.contains('open');
+                    if (isOpen) {
+                        subnav.classList.remove('open');
+                        header.classList.remove('active');
+                    } else {
+                        subnav.classList.add('open');
+                        header.classList.add('active');
+                    }
+                }
+            });
+        });
     }
 
     // === DEFINIR TÍTULO DA PÁGINA COM NOME DO SISTEMA ===
     const cleanTitle = document.title.replace(' - Sistema de Estoque', '');
     document.title = `Aion ERP | ${cleanTitle}`;
-
-    // === FILTRAR MENU POR PERMISSÃO ===
-    filtrarMenuPorPermissao(usuario);
     
     // Mostrar informações do usuário
     const userNameElement = document.getElementById('userName');
@@ -459,3 +632,8 @@ function verificarPermissao(modulo, acao = 'ver') {
     const usuario = JSON.parse(sessionStorage.getItem('usuario'));
     return verificarPermissaoUsuario(usuario, modulo, acao);
 }
+
+// Exportações globais para uso nas páginas e menus
+window.abrirModalConfigLoja = abrirModalConfigLoja;
+window.verificarPermissao = verificarPermissao;
+window.verificarPermissaoUsuario = verificarPermissaoUsuario;
