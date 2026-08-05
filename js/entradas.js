@@ -120,7 +120,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const filtrados = produtos.filter(p => 
             p.nome?.toLowerCase().includes(search) || 
-            (p.codigo || '').toLowerCase().includes(search)
+            (p.codigo || '').toLowerCase().includes(search) ||
+            (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(search)))
         );
         
         if (filtrados.length === 0) {

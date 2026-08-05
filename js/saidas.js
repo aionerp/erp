@@ -427,7 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const termoLower = termo.toLowerCase();
             const exactMatch = produtos.find(p => 
                 p.codigo?.toLowerCase() === termoLower || 
-                p.id.toString() === termo
+                p.id.toString() === termo ||
+                (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase() === termoLower))
             );
             
             if (exactMatch) {
@@ -487,10 +488,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const termoLower = termo.toLowerCase();
 
-        // 1. Filtro local: nome e código
+        // 1. Filtro local: nome, código e códigos de barras múltiplos
         const porNomeCodigo = produtos.filter(p =>
             p.nome?.toLowerCase().includes(termoLower) ||
-            (p.codigo || '').toLowerCase().includes(termoLower)
+            (p.codigo || '').toLowerCase().includes(termoLower) ||
+            (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(termoLower)))
         );
 
         // 2. Busca assíncrona por IMEI / Serial no banco

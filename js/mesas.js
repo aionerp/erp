@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data, error } = await supabaseClient
                 .from('produtos')
-                .select('id, nome, codigo, valor_venda')
+                .select('id, nome, codigo, valor_venda, codigos_barras')
                 .order('nome');
             
             if (error) throw error;
@@ -379,7 +379,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filtrados = listaProdutos.filter(p => 
             p.nome.toLowerCase().includes(query) || 
-            (p.codigo || '').toLowerCase().includes(query)
+            (p.codigo || '').toLowerCase().includes(query) ||
+            (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(query)))
         ).slice(0, 10);
 
         if (filtrados.length === 0) {

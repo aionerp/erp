@@ -103,7 +103,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 1. Pesquisa por texto
             const matchSearch = p.nome?.toLowerCase().includes(search) || 
                                 (p.codigo || '').toLowerCase().includes(search) ||
-                                (p.marca || '').toLowerCase().includes(search);
+                                (p.marca || '').toLowerCase().includes(search) ||
+                                (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(search)));
                                 
             // 2. Filtro Categoria
             const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria;
