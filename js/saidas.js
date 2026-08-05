@@ -1847,26 +1847,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- TERMOS DE GARANTIA E TROCAS -->
                     <div style="border-top:1px solid #000;padding-top:10px;font-size:13px;line-height:1.4;text-align:left;">
                         <p style="margin:4px 0;font-weight:bold;text-align:center;">GARANTIA DOS PRODUTOS</p>
-                        <br>
-                        <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
-                        <p style="margin:1px 0;">SANSUNG</p>
-                        <p style="margin:1px 0;">APPLE</p>
-                        <p style="margin:1px 0;">ACER</p>
-                        <p style="margin:1px 0;">LENOVO</p>
-                        <p style="margin:1px 0;">DELL</p>
-                        <p style="margin:1px 0;">HP</p>
-                        <br>
-                        <p style="margin:2px 0;font-weight:bold;">3 MESES PARA:</p>
-                        <p style="margin:1px 0;">XIONI</p>
-                        <br>
-                        <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
-                        <p style="margin:1px 0;">MOTOROLA</p>
+                        ${(usuario.config_loja && usuario.config_loja.termo_garantia) ? `
+                            <div style="white-space: pre-wrap; margin-top: 4px;">${usuario.config_loja.termo_garantia}</div>
+                        ` : `
+                            <br>
+                            <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
+                            <p style="margin:1px 0;">SANSUNG</p>
+                            <p style="margin:1px 0;">APPLE</p>
+                            <p style="margin:1px 0;">ACER</p>
+                            <p style="margin:1px 0;">LENOVO</p>
+                            <p style="margin:1px 0;">DELL</p>
+                            <p style="margin:1px 0;">HP</p>
+                            <br>
+                            <p style="margin:2px 0;font-weight:bold;">3 MESES PARA:</p>
+                            <p style="margin:1px 0;">XIONI</p>
+                            <br>
+                            <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
+                            <p style="margin:1px 0;">MOTOROLA</p>
+                        `}
+                        
                         <br>
                         <p style="margin:4px 0;font-weight:bold;text-align:center;">POLITICA DE TROCAS</p>
-                        <br>
-                        <p style="margin:2px 0;text-align:justify;">O prazo de troca dos produtos é de 7 dias úteis para qualquer defeito funcional, após esse prazo, procure um posto autorizado do fabricante, norma que se aplica aos produtos APPLE, SANSUNG, DELL, ACER, LENOVO, HP, LG, MOTOROLA</p>
-                        <br>
-                        <p style="margin:2px 0;font-weight:bold;text-align:center;">OBS: NÃO EFETUAMOS TROCA POR INSATISFAÇÃO</p>
+                        ${(usuario.config_loja && usuario.config_loja.termo_troca) ? `
+                            <div style="white-space: pre-wrap; text-align: justify; margin-top: 4px;">${usuario.config_loja.termo_troca}</div>
+                        ` : `
+                            <br>
+                            <p style="margin:2px 0;text-align:justify;">O prazo de troca dos produtos é de 7 dias úteis para qualquer defeito funcional, após esse prazo, procure um posto autorizado do fabricante, norma que se aplica aos produtos APPLE, SANSUNG, DELL, ACER, LENOVO, HP, LG, MOTOROLA</p>
+                            <br>
+                            <p style="margin:2px 0;font-weight:bold;text-align:center;">OBS: NÃO EFETUAMOS TROCA POR INSATISFAÇÃO</p>
+                        `}
                     </div>
 
                 </div>`;;

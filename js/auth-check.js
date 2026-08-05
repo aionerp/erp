@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'group',
                 label: '🏢 Empresa',
                 items: [
-                    { label: '⚙️ Configurações do ERP', href: 'javascript:void(0)', onclick: 'abrirModalConfigLoja()', modulo: 'usuarios' },
+                    { label: '🏢 Dados da Empresa', href: 'javascript:void(0)', onclick: 'abrirModalConfigLoja()', modulo: 'usuarios' },
                     { label: '👤 Usuários', href: 'usuarios.html', modulo: 'usuarios' }
                 ]
             },
@@ -175,7 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: '📦 Suprimentos',
                 items: [
                     { label: '💾 Estoque', href: 'estoque.html', modulo: 'estoque' },
-                    { label: labelProdutos, href: 'produtos.html', modulo: 'produtos' }
+                    { label: labelProdutos, href: 'produtos.html', modulo: 'produtos' },
+                    { label: '🏷️ Categorias', href: 'categorias.html', modulo: 'categorias' }
                 ]
             },
             {
@@ -262,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.innerHTML = `
             <div class="sidebar-header" style="padding: 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
                 <h2 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span>${icone}</span>
+                    <span style="background: var(--primary); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">ERP</span>
                     <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${usuario.loja_nome || 'Aion ERP'}</span>
                 </h2>
                 <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #D4AF37; margin-top: 4px; font-weight: bold;">
@@ -315,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userPerfilElement.textContent = perfilLabels[usuario.perfil] || usuario.perfil || 'Usuário';
     }
 
-    // === BOTÃO DE CONFIGURAÇÃO DO ERP (Módulos / Verticais) ===
+    // === BOTÃO DADOS DA EMPRESA ===
     const userInfo = document.querySelector('.user-info');
     if (userInfo && !document.getElementById('btnConfigLoja') && (usuario.perfil === 'admin' || usuario.perfil === 'gerente')) {
         const btnConfig = document.createElement('button');
@@ -323,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnConfig.className = 'settings-btn';
         btnConfig.style.cssText = 'background:none; border:none; font-size:18px; cursor:pointer; color:var(--primary); margin-right: 12px; transition: transform 0.3s ease;';
         btnConfig.innerHTML = '⚙️';
-        btnConfig.title = 'Configurações do ERP';
+        btnConfig.title = 'Dados da Empresa';
         
         btnConfig.addEventListener('mouseenter', () => btnConfig.style.transform = 'rotate(45deg)');
         btnConfig.addEventListener('mouseleave', () => btnConfig.style.transform = 'rotate(0deg)');
@@ -365,70 +366,101 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // =====================================================
-// FUNÇÕES DE CONFIGURAÇÃO DE VERTICAIS (MÓDULOS)
+// FUNÇÕES DE CONFIGURAÇÃO DADOS DA EMPRESA
 // =====================================================
 
 function abrirModalConfigLoja() {
+    const usuario = JSON.parse(sessionStorage.getItem('usuario')) || {};
+    const config = usuario.config_loja || {};
+
     let modal = document.getElementById('modalGlobalConfigLoja');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modalGlobalConfigLoja';
-        modal.className = 'modal';
-        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999;';
-        
-        modal.innerHTML = `
-            <div class="modal-content" style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:500px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease;">
-                <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
-                    <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">⚙️ Dados da Empresa - Aion ERP</h2>
-                    <span class="close-config" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
-                </div>
-                <div class="modal-body" style="max-height: 450px; overflow-y: auto; padding-right: 5px;">
-                    <form id="formGlobalConfigLoja">
-                        <div class="form-group" style="margin-bottom:12px;">
-                            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Nome da Loja</label>
-                            <input type="text" id="cfgNome" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom:12px;">
-                            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Razão Social</label>
-                            <input type="text" id="cfgRazao" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
-                        </div>
-                        <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
-                            <div class="form-group">
-                                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">CNPJ</label>
-                                <input type="text" id="cfgCnpj" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
-                            </div>
-                            <div class="form-group">
-                                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Telefone</label>
-                                <input type="text" id="cfgTelefone" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
-                            </div>
-                        </div>
-                        <div class="form-group" style="margin-bottom:12px;">
-                            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Endereço da Loja (Saída no cupom)</label>
-                            <input type="text" id="cfgEndereco" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:12px; margin-top:12px;">
-                    <button class="btn-warning" id="btnFecharConfig" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600;">Cancelar</button>
-                    <button class="btn-primary" id="btnSalvarConfigLoja" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600;">Salvar</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        modal.querySelector('.close-config').addEventListener('click', () => modal.style.display = 'none');
-        document.getElementById('btnFecharConfig').addEventListener('click', () => modal.style.display = 'none');
-        document.getElementById('btnSalvarConfigLoja').addEventListener('click', salvarConfigLojaMaster);
+    if (modal) {
+        modal.remove();
     }
     
-    const usuario = JSON.parse(sessionStorage.getItem('usuario'));
-    const config = usuario.config_loja || {};
+    modal = document.createElement('div');
+    modal.id = 'modalGlobalConfigLoja';
+    modal.className = 'modal';
+    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999;';
+
+    let termosHtml = '';
+    if (config.termo_garantia !== undefined) {
+        termosHtml = `
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Garantia dos Produtos (Cupom)</label>
+                <textarea id="cfgTermoGarantia" rows="5" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Política de Trocas (Cupom)</label>
+                <textarea id="cfgTermoTroca" rows="4" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
+            </div>
+        `;
+    } else {
+        termosHtml = `
+            <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:12px; margin-bottom:12px; font-size:12px; color:#b45309; line-height:1.4;">
+                <strong style="display:block; margin-bottom:4px;">⚠️ Habilitar Termos no Cupom</strong>
+                Para habilitar a personalização de garantia e trocas nos cupons, execute este script SQL no editor do seu Supabase:
+                <textarea readonly style="width:100%; height:60px; font-family:monospace; font-size:11px; margin-top:6px; padding:6px; border:1px solid #fcd34d; border-radius:4px; background:#fff; resize:none; box-sizing:border-box;" onclick="this.select()">ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_garantia TEXT;
+ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_troca TEXT;</textarea>
+            </div>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div class="modal-content" style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:500px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease; box-sizing:border-box; font-family:inherit;">
+            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - Aion ERP</h2>
+                <span class="close-config" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
+            </div>
+            <div class="modal-body" style="max-height: 430px; overflow-y: auto; padding-right: 5px;">
+                <form id="formGlobalConfigLoja">
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Nome (Razão Social)</label>
+                        <input type="text" id="cfgRazao" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Nome Fantasia</label>
+                        <input type="text" id="cfgNome" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                        <div class="form-group">
+                            <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">CNPJ</label>
+                            <input type="text" id="cfgCnpj" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                        </div>
+                        <div class="form-group">
+                            <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Telefone</label>
+                            <input type="text" id="cfgTelefone" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Endereço da Empresa (Saída no cupom)</label>
+                        <input type="text" id="cfgEndereco" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    ${termosHtml}
+                </form>
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:12px; margin-top:12px;">
+                <button class="btn-warning" id="btnFecharConfig" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:#f3f4f6; color:#4b5563;">Cancelar</button>
+                <button class="btn-primary" id="btnSalvarConfigLoja" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:var(--primary); color:#fff;">Salvar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
     
+    modal.querySelector('.close-config').addEventListener('click', () => modal.style.display = 'none');
+    document.getElementById('btnFecharConfig').addEventListener('click', () => modal.style.display = 'none');
+    document.getElementById('btnSalvarConfigLoja').addEventListener('click', salvarConfigLojaMaster);
+
     document.getElementById('cfgNome').value = usuario.loja_nome || '';
     document.getElementById('cfgRazao').value = config.razao_social || '';
     document.getElementById('cfgCnpj').value = config.cnpj || '';
     document.getElementById('cfgTelefone').value = config.telefone || '';
     document.getElementById('cfgEndereco').value = config.endereco || '';
+    
+    if (config.termo_garantia !== undefined) {
+        document.getElementById('cfgTermoGarantia').value = config.termo_garantia || '';
+        document.getElementById('cfgTermoTroca').value = config.termo_troca || '';
+    }
     
     modal.style.display = 'flex';
 }
@@ -447,16 +479,25 @@ async function salvarConfigLojaMaster() {
     const tel = document.getElementById('cfgTelefone').value.trim();
     const endereco = document.getElementById('cfgEndereco').value.trim();
     
+    const hasTermosFields = document.getElementById('cfgTermoGarantia') !== null;
+    
+    const updateData = {
+        nome_fantasia: nome,
+        razao_social: razao,
+        cnpj: cnpj,
+        telefone: tel,
+        endereco: endereco
+    };
+    
+    if (hasTermosFields) {
+        updateData.termo_garantia = document.getElementById('cfgTermoGarantia').value;
+        updateData.termo_troca = document.getElementById('cfgTermoTroca').value;
+    }
+    
     try {
         const { error: errConfig } = await supabaseClient
             .from('config_loja')
-            .update({
-                nome_fantasia: nome,
-                razao_social: razao,
-                cnpj: cnpj,
-                telefone: tel,
-                endereco: endereco
-            })
+            .update(updateData)
             .eq('loja_id', usuario.loja_id);
             
         if (errConfig) throw errConfig;
@@ -471,11 +512,16 @@ async function salvarConfigLojaMaster() {
         usuario.loja_nome = nome;
         usuario.config_loja = {
             ...usuario.config_loja,
+            nome_fantasia: nome,
             razao_social: razao,
             cnpj: cnpj,
             telefone: tel,
             endereco: endereco
         };
+        if (hasTermosFields) {
+            usuario.config_loja.termo_garantia = updateData.termo_garantia;
+            usuario.config_loja.termo_troca = updateData.termo_troca;
+        }
         sessionStorage.setItem('usuario', JSON.stringify(usuario));
         
         mostrarNotificacao('Dados da empresa atualizados com sucesso!', 'success');
