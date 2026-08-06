@@ -465,50 +465,54 @@ document.addEventListener('DOMContentLoaded', () => {
                         subtotal: item.valorTotalDevolvido
                     }]);
 
-                // Obter estoque atual do produto
+                // Obter estoque atual e tipo do produto
                 const { data: prodData } = await supabaseClient
                     .from('produtos')
-                    .select('estoque_total')
+                    .select('estoque_total, tipo')
                     .eq('id', item.produto_id)
                     .single();
 
-                const estoqueAtual = prodData?.estoque_total || 0;
-                const novoEstoque = estoqueAtual + item.qtdADevolver;
+                const isServico = prodData?.tipo === 'servico';
 
-                // Atualizar saldo do produto
-                await supabaseClient
-                    .from('produtos')
-                    .update({
-                        estoque_total: novoEstoque,
-                        ultima_movimentacao: new Date().toISOString()
-                    })
-                    .eq('id', item.produto_id);
+                if (!isServico) {
+                    const estoqueAtual = prodData?.estoque_total || 0;
+                    const novoEstoque = estoqueAtual + item.qtdADevolver;
 
-                // Reativar serial se aplicável
-                if (item.serial_id) {
+                    // Atualizar saldo do produto
                     await supabaseClient
-                        .from('produtos_seriais')
+                        .from('produtos')
                         .update({
-                            status: 'disponivel',
-                            data_saida: null,
-                            observacao: `Estornado via Devolução da venda #${vendaSelecionada.id}`
-                        })
-                        .eq('id', item.serial_id);
-                }
+                            estoque_total: novoEstoque,
+                            ultima_movimentacao: new Date().toISOString()
+                         })
+                        .eq('id', item.produto_id);
 
-                // Criar registro em `movimentos_estoque`
-                await supabaseClient
-                    .from('movimentos_estoque')
-                    .insert([{
-                        produto_id: item.produto_id,
-                        tipo: 'entrada',
-                        quantidade: item.qtdADevolver,
-                        quantidade_anterior: estoqueAtual,
-                        quantidade_nova: novoEstoque,
-                        motivo: `Devolução de Venda - Nota (${vendaSelecionada.id}) — ${motivo}`,
-                        data: new Date().toISOString(),
-                        usuario_id: usuario.id
-                    }]);
+                    // Reativar serial se aplicável
+                    if (item.serial_id) {
+                        await supabaseClient
+                            .from('produtos_seriais')
+                            .update({
+                                status: 'disponivel',
+                                data_saida: null,
+                                observacao: `Estornado via Devolução da venda #${vendaSelecionada.id}`
+                            })
+                            .eq('id', item.serial_id);
+                    }
+
+                    // Criar registro em `movimentos_estoque`
+                    await supabaseClient
+                        .from('movimentos_estoque')
+                        .insert([{
+                            produto_id: item.produto_id,
+                            tipo: 'entrada',
+                            quantidade: item.qtdADevolver,
+                            quantidade_anterior: estoqueAtual,
+                            quantidade_nova: novoEstoque,
+                            motivo: `Devolução de Venda - Nota (${vendaSelecionada.id}) — ${motivo}`,
+                            data: new Date().toISOString(),
+                            usuario_id: usuario.id
+                        }]);
+                }
             }
 
             // 3. Atualizar a observação da venda original para documentar
@@ -519,7 +523,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await supabaseClient
                 .from('saidas')
-                .update({ observacao: novaObs })
+                .update({ 
+                    observacao: novaObs,
+                    comissao_calculada: 0
+                })
                 .eq('id', vendaSelecionada.id);
 
             mostrarNotificacao(`✅ Devolução registrada com sucesso! Entrada #${entradaObj.id} gerada.`, 'success');

@@ -194,8 +194,12 @@
                         </select>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                        <div>
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
                             <button class="btn-primary" id="btnAjustar" style="margin-bottom: 0;">✏️ Ajuste de Saldo</button>
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; margin-bottom: 0; user-select: none;">
+                                <input type="checkbox" id="chkPermitirVendaSemSaldo" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 14px; color: #374151;">Permitir venda de produtos sem saldo</span>
+                            </label>
                         </div>
                         <div class="export-actions" style="display: flex; gap: 5px;">
                             <button class="btn-excel" id="btnExportExcel">📥 Excel</button>

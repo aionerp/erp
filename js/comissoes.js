@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Calcular comissão de uma venda específica
     function calcularComissaoVenda(venda) {
-        if (venda.comissao_calculada !== undefined && venda.comissao_calculada !== null && parseFloat(venda.comissao_calculada) > 0) {
+        if (venda.comissao_calculada !== undefined && venda.comissao_calculada !== null && parseFloat(venda.comissao_calculada) >= 0) {
             return parseFloat(venda.comissao_calculada);
         }
         

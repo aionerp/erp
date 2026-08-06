@@ -747,21 +747,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         container.innerHTML = lista.map(p => {
+            const isServico = p.tipo === 'servico';
+            const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
             const estoque = p.estoque_total ?? p.estoque ?? 0;
             const semEstoque = estoque <= 0;
+            const bloqueado = !isServico && !permitirVendaSemSaldo && semEstoque;
             
             let estoqueBadge = '';
-            if (semEstoque)      estoqueBadge = '<span class="estoque-badge estoque-zero" style="font-size:9px;">Sem estoque</span>';
-            else if (estoque <= 5) estoqueBadge = `<span class="estoque-badge estoque-baixo" style="font-size:9px;">${estoque} un</span>`;
-            else                   estoqueBadge = `<span class="estoque-badge estoque-ok" style="font-size:9px;">${estoque} un</span>`;
+            if (isServico) {
+                estoqueBadge = '<span class="estoque-badge estoque-ok" style="font-size:9px;">Serviço</span>';
+            } else if (semEstoque) {
+                estoqueBadge = '<span class="estoque-badge estoque-zero" style="font-size:9px;">Sem estoque</span>';
+            } else if (estoque <= 5) {
+                estoqueBadge = `<span class="estoque-badge estoque-baixo" style="font-size:9px;">${estoque} un</span>`;
+            } else {
+                estoqueBadge = `<span class="estoque-badge estoque-ok" style="font-size:9px;">${estoque} un</span>`;
+            }
 
             const serialBadge = p._serialMatch
                 ? `<br><small style="color:#2563eb;font-weight:600;">🔢 Serial/IMEI: ${p._serialMatch}</small>`
                 : '';
 
             return `
-                <div class="produto-suggestion-item ${semEstoque ? 'sem-estoque' : ''}"
-                     ${semEstoque ? '' : `onclick="selecionarSugestaoProduto(${p.id})"`}>
+                <div class="produto-suggestion-item ${bloqueado ? 'sem-estoque' : ''}"
+                     ${bloqueado ? '' : `onclick="selecionarSugestaoProduto(${p.id})"`}>
                     <div>
                         <strong>${p.nome}</strong><br>
                         <small>Cód: ${p.codigo || p.id} | ${p.categoria || 'Sem Categoria'} ${estoqueBadge}</small>
@@ -1002,8 +1011,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const produto = produtos.find(p => p.id === produtoId);
         if (!produto) { mostrarNotificacao('Produto não encontrado!', 'error'); return; }
 
+        const isServico = produto.tipo === 'servico';
+        const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
         const estoque = produto.estoque_total ?? produto.estoque ?? 0;
-        if (estoque <= 0) { mostrarNotificacao('Produto sem estoque disponível!', 'error'); return; }
+        if (!isServico && !permitirVendaSemSaldo && estoque <= 0) { mostrarNotificacao('Produto sem estoque disponível!', 'error'); return; }
 
         let exigeIMEI = false;
         try {
@@ -1115,7 +1126,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .filter(item => item.id === produto.id)
             .reduce((sum, item) => sum + item.quantidade, 0);
 
-        if (totalNoCarrinho + 1 > estoque) {
+        const isServico = produto.tipo === 'servico';
+        const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
+
+        if (!isServico && !permitirVendaSemSaldo && (totalNoCarrinho + 1 > estoque)) {
             mostrarNotificacao(`Estoque insuficiente! Disponível: ${estoque} (Já no carrinho: ${totalNoCarrinho})`, 'error');
             return;
         }
@@ -1255,9 +1269,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const produto = produtos.find(p => p.id === cartItem.id);
+        const isServico = cartItem.tipo === 'servico' || produto?.tipo === 'servico';
+        const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
         const estoque = produto ? (produto.estoque_total ?? produto.estoque ?? 0) : 999;
 
-        if (quantidade > estoque) {
+        if (!isServico && !permitirVendaSemSaldo && quantidade > estoque) {
             mostrarNotificacao(`Estoque insuficiente! Disponível: ${estoque}`, 'error');
             quantidade = estoque;
         }
@@ -1510,29 +1526,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]);
 
                 const produto = produtos.find(p => p.id === item.id);
-                const estAtual = produto?.estoque_total ?? produto?.estoque ?? 0;
-                const novoEst  = estAtual - item.quantidade;
+                const isServico = item.tipo === 'servico' || produto?.tipo === 'servico';
 
-                await supabaseClient.from('produtos')
-                    .update({ estoque_total: novoEst, ultima_movimentacao: new Date().toISOString() })
-                    .eq('id', item.id);
+                if (!isServico) {
+                    const estAtual = produto?.estoque_total ?? produto?.estoque ?? 0;
+                    const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
+                    const novoEstRaw = estAtual - item.quantidade;
+                    const novoEst = permitirVendaSemSaldo ? novoEstRaw : Math.max(0, novoEstRaw);
 
-                if (item.serial_id) {
-                    await supabaseClient.from('produtos_seriais')
-                        .update({ status: 'vendido', data_saida: new Date().toISOString() })
-                        .eq('id', item.serial_id);
+                    await supabaseClient.from('produtos')
+                        .update({ estoque_total: novoEst, ultima_movimentacao: new Date().toISOString() })
+                        .eq('id', item.id);
+
+                    if (item.serial_id) {
+                        await supabaseClient.from('produtos_seriais')
+                            .update({ status: 'vendido', data_saida: new Date().toISOString() })
+                            .eq('id', item.serial_id);
+                    }
+
+                    await supabaseClient.from('movimentos_estoque').insert([{
+                        produto_id:          item.id,
+                        tipo:                'saida',
+                        quantidade:          item.quantidade,
+                        quantidade_anterior: estAtual,
+                        quantidade_nova:     novoEst,
+                        motivo:              `Venda #${venda.id}`,
+                        data:                new Date().toISOString(),
+                        usuario_id:          usuario.id
+                    }]);
                 }
-
-                await supabaseClient.from('movimentos_estoque').insert([{
-                    produto_id:          item.id,
-                    tipo:                'saida',
-                    quantidade:          item.quantidade,
-                    quantidade_anterior: estAtual,
-                    quantidade_nova:     novoEst,
-                    motivo:              `Venda #${venda.id}`,
-                    data:                new Date().toISOString(),
-                    usuario_id:          usuario.id
-                }]);
             }
 
             // Se for checkout de restaurante, atualizar o status da mesa para livre no banco e limpar itens

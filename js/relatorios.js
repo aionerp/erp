@@ -792,7 +792,7 @@ async function carregarComissoesColaborador() {
             colabSales.forEach(sale => {
                 faturamentoTotal += parseFloat(sale.total || 0);
 
-                if (sale.comissao_calculada !== undefined && sale.comissao_calculada !== null && parseFloat(sale.comissao_calculada) > 0) {
+                if (sale.comissao_calculada !== undefined && sale.comissao_calculada !== null && parseFloat(sale.comissao_calculada) >= 0) {
                     comissaoGerada += parseFloat(sale.comissao_calculada);
                 } else {
                     const items = (saleItems || []).filter(item => item.saida_id === sale.id);

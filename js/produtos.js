@@ -612,6 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (dadosProduto.tipo === 'servico') {
+            dadosProduto.estoque_total = 0;
             const chkHabilitada = document.getElementById('comissao_habilitada');
             dadosProduto.comissao_habilitada = chkHabilitada ? chkHabilitada.checked : false;
             
@@ -693,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mostrarNotificacao(`Produto cadastrado com ${seriaisList.length} número(s) de série!`, 'success');
                 } else {
                     // Outros nichos: salva direto com a quantidade informada
-                    dadosProduto.estoque_total = quantidadeEstoque;
+                    dadosProduto.estoque_total = dadosProduto.tipo === 'servico' ? 0 : quantidadeEstoque;
                     const { error } = await supabaseClient
                         .from('produtos')
                         .insert([dadosProduto]);
