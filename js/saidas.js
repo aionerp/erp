@@ -1086,28 +1086,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const container = document.getElementById('seriaisDisponiveis');
             if (seriaisDisponiveis.length === 0) {
-                container.innerHTML = '<p style="color:#dc2626;font-size:13px;">⚠️ Nenhum IMEI disponível!</p>';
+                container.innerHTML = '<p style="color:#dc2626;font-size:13px;">⚠️ Nenhum Número de Série / IMEI disponível em estoque!</p>';
             } else {
                 container.innerHTML = `
-                    <strong>📱 IMEIs disponíveis (${seriaisDisponiveis.length} un.):</strong>
-                    <ul style="margin-top:10px;max-height:150px;overflow-y:auto;padding:0;list-style:none;">
-                        ${seriaisDisponiveis.map(s => `
-                            <li onclick="selecionarSerial('${s.imei || ''}')"
-                                style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;
-                                       display:flex;justify-content:space-between;align-items:center;border-radius:4px;"
-                                onmouseover="this.style.background='#f0f9ff'"
-                                onmouseout="this.style.background=''">
-                                <div>
-                                    <code>IMEI: ${s.imei || 'N/A'}</code>
-                                    ${s.numero_serie ? `<br><small>Serial: ${s.numero_serie}</small>` : ''}
+                    <strong>📱 Seriais / IMEIs disponíveis (${seriaisDisponiveis.length} un.):</strong>
+                    <ul style="margin-top:10px;max-height:160px;overflow-y:auto;padding:0;list-style:none;">
+                        ${seriaisDisponiveis.map(s => {
+                            const identificador = s.numero_serie || s.imei || `ID #${s.id}`;
+                            const partes = [];
+                            if (s.numero_serie) partes.push(`Serial: <strong>${s.numero_serie}</strong>`);
+                            if (s.imei) partes.push(`IMEI: <strong>${s.imei}</strong>`);
+                            const textoExibicao = partes.length > 0 ? partes.join(' | ') : `<code>${identificador}</code>`;
+
+                            return `
+                            <li onclick="selecionarSerialPorId(${s.id})"
+                                style="padding:8px 10px;border-bottom:1px solid #eee;cursor:pointer;
+                                       display:flex;justify-content:space-between;align-items:center;border-radius:6px;margin-bottom:4px;background:#f9fafb;"
+                                onmouseover="this.style.background='#eff6ff'"
+                                onmouseout="this.style.background='#f9fafb'">
+                                <div style="font-size:13px;color:#1f2937;">
+                                    ${textoExibicao}
                                 </div>
-                                <button style="background:#2563eb;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">
+                                <button type="button" style="background:#2563eb;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
                                     Selecionar
                                 </button>
-                            </li>`).join('')}
+                            </li>`;
+                        }).join('')}
                     </ul>
                     <small style="color:var(--gray);margin-top:8px;display:block;">
-                        📝 Digite ou clique no IMEI acima para selecionar
+                        📝 Digite ou clique no item acima para selecionar
                     </small>`;
             }
 
@@ -1118,29 +1125,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    window.selecionarSerialPorId = (serialId) => {
+        const s = seriaisDisponiveis.find(item => item.id === serialId);
+        if (s) {
+            const val = s.numero_serie || s.imei || String(s.id);
+            document.getElementById('numeroSerie').value = val;
+            if (produtoSerialPendente) {
+                adicionarAoCarrinho(produtoSerialPendente, s);
+                document.getElementById('modalSerial').style.display = 'none';
+                produtoSerialPendente = null;
+            }
+        }
+    };
+
     window.selecionarSerial = (serial) => {
-        document.getElementById('numeroSerie').value = serial;
-        document.getElementById('btnConfirmarSerial').click();
+        const s = seriaisDisponiveis.find(item => 
+            item.numero_serie === serial || 
+            item.imei === serial || 
+            String(item.id) === String(serial)
+        );
+        if (s) {
+            window.selecionarSerialPorId(s.id);
+        } else {
+            document.getElementById('numeroSerie').value = serial;
+            document.getElementById('btnConfirmarSerial').click();
+        }
     };
 
     document.getElementById('btnConfirmarSerial')?.addEventListener('click', async () => {
-        const numeroSerie = document.getElementById('numeroSerie').value.trim();
+        const inputVal = document.getElementById('numeroSerie').value.trim();
 
-        if (!numeroSerie && seriaisDisponiveis.length > 0) {
-            mostrarNotificacao('Informe o IMEI!', 'error');
+        if (!inputVal && seriaisDisponiveis.length > 0) {
+            mostrarNotificacao('Informe ou selecione o Número de Série / IMEI!', 'error');
             return;
         }
 
-        const serial = seriaisDisponiveis.find(s =>
-            s.imei === numeroSerie
+        let serialObj = seriaisDisponiveis.find(s =>
+            (s.numero_serie && s.numero_serie.toLowerCase() === inputVal.toLowerCase()) ||
+            (s.imei && s.imei.toLowerCase() === inputVal.toLowerCase()) ||
+            String(s.id) === inputVal
         );
 
-        if (seriaisDisponiveis.length > 0 && !serial) {
-            mostrarNotificacao('IMEI inválido!', 'error');
-            return;
+        if (!serialObj && inputVal) {
+            serialObj = {
+                id: null,
+                numero_serie: inputVal,
+                imei: inputVal
+            };
         }
 
-        if (produtoSerialPendente) adicionarAoCarrinho(produtoSerialPendente, serial || null);
+        if (produtoSerialPendente) {
+            adicionarAoCarrinho(produtoSerialPendente, serialObj || null);
+        }
 
         document.getElementById('modalSerial').style.display = 'none';
         produtoSerialPendente = null;
