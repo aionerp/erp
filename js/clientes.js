@@ -343,14 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
         exportarTabelaParaPDF('clientesTable', 'Relatório de Clientes', 'Lista de clientes cadastrados no sistema');
     });
     
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modal')) {
-            document.getElementById('modal').style.display = 'none';
-            document.getElementById('btnSalvar').style.display = 'block';
-            document.getElementById('btnCancelar').textContent = 'Cancelar';
-        }
-    };
-    
     // Inicializar
     carregarClientes();
 });

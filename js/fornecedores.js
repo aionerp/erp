@@ -261,13 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalFornecedor').style.display = 'none';
     });
     
-    window.onclick = (event) => {
-        const modal = document.getElementById('modalFornecedor');
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-    
     carregarFornecedores();
     
     window.buscarFornecedores = async () => {

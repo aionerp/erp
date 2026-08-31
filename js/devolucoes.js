@@ -559,12 +559,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modalDevolucao.style.display = 'none';
     });
 
-    window.onclick = (event) => {
-        if (event.target === modalDevolucao) {
-            modalDevolucao.style.display = 'none';
-        }
-    };
-
     btnConfirmarDevolucao.addEventListener('click', confirmarDevolucao);
 
     // Carregar dados iniciais

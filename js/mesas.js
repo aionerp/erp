@@ -528,15 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filtroTipo')?.addEventListener('change', renderizarMesas);
     document.getElementById('filtroStatus')?.addEventListener('change', renderizarMesas);
 
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalMesa')) {
-            document.getElementById('modalMesa').style.display = 'none';
-        }
-        if (event.target === document.getElementById('modalConsumo')) {
-            document.getElementById('modalConsumo').style.display = 'none';
-        }
-    };
-
     // Excluir Mesa/Comanda/Serviço
     window.excluirMesa = async (id, numero) => {
         if (!confirm(`Deseja realmente excluir a comanda/mesa "${numero}"?`)) return;

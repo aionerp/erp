@@ -1137,18 +1137,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalEntrada')) {
-            document.getElementById('modalEntrada').style.display = 'none';
-        }
-        if (event.target === document.getElementById('modalDetalhes')) {
-            document.getElementById('modalDetalhes').style.display = 'none';
-        }
-        if (event.target === document.getElementById('modalProdutoRapido')) {
-            document.getElementById('modalProdutoRapido').style.display = 'none';
-        }
-    };
-    
     await carregarDados();
     
     window.removerDoCarrinho = removerDoCarrinho;

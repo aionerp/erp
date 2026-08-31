@@ -553,12 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalUsuario').style.display = 'none';
     });
     
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalUsuario')) {
-            document.getElementById('modalUsuario').style.display = 'none';
-        }
-    };
-    
     document.getElementById('searchUsuario')?.addEventListener('input', renderizarTabela);
     document.getElementById('filtroPerfil')?.addEventListener('change', renderizarTabela);
     document.getElementById('filtroStatus')?.addEventListener('change', renderizarTabela);

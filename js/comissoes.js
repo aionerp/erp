@@ -381,13 +381,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
     
-    // Fechar modal ao clicar fora
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalDetalhesVenda')) {
-            fecharModalDetalhes();
-        }
-    };
-    
     // Atualizar resumo e totalizador das comissões selecionadas
     window.atualizarSelecaoComissoes = () => {
         const checkboxes = document.querySelectorAll('.comissao-checkbox:checked');

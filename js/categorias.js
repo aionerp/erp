@@ -274,12 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('groupAvisoVencimento').style.display = e.target.checked ? 'block' : 'none';
     });
     
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalCategoria')) {
-            document.getElementById('modalCategoria').style.display = 'none';
-        }
-    };
-    
     // Eventos de Exportação
     document.getElementById('btnExportExcel')?.addEventListener('click', () => {
         exportarTabelaParaExcel('categoriasTable', 'relatorio_categorias');

@@ -2114,16 +2114,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalComprovante'))
-            document.getElementById('modalComprovante').style.display = 'none';
-        if (event.target === document.getElementById('modalSerial')) {
-            document.getElementById('modalSerial').style.display = 'none';
-            produtoSerialPendente = null;
-        }
-        // Removido fechamento de modalNovoCliente ao clicar fora
-    };
-
     // =====================================================
     // TOGGLE VENDAS RECENTES
     // =====================================================

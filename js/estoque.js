@@ -880,13 +880,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('modal').style.display = 'none';
     });
     
-    window.onclick = (event) => {
-        const modal = document.getElementById('modal');
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-    
     // Eventos de Exportação
     document.getElementById('btnExportExcel')?.addEventListener('click', () => {
         exportarTabelaParaExcel('estoqueTable', 'relatorio_estoque');

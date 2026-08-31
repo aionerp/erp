@@ -1013,15 +1013,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalProduto')) {
-            document.getElementById('modalProduto').style.display = 'none';
-        }
-        if (event.target === document.getElementById('modalSerial')) {
-            document.getElementById('modalSerial').style.display = 'none';
-        }
-    };
-    
     // Eventos de Exportação
     document.getElementById('btnExportExcel')?.addEventListener('click', () => {
         exportarTabelaParaExcel('produtosTable', 'relatorio_produtos');

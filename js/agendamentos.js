@@ -309,12 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filtroProfissional')?.addEventListener('change', renderizarAgendamentos);
     document.getElementById('filtroStatus')?.addEventListener('change', renderizarAgendamentos);
 
-    window.onclick = (event) => {
-        if (event.target === document.getElementById('modalAgendamento')) {
-            document.getElementById('modalAgendamento').style.display = 'none';
-        }
-    };
-
     // Inicializar
     carregarDadosFormulario();
     carregarAgendamentos();
