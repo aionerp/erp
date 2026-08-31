@@ -2185,7 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cpf_cnpj: cpf_cnpj || null,
                 email: email || null,
                 endereco: endereco || null,
-                data_cadastro: new Date().toISOString()
+                tipo: 'cliente'
             };
 
             const { data, error } = await supabaseClient
