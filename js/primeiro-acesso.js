@@ -248,57 +248,100 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Falha ao conectar com o banco de dados do cliente.');
                 }
 
-                btn.textContent = 'Verificando banco de dados...';
+                btn.textContent = 'Verificando status de ativação da loja...';
 
-                // 3. TRAVA DE SEGURANÇA: Verificar se o primeiro acesso já foi concluído
+                // 3. TRAVA DE SEGURANÇA: Verificar se a loja já está ativada ou possui usuários cadastrados
                 const prefixo = cliente.prefix || cliente.clientId;
                 const usuarioAdmEsperado = `adm.${prefixo.toLowerCase()}`;
                 const cleanCnpj = cnpjDigitado.replace(/\D/g, '');
 
+                let lojaJaAtivada = false;
+                let usuarioPrincipal = usuarioAdmEsperado;
+
+                // 3.1 Checar via RPC de Segurança no PostgreSQL (bypassa RLS com SECURITY DEFINER)
                 try {
-                    // Checar se já existe a loja cadastrada com este CNPJ
-                    const { data: lojasCadastradas, error: errLoja } = await clientSupabase
-                        .from('lojas')
-                        .select('id, nome, cnpj')
-                        .limit(5);
+                    const { data: statusLoja, error: errRpc } = await clientSupabase.rpc('verificar_status_loja', {
+                        p_cnpj: cleanCnpj
+                    });
 
-                    // Checar se já existe o usuário adm.<prefixo> cadastrado
-                    const { data: usersCadastrados, error: errUser } = await clientSupabase
-                        .from('usuarios')
-                        .select('id, email, nome')
-                        .eq('email', usuarioAdmEsperado)
-                        .limit(1);
-
-                    const jaTemUsuario = usersCadastrados && usersCadastrados.length > 0;
-                    const jaTemLoja = lojasCadastradas && lojasCadastradas.some(l => String(l.cnpj).replace(/\D/g, '') === cleanCnpj);
-
-                    if (jaTemUsuario || jaTemLoja) {
-                        // TRAVA ACIONADA: Não pode repetir o primeiro acesso!
-                        alertBox.innerHTML = `
-                            <div class="pa-alert pa-alert-warning">
-                                <strong>🔒 Trava de Segurança Ativa:</strong><br>
-                                O primeiro acesso para a empresa <strong>${cliente.companyName}</strong> já foi realizado anteriormente.<br><br>
-                                Seu usuário de acesso é: <strong>${usuarioAdmEsperado}</strong>.<br>
-                                Retorne à tela inicial e utilize sua senha para entrar.
-                            </div>
-                        `;
-                        btn.disabled = false;
-                        btn.textContent = 'Ir para Tela de Login';
-                        btn.onclick = () => {
-                            fecharModalPA();
-                            const inputLogin = document.getElementById('email');
-                            if (inputLogin) {
-                                inputLogin.value = usuarioAdmEsperado;
-                                document.getElementById('password')?.focus();
-                            }
-                        };
-                        return;
+                    if (!errRpc && statusLoja) {
+                        if (statusLoja.loja_ativa === true || statusLoja.permite_onboarding === false) {
+                            lojaJaAtivada = true;
+                            if (statusLoja.usuario_adm) usuarioPrincipal = statusLoja.usuario_adm;
+                        }
                     }
-                } catch (e) {
-                    console.log('Checagem de trava inicial prosseguiu:', e);
+                } catch (rpcEx) {
+                    console.log('RPC verificar_status_loja não disponível, executando checagens complementares...', rpcEx);
                 }
 
-                // Se passou da trava, avançar para a Ficha de Cadastro da Empresa e ADM
+                // 3.2 Checagem direta de usuários cadastrados
+                if (!lojaJaAtivada) {
+                    try {
+                        const { data: usersCadastrados } = await clientSupabase
+                            .from('usuarios')
+                            .select('id, email, nome, ativo')
+                            .limit(5);
+
+                        if (usersCadastrados && usersCadastrados.length > 0) {
+                            lojaJaAtivada = true;
+                            const uAdm = usersCadastrados.find(u => u.email && u.email.startsWith('adm.')) || usersCadastrados[0];
+                            if (uAdm?.email) usuarioPrincipal = uAdm.email;
+                        }
+                    } catch (e) {
+                        console.log('Checagem direta de usuários:', e);
+                    }
+                }
+
+                // 3.3 Checagem direta de lojas cadastradas
+                if (!lojaJaAtivada) {
+                    try {
+                        const { data: lojasCadastradas } = await clientSupabase
+                            .from('lojas')
+                            .select('id, nome, cnpj')
+                            .limit(5);
+
+                        if (lojasCadastradas && lojasCadastradas.length > 0) {
+                            lojaJaAtivada = true;
+                        }
+                    } catch (e) {
+                        console.log('Checagem direta de lojas:', e);
+                    }
+                }
+
+                // 3.4 Checagem nas configurações do cliente (config.json)
+                if (!lojaJaAtivada) {
+                    if (cliente.active === true || cliente.status === 'ativo' || cliente.configured === true || cliente.ativado === true) {
+                        lojaJaAtivada = true;
+                    }
+                }
+
+                // Se a loja já estiver ativada, BLOQUEIA IMEDIATAMENTE O ACESSO
+                if (lojaJaAtivada) {
+                    alertBox.innerHTML = `
+                        <div class="pa-alert pa-alert-error" style="border-left: 4px solid #dc2626; padding: 16px; background: #FEF2F2; color: #991B1B;">
+                            <strong style="font-size: 15px; display: block; margin-bottom: 6px;">❌ Acesso Negado (Loja já ativada).</strong>
+                            <p style="margin: 0 0 10px 0; font-size: 13px; color: #7F1D1D; line-height: 1.4;">
+                                Esta empresa (<strong>${cliente.companyName}</strong>) já possui usuários e configurações ativas no sistema.
+                            </p>
+                            <div style="font-size: 13px; font-weight: 700; color: #991B1B; background: #FEE2E2; padding: 8px 12px; border-radius: 6px; border: 1px solid #FECACA;">
+                                ⚠️ Acione o supervisor do seu sistema.
+                            </div>
+                        </div>
+                    `;
+                    btn.disabled = false;
+                    btn.textContent = 'Ir para a Tela de Login';
+                    btn.onclick = () => {
+                        fecharModalPA();
+                        const inputLogin = document.getElementById('email');
+                        if (inputLogin) {
+                            inputLogin.value = usuarioPrincipal;
+                            document.getElementById('password')?.focus();
+                        }
+                    };
+                    return;
+                }
+
+                // Se passou de todas as travas e não há nenhum usuário cadastrado, avança para a Ficha
                 renderizarFichaCadastro(cliente);
 
             } catch (err) {

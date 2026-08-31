@@ -553,3 +553,53 @@ Caso queira checar o que está ativo em cada loja:
 --     habilitar_mesas, 
 --     habilitar_seriais 
 -- FROM public.config_loja;
+
+-- ============================================================================
+-- VERIFICAÇÃO DE STATUS DA LOJA E TRAVA DE PRIMEIRO ACESSO
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.verificar_status_loja(p_cnpj text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_clean_cnpj text;
+    v_qtd_usuarios integer;
+    v_qtd_lojas integer;
+    v_loja_nome text;
+    v_usuario_adm text;
+BEGIN
+    v_clean_cnpj := regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g');
+
+    -- Contar usuários ativos
+    SELECT COUNT(*), (ARRAY_AGG(email))[1]
+    INTO v_qtd_usuarios, v_usuario_adm
+    FROM public.usuarios
+    WHERE ativo = true;
+
+    -- Verificar se existe loja cadastrada
+    SELECT COUNT(*), (ARRAY_AGG(nome))[1]
+    INTO v_qtd_lojas, v_loja_nome
+    FROM public.lojas;
+
+    -- Se existirem usuários ativos ou lojas cadastradas
+    IF coalesce(v_qtd_usuarios, 0) > 0 OR coalesce(v_qtd_lojas, 0) > 0 THEN
+        RETURN jsonb_build_object(
+            'loja_ativa', true,
+            'permite_onboarding', false,
+            'qtd_usuarios', v_qtd_usuarios,
+            'usuario_adm', v_usuario_adm,
+            'loja_nome', v_loja_nome,
+            'mensagem', 'Acesso Negado (Loja já ativada). Acione o supervisor do seu sistema.'
+        );
+    ELSE
+        RETURN jsonb_build_object(
+            'loja_ativa', false,
+            'permite_onboarding', true,
+            'qtd_usuarios', 0,
+            'mensagem', 'Loja disponível para primeiro acesso.'
+        );
+    END IF;
+END;
+$$;

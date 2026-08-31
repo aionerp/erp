@@ -4,6 +4,7 @@
   "companySubtitle": "by AionLabs (Cliente 03)",
   "prefix": "originaleltronico",
   "cnpj": "47.391.014/0001-47",
+  "active": true,
   "supabase": {
     "url": "https://jzbqyeyzgvvjqsohliee.supabase.co",
     "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6YnF5ZXl6Z3Z2anFzb2hsaWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTQ0OTQsImV4cCI6MjEwMzc3MDQ5NH0.sYSA8zU1EExsame51PKBAPQl0lP4vlK-LPgIYLEdvxQ"
