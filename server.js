@@ -2,7 +2,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const serveDir = process.argv[2] || '.';
+
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -26,7 +28,7 @@ const server = http.createServer((req, res) => {
         decodedUrl = decodedUrl.substring(0, qIndex);
     }
 
-    let filePath = path.join(__dirname, decodedUrl === '/' ? 'index.html' : decodedUrl);
+    let filePath = path.join(__dirname, serveDir, decodedUrl === '/' ? 'index.html' : decodedUrl);
     const extname = path.extname(filePath);
     let contentType = MIME_TYPES[extname] || 'application/octet-stream';
     
@@ -48,4 +50,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
+    console.log(`Servindo diretório: "${serveDir}"`);
 });

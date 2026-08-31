@@ -13,6 +13,20 @@ try {
     console.log('Arquivo env.js não encontrado localmente. Usando fallbacks de ambiente.');
 }
 
+// Injeção dinâmica de branding/cores se configuradas
+if (window.ENV?.BRANDING?.primaryColor) {
+    const style = document.createElement('style');
+    style.id = 'dynamic-branding-styles';
+    style.textContent = `
+        :root {
+            --primary: ${window.ENV.BRANDING.primaryColor} !important;
+            ${window.ENV.BRANDING.primaryDarkColor ? `--primary-dark: ${window.ENV.BRANDING.primaryDarkColor} !important;` : ''}
+            ${window.ENV.BRANDING.primaryLightColor ? `--primary-light: ${window.ENV.BRANDING.primaryLightColor} !important;` : ''}
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://madaoptvsbnhelamwyzp.supabase.co';
 const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4';
 
@@ -581,3 +595,44 @@ async function obterProximoCodigoProduto() {
 
 window.nextCode = nextCode;
 window.obterProximoCodigoProduto = obterProximoCodigoProduto;
+
+// Inicialização Dinâmica de Branding no DOM
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.ENV) {
+        // Títulos de Páginas e Textos de Branding (Login)
+        if (window.ENV.COMPANY_NAME) {
+            const loginTitle = document.querySelector('.login-header h1');
+            if (loginTitle) {
+                loginTitle.textContent = window.ENV.COMPANY_NAME;
+            }
+            
+            const loginSubtitle = document.querySelector('.login-header .subtitle');
+            if (loginSubtitle) {
+                loginSubtitle.textContent = window.ENV.COMPANY_SUBTITLE || 'by AionLabs';
+            }
+            
+            const footerText = document.querySelector('.login-footer p');
+            if (footerText) {
+                footerText.innerHTML = `${window.ENV.COMPANY_NAME} &copy; ${new Date().getFullYear()} ${window.ENV.COMPANY_SUBTITLE ? window.ENV.COMPANY_SUBTITLE : ''}`;
+            }
+
+            // Títulos do Manual do Sistema se houver
+            const coverTitle = document.querySelector('.cover-subtitle');
+            if (coverTitle) {
+                coverTitle.textContent = `${window.ENV.COMPANY_NAME} - Guia Prático de Operação de Vendas (PDV) e Controle de Estoque`;
+            }
+            const coverLogoHeader = document.querySelector('.cover-logo + h2');
+            if (coverLogoHeader) {
+                coverLogoHeader.textContent = `🍀 Manual do Sistema ${window.ENV.COMPANY_NAME}`;
+            }
+        }
+        
+        // Substituir logotipo no login se especificado
+        if (window.ENV.BRANDING?.logoUrl) {
+            const logoContainer = document.querySelector('.login-logo');
+            if (logoContainer) {
+                logoContainer.innerHTML = `<img src="${window.ENV.BRANDING.logoUrl}" alt="Logo" style="max-height: 100%; max-width: 100%; object-fit: contain;">`;
+            }
+        }
+    }
+});

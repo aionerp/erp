@@ -1,0 +1,49 @@
+name: Multi-Client ERP Build CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run builds for all clients
+        run: |
+          echo "Discovered clients:"
+          ls -la clients/
+          
+          # Loop through each directory in clients/ and run build
+          errors=0
+          for client_dir in clients/*; do
+            if [ -d "$client_dir" ]; then
+              client_name=$(basename "$client_dir")
+              echo "--------------------------------------------------"
+              echo "🔨 Running build for client: $client_name"
+              echo "--------------------------------------------------"
+              
+              if CLIENTE=$client_name node build.js; then
+                echo "✅ Build successful for $client_name"
+              else
+                echo "❌ Build FAILED for $client_name"
+                errors=$((errors+1))
+              fi
+            fi
+          done
+          
+          if [ $errors -ne 0 ]; then
+            echo "❌ CI failed: $errors client build(s) failed."
+            exit 1
+          fi
+          echo "✅ All client builds completed successfully!"

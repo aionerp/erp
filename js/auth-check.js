@@ -53,13 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    const config = usuario.config_loja || {
+    const baseConfig = usuario.config_loja || {
         habilitar_seriais: true,
         habilitar_agendamentos: false,
         habilitar_mesas: false,
         habilitar_lotes: false,
         habilitar_variacoes: false
     };
+    const config = { ...baseConfig, ...window.ENV?.FEATURES || window.ENV?.features };
 
     // === RECONSTRUIR SIDEBAR DINAMICAMENTE POR RECURSOS ATIVOS ===
     const sidebar = document.querySelector('.sidebar');
@@ -266,10 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="sidebar-header" style="padding: 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
                 <h2 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span style="background: var(--primary); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">ERP</span>
-                    <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${usuario.loja_nome || 'Aion ERP'}</span>
+                    <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</span>
                 </h2>
                 <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #D4AF37; margin-top: 4px; font-weight: bold;">
-                    by AionLabs
+                    ${window.ENV?.COMPANY_SUBTITLE || 'by AionLabs'}
                 </div>
             </div>
             <ul class="sidebar-nav" style="overflow-y: auto; max-height: calc(100vh - 120px);">
@@ -298,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === DEFINIR TÍTULO DA PÁGINA COM NOME DO SISTEMA ===
     const cleanTitle = document.title.replace(' - Sistema de Estoque', '');
-    document.title = `Aion ERP | ${cleanTitle}`;
+    document.title = `${window.ENV?.COMPANY_NAME || 'Aion ERP'} | ${cleanTitle}`;
     
     // Mostrar informações do usuário
     const userNameElement = document.getElementById('userName');
@@ -411,7 +412,7 @@ ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_troca TEXT;</texta
     modal.innerHTML = `
         <div class="modal-content" style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:500px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease; box-sizing:border-box; font-family:inherit;">
             <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
-                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - Aion ERP</h2>
+                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - ${window.ENV?.COMPANY_NAME || 'Aion ERP'}</h2>
                 <span class="close-config" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
             </div>
             <div class="modal-body" style="max-height: 430px; overflow-y: auto; padding-right: 5px;">

@@ -1,1 +1,5 @@
 env.js
+.env
+/dist
+/node_modules
+*.log

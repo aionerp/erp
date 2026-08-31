@@ -1,0 +1,22 @@
+{
+  "clientId": "cliente01",
+  "companyName": "Cliente 01 Oficial",
+  "companySubtitle": "by AionLabs (Cliente 01)",
+  "cnpj": "12.345.678/0001-90",
+  "supabase": {
+    "url": "https://madaoptvsbnhelamwyzp.supabase.co",
+    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4"
+  },
+  "branding": {
+    "primaryColor": "#0A4D68",
+    "primaryDarkColor": "#083F55",
+    "primaryLightColor": "#1D789B"
+  },
+  "features": {
+    "habilitar_seriais": true,
+    "habilitar_agendamentos": true,
+    "habilitar_mesas": false,
+    "habilitar_lotes": true,
+    "habilitar_variacoes": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "clientId": "cliente02",
+  "companyName": "Cliente 02 Verde",
+  "companySubtitle": "by AionLabs (Cliente 02)",
+  "cnpj": "98.765.432/0001-10",
+  "supabase": {
+    "url": "https://yqnjgkdqaytcsigcbhgv.supabase.co",
+    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxbmpna2RxYXl0Y3NpZ2NiaGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTYxNzgsImV4cCI6MjEwMTUzMjE3OH0.DjeqfKwMnZpS_Ev0hBIAi-Nf2clkBcgijhoDYWMsCjI"
+  },
+  "branding": {
+    "primaryColor": "#00A86B",
+    "primaryDarkColor": "#007F51",
+    "primaryLightColor": "#10C17E"
+  },
+  "features": {
+    "habilitar_seriais": false,
+    "habilitar_agendamentos": false,
+    "habilitar_mesas": true,
+    "habilitar_lotes": false,
+    "habilitar_variacoes": true
+  }
+}

@@ -2,11 +2,36 @@ const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 
+// Carregar .env local se disponível
+try {
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.join(__dirname, '../.env');
+    if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        envContent.split('\n').forEach(line => {
+            const parts = line.split('=');
+            if (parts.length >= 2) {
+                const key = parts[0].trim();
+                const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
+                process.env[key] = val;
+            }
+        });
+    }
+} catch (e) {
+    // Silencioso
+}
+
 // Pegar variáveis das variáveis de ambiente (GitHub Secrets ou Local)
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://limlumccmvekwvglfgtx.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpbWx1bWNjbXZla3d2Z2xmZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDI1MTksImV4cCI6MjA5Njg3ODUxOX0.i7uJK2DZ_lFS6XTIHKQTpdwx9BPeVbFDOvAJIBd3kFs';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_DESTINATARIO = process.env.EMAIL_DESTINATARIO;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('ERRO: SUPABASE_URL e SUPABASE_ANON_KEY são obrigatórios nas variáveis de ambiente.');
+    process.exit(1);
+}
 
 const TABELAS = [
     'clientes',

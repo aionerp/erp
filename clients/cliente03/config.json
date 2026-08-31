@@ -1,0 +1,22 @@
+{
+  "clientId": "cliente03",
+  "companyName": "Cliente 03 Orange",
+  "companySubtitle": "by AionLabs (Cliente 03)",
+  "cnpj": "11.222.333/0001-44",
+  "supabase": {
+    "url": "https://abc-cliente03.supabase.co",
+    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-key-cliente03-anon.example"
+  },
+  "branding": {
+    "primaryColor": "#EB5E28",
+    "primaryDarkColor": "#B83E15",
+    "primaryLightColor": "#FF8C61"
+  },
+  "features": {
+    "habilitar_seriais": true,
+    "habilitar_agendamentos": true,
+    "habilitar_mesas": true,
+    "habilitar_lotes": true,
+    "habilitar_variacoes": true
+  }
+}
