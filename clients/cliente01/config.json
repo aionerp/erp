@@ -4,6 +4,8 @@
   "companySubtitle": "by AionLabs",
   "prefix": "aionerp",
   "cnpj": "12.345.678/0001-90",
+  "active": true,
+  "configured": true,
   "supabase": {
     "url": "https://madaoptvsbnhelamwyzp.supabase.co",
     "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4"

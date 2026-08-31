@@ -4,6 +4,8 @@
   "companySubtitle": "by AionLabs (Cliente 02)",
   "prefix": "cliente02",
   "cnpj": "98.765.432/0001-10",
+  "active": true,
+  "configured": true,
   "supabase": {
     "url": "https://jlpxureozcpgfliukztn.supabase.co",
     "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpscHh1cmVvemNwZ2ZsaXVrenRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTAxNTYsImV4cCI6MjEwMzc2NjE1Nn0.TDYRAbDaeRwQ0i3Uq6RxZUyZu1WMuugNO5nejq2og0s"

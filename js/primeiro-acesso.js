@@ -242,15 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 clienteSelecionadoPA = cliente;
 
-                // 2. Conectar dinamicamente ao banco Supabase daquele cliente
-                const clientSupabase = window.conectarClienteSupabase(cliente);
-                if (!clientSupabase) {
-                    throw new Error('Falha ao conectar com o banco de dados do cliente.');
-                }
-
-                btn.textContent = 'Verificando status de ativação da loja...';
-
-                // 3. TRAVA DE SEGURANÇA: Verificar se a loja já está ativada ou possui usuários cadastrados
                 const prefixo = cliente.prefix || cliente.clientId;
                 const usuarioAdmEsperado = `adm.${prefixo.toLowerCase()}`;
                 const cleanCnpj = cnpjDigitado.replace(/\D/g, '');
@@ -258,60 +249,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 let lojaJaAtivada = false;
                 let usuarioPrincipal = usuarioAdmEsperado;
 
-                // 3.1 Checar via RPC de Segurança no PostgreSQL (bypassa RLS com SECURITY DEFINER)
-                try {
-                    const { data: statusLoja, error: errRpc } = await clientSupabase.rpc('verificar_status_loja', {
-                        p_cnpj: cleanCnpj
-                    });
-
-                    if (!errRpc && statusLoja) {
-                        if (statusLoja.loja_ativa === true || statusLoja.permite_onboarding === false) {
-                            lojaJaAtivada = true;
-                            if (statusLoja.usuario_adm) usuarioPrincipal = statusLoja.usuario_adm;
-                        }
-                    }
-                } catch (rpcEx) {
-                    console.log('RPC verificar_status_loja não disponível, executando checagens complementares...', rpcEx);
+                // 2. Trava 1: Checagem no Manifesto/JSON do Cliente (config.json)
+                if (cliente.active === true || cliente.status === 'ativo' || cliente.configured === true || cliente.ativado === true) {
+                    lojaJaAtivada = true;
                 }
 
-                // 3.2 Checagem direta de usuários cadastrados
+                // 3. Trava 2: Conectar dinamicamente ao banco Supabase daquele cliente e verificar banco de dados
                 if (!lojaJaAtivada) {
-                    try {
-                        const { data: usersCadastrados } = await clientSupabase
-                            .from('usuarios')
-                            .select('id, email, nome, ativo')
-                            .limit(5);
+                    btn.textContent = 'Verificando status de ativação no banco...';
+                    const clientSupabase = window.conectarClienteSupabase(cliente);
+                    if (clientSupabase) {
+                        // 3.1 RPC de Segurança no PostgreSQL
+                        try {
+                            const { data: statusLoja, error: errRpc } = await clientSupabase.rpc('verificar_status_loja', {
+                                p_cnpj: cleanCnpj
+                            });
 
-                        if (usersCadastrados && usersCadastrados.length > 0) {
-                            lojaJaAtivada = true;
-                            const uAdm = usersCadastrados.find(u => u.email && u.email.startsWith('adm.')) || usersCadastrados[0];
-                            if (uAdm?.email) usuarioPrincipal = uAdm.email;
+                            if (!errRpc && statusLoja) {
+                                if (statusLoja.loja_ativa === true || statusLoja.permite_onboarding === false) {
+                                    lojaJaAtivada = true;
+                                    if (statusLoja.usuario_adm) usuarioPrincipal = statusLoja.usuario_adm;
+                                }
+                            }
+                        } catch (rpcEx) {
+                            console.log('RPC verificar_status_loja:', rpcEx);
                         }
-                    } catch (e) {
-                        console.log('Checagem direta de usuários:', e);
-                    }
-                }
 
-                // 3.3 Checagem direta de lojas cadastradas
-                if (!lojaJaAtivada) {
-                    try {
-                        const { data: lojasCadastradas } = await clientSupabase
-                            .from('lojas')
-                            .select('id, nome, cnpj')
-                            .limit(5);
+                        // 3.2 Checagem direta de usuários cadastrados
+                        if (!lojaJaAtivada) {
+                            try {
+                                const { data: usersCadastrados } = await clientSupabase
+                                    .from('usuarios')
+                                    .select('id, email, nome, ativo')
+                                    .limit(5);
 
-                        if (lojasCadastradas && lojasCadastradas.length > 0) {
-                            lojaJaAtivada = true;
+                                if (usersCadastrados && usersCadastrados.length > 0) {
+                                    lojaJaAtivada = true;
+                                    const uAdm = usersCadastrados.find(u => u.email && u.email.startsWith('adm.')) || usersCadastrados[0];
+                                    if (uAdm?.email) usuarioPrincipal = uAdm.email;
+                                }
+                            } catch (e) {}
                         }
-                    } catch (e) {
-                        console.log('Checagem direta de lojas:', e);
-                    }
-                }
 
-                // 3.4 Checagem nas configurações do cliente (config.json)
-                if (!lojaJaAtivada) {
-                    if (cliente.active === true || cliente.status === 'ativo' || cliente.configured === true || cliente.ativado === true) {
-                        lojaJaAtivada = true;
+                        // 3.3 Checagem direta de lojas cadastradas
+                        if (!lojaJaAtivada) {
+                            try {
+                                const { data: lojasCadastradas } = await clientSupabase
+                                    .from('lojas')
+                                    .select('id, nome, cnpj')
+                                    .limit(5);
+
+                                if (lojasCadastradas && lojasCadastradas.length > 0) {
+                                    lojaJaAtivada = true;
+                                }
+                            } catch (e) {}
+                        }
                     }
                 }
 

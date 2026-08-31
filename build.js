@@ -46,6 +46,9 @@ function generateClientsManifest() {
                         prefix: clientData.prefix || folder.toLowerCase().replace(/[^a-z0-9]/g, ''),
                         cnpj: (clientData.cnpj || '').replace(/\D/g, ''),
                         cnpjFormatted: clientData.cnpj || '',
+                        active: clientData.active !== undefined ? clientData.active : true,
+                        configured: clientData.configured !== undefined ? clientData.configured : true,
+                        status: clientData.status || (clientData.active !== false ? 'ativo' : 'inativo'),
                         supabase: clientData.supabase || {},
                         branding: clientData.branding || {},
                         features: clientData.features || {}

@@ -6,6 +6,9 @@
     "prefix": "aionerp",
     "cnpj": "12345678000190",
     "cnpjFormatted": "12.345.678/0001-90",
+    "active": true,
+    "configured": true,
+    "status": "ativo",
     "supabase": {
       "url": "https://madaoptvsbnhelamwyzp.supabase.co",
       "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4"
@@ -30,6 +33,9 @@
     "prefix": "cliente02",
     "cnpj": "98765432000110",
     "cnpjFormatted": "98.765.432/0001-10",
+    "active": true,
+    "configured": true,
+    "status": "ativo",
     "supabase": {
       "url": "https://jlpxureozcpgfliukztn.supabase.co",
       "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpscHh1cmVvemNwZ2ZsaXVrenRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTAxNTYsImV4cCI6MjEwMzc2NjE1Nn0.TDYRAbDaeRwQ0i3Uq6RxZUyZu1WMuugNO5nejq2og0s"
@@ -54,6 +60,9 @@
     "prefix": "originaleltronico",
     "cnpj": "47391014000147",
     "cnpjFormatted": "47.391.014/0001-47",
+    "active": true,
+    "configured": true,
+    "status": "ativo",
     "supabase": {
       "url": "https://jzbqyeyzgvvjqsohliee.supabase.co",
       "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6YnF5ZXl6Z3Z2anFzb2hsaWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTQ0OTQsImV4cCI6MjEwMzc3MDQ5NH0.sYSA8zU1EExsame51PKBAPQl0lP4vlK-LPgIYLEdvxQ"
