@@ -927,7 +927,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                     <td><strong>#${v.id}</strong></td>
                     <td>${formatarData(v.data)}</td>
-                    <td>${v.clientes?.nome || '<span style="color:#9ca3af">—</span>'}</td>
+                    <td>${v.cliente_nome || v.clientes?.nome || '<span style="color:#9ca3af">Consumidor Final</span>'}</td>
                     <td><strong style="color:var(--primary)">${formatarMoeda(v.total)}</strong></td>
                     <td>${v.forma_pagamento || '—'}</td>
                     <td>${statusHtml}</td>
@@ -941,13 +941,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =====================================================
-    // BUSCA DE CLIENTES
+    // IDENTIFICAÇÃO E BUSCA DE CLIENTES (OPCIONAL)
     // =====================================================
 
     const searchClienteEl = document.getElementById('searchCliente');
+    const clienteCpfEl = document.getElementById('clienteVendaCpf');
+    const btnLimparClienteEl = document.getElementById('btnLimparClienteRapido');
     const clienteSuggestionsEl = document.getElementById('clienteSuggestions');
 
+    function atualizarVisibilidadeBotaoLimparCliente() {
+        const temValor = (searchClienteEl?.value.trim().length > 0) || (clienteCpfEl?.value.trim().length > 0) || (document.getElementById('clienteId')?.value);
+        if (btnLimparClienteEl) {
+            btnLimparClienteEl.style.display = temValor ? 'flex' : 'none';
+        }
+    }
+
     searchClienteEl?.addEventListener('input', (e) => {
+        atualizarVisibilidadeBotaoLimparCliente();
         const termo = e.target.value.toLowerCase();
         if (termo.length < 2) { clienteSuggestionsEl.style.display = 'none'; return; }
 
@@ -959,7 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
         if (filtrados.length === 0) {
-            clienteSuggestionsEl.innerHTML = '<div class="cliente-suggestion-item">Nenhum cliente encontrado</div>';
+            clienteSuggestionsEl.innerHTML = '<div class="cliente-suggestion-item" style="color:#6b7280;font-size:12px;">Nenhum cliente cadastrado com esse nome (seguirá como venda rápida)</div>';
         } else {
             clienteSuggestionsEl.innerHTML = filtrados.slice(0, 8).map(c => `
                 <div class="cliente-suggestion-item"
@@ -971,6 +981,23 @@ document.addEventListener('DOMContentLoaded', () => {
         clienteSuggestionsEl.style.display = 'block';
     });
 
+    clienteCpfEl?.addEventListener('input', (e) => {
+        let v = e.target.value.replace(/\D/g, '');
+        if (v.length <= 11) {
+            v = v.replace(/(\d{3})(\d)/, '$1.$2');
+            v = v.replace(/(\d{3})(\d)/, '$1.$2');
+            v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        } else {
+            v = v.slice(0, 14);
+            v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+            v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+            v = v.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+        }
+        e.target.value = v;
+        atualizarVisibilidadeBotaoLimparCliente();
+    });
+
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.search-cliente')) {
             clienteSuggestionsEl.style.display = 'none';
@@ -978,12 +1005,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.selecionarCliente = (id, nome, documento) => {
-        document.getElementById('clienteId').value = id;
-        document.getElementById('searchCliente').value = nome;
+        document.getElementById('clienteId').value = id || '';
+        if (searchClienteEl) searchClienteEl.value = nome || '';
+        if (clienteCpfEl && documento) clienteCpfEl.value = documento;
+        atualizarVisibilidadeBotaoLimparCliente();
         document.getElementById('clienteSelecionado').innerHTML =
-            `✅ <strong>${nome}</strong>${documento ? ` (${documento})` : ''}`;
+            `✅ Cliente Vinculado: <strong>${nome}</strong>${documento ? ` (${documento})` : ''} <a href="javascript:void(0)" onclick="limparClienteRapido()" style="color:#dc2626;margin-left:8px;text-decoration:none;font-weight:bold;">✕ Limpar</a>`;
         clienteSuggestionsEl.style.display = 'none';
     };
+
+    window.limparClienteRapido = () => {
+        const idEl = document.getElementById('clienteId');
+        if (idEl) idEl.value = '';
+        if (searchClienteEl) searchClienteEl.value = '';
+        if (clienteCpfEl) clienteCpfEl.value = '';
+        const selEl = document.getElementById('clienteSelecionado');
+        if (selEl) selEl.innerHTML = '';
+        if (btnLimparClienteEl) btnLimparClienteEl.style.display = 'none';
+    };
+
+    btnLimparClienteEl?.addEventListener('click', window.limparClienteRapido);
 
     // =====================================================
     // FORMAS DE PAGAMENTO
@@ -1384,9 +1425,15 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('checkout_restaurante');
         sessionStorage.removeItem('checkout_agendamento');
 
-        document.getElementById('clienteId').value         = '';
-        document.getElementById('searchCliente').value     = '';
-        document.getElementById('clienteSelecionado').innerHTML = '';
+        if (typeof window.limparClienteRapido === 'function') {
+            window.limparClienteRapido();
+        } else {
+            document.getElementById('clienteId').value         = '';
+            document.getElementById('searchCliente').value     = '';
+            if (document.getElementById('clienteVendaCpf')) document.getElementById('clienteVendaCpf').value = '';
+            document.getElementById('clienteSelecionado').innerHTML = '';
+        }
+
         document.getElementById('desconto').value          = '0';
         document.getElementById('acrescimo').value         = '0';
         document.getElementById('observacao').value        = '';
@@ -1426,12 +1473,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const clienteId  = document.getElementById('clienteId').value;
-        const desconto   = parseFloat(document.getElementById('desconto').value)  || 0;
-        const acrescimo  = parseFloat(document.getElementById('acrescimo').value) || 0;
-        const observacao = document.getElementById('observacao').value;
-        const subtotal   = carrinho.reduce((s, i) => s + i.subtotal, 0);
-        const total      = Math.max(0, subtotal - desconto + acrescimo);
+        const clienteIdRaw  = document.getElementById('clienteId')?.value;
+        const clienteId     = clienteIdRaw ? parseInt(clienteIdRaw) : null;
+        const clienteNome   = document.getElementById('searchCliente')?.value.trim() || null;
+        const clienteCpf    = document.getElementById('clienteVendaCpf')?.value.trim() || null;
+        const desconto      = parseFloat(document.getElementById('desconto').value)  || 0;
+        const acrescimo     = parseFloat(document.getElementById('acrescimo').value) || 0;
+        const observacao    = document.getElementById('observacao').value;
+        const subtotal      = carrinho.reduce((s, i) => s + i.subtotal, 0);
+        const total         = Math.max(0, subtotal - desconto + acrescimo);
 
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
         if (btnFinalizar) { btnFinalizar.disabled = true; btnFinalizar.textContent = '⏳ Processando...'; }
@@ -1472,21 +1522,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            let obsFinal = observacao ? observacao.trim() : '';
+            if (acrescimo > 0) {
+                obsFinal = obsFinal ? `${obsFinal} | Acréscimo: R$ ${acrescimo.toFixed(2)}` : `Acréscimo: R$ ${acrescimo.toFixed(2)}`;
+            }
+
             let insertData = {
-                cliente_id:       clienteId || null,
-                data:             dataVenda,
-                total:            total,
-                desconto:         desconto,
-                forma_pagamento:  formaPagamentoSelecionada,
-                observacao:       observacao
-                    ? `${observacao} | Acréscimo: R$ ${acrescimo.toFixed(2)}`
-                    : acrescimo > 0 ? `Acréscimo: R$ ${acrescimo.toFixed(2)}` : null,
-                usuario_id:       usuario.id,
-                data_finalizacao: new Date().toISOString(),
-                caixa_id:         caixaAtivo.id,
-                colaborador_id:   colabIdVal,
+                cliente_id:         clienteId || null,
+                cliente_nome:       clienteNome,
+                cliente_cpf:        clienteCpf,
+                data:               dataVenda,
+                total:              total,
+                desconto:           desconto,
+                forma_pagamento:    formaPagamentoSelecionada,
+                observacao:         obsFinal || null,
+                usuario_id:         usuario.id,
+                data_finalizacao:   new Date().toISOString(),
+                caixa_id:           caixaAtivo.id,
+                colaborador_id:     colabIdVal,
                 comissao_calculada: comissaoCalculada,
-                comissao_paga:     false
+                comissao_paga:      false
             };
 
             let { data: venda, error: vendaError } = await supabaseClient
@@ -1496,21 +1551,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 .single();
 
             if (vendaError) {
-                // Se der erro que indica que a coluna caixa_id ou colaborador_id não existe no banco, remove e tenta novamente
-                if (vendaError.message && (vendaError.message.includes('caixa_id') || vendaError.message.includes('colaborador_id') || vendaError.message.includes('comissao_calculada') || vendaError.code === 'PGRST116')) {
-                    console.warn('⚠️ Colunas não encontradas na tabela public.saidas. Retentando sem vincular...');
-                    delete insertData.caixa_id;
-                    delete insertData.colaborador_id;
-                    delete insertData.comissao_calculada;
-                    delete insertData.comissao_paga;
-                    const retryResult = await supabaseClient
-                        .from('saidas')
-                        .insert([insertData])
-                        .select()
-                        .single();
-                    venda = retryResult.data;
-                    vendaError = retryResult.error;
+                console.warn('⚠️ Erro ao inserir venda direta na tabela public.saidas. Retentando fallback seguro...', vendaError);
+                delete insertData.cliente_nome;
+                delete insertData.cliente_cpf;
+                delete insertData.caixa_id;
+                delete insertData.colaborador_id;
+                delete insertData.comissao_calculada;
+                delete insertData.comissao_paga;
+
+                if (!clienteId && clienteNome) {
+                    const idInfo = clienteCpf ? `${clienteNome} (CPF: ${clienteCpf})` : clienteNome;
+                    insertData.observacao = insertData.observacao ? `${insertData.observacao} | Cliente: ${idInfo}` : `Cliente: ${idInfo}`;
                 }
+
+                const retryResult = await supabaseClient
+                    .from('saidas')
+                    .insert([insertData])
+                    .select()
+                    .single();
+                venda = retryResult.data;
+                vendaError = retryResult.error;
             }
 
             if (vendaError) throw vendaError;
@@ -1794,8 +1854,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- DADOS DO CLIENTE -->
                     <div style="font-size:15px;line-height:1.4;margin-bottom:8px;">
-                        <p style="margin:2px 0;">Cliente: ${cliente.nome || ''}</p>
-                        <p style="margin:2px 0;">CPF: ${cliente.cpf_cnpj || ''}</p>
+                        <p style="margin:2px 0;">Cliente: ${venda.cliente_nome || cliente.nome || 'Consumidor Final (Sem identificação)'}</p>
+                        ${(venda.cliente_cpf || cliente.cpf_cnpj) ? `<p style="margin:2px 0;">CPF/CNPJ: ${venda.cliente_cpf || cliente.cpf_cnpj}</p>` : ''}
                         <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 

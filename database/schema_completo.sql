@@ -247,6 +247,10 @@ CREATE TABLE public.saidas (
     caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL,
     colaborador_id INTEGER REFERENCES public.colaboradores(id) ON DELETE SET NULL,
     
+    -- Identificação rápida do cliente na venda (opcional)
+    cliente_nome VARCHAR(255),
+    cliente_cpf VARCHAR(20),
+    
     -- Comissão calculada na venda
     comissao_calculada NUMERIC DEFAULT 0,
     comissao_paga BOOLEAN DEFAULT false,

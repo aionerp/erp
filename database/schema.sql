@@ -205,7 +205,9 @@ CREATE TABLE public.saidas (
     data_finalizacao TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     observacao TEXT,
     caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL,
-    colaborador_id INTEGER REFERENCES public.colaboradores(id) ON DELETE SET NULL
+    colaborador_id INTEGER REFERENCES public.colaboradores(id) ON DELETE SET NULL,
+    cliente_nome VARCHAR(255),
+    cliente_cpf VARCHAR(20)
 );
 
 -- 10. ITENS DE SAÍDA
