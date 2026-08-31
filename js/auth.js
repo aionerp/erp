@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (error) {
                     console.error('Erro na autenticação:', error);
-                    throw new Error('Erro ao conectar com o banco de dados');
+                    throw new Error(error.message || error.details || 'Erro ao conectar com o banco de dados');
                 }
                 
                 if (!data || data.length === 0) {

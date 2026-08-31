@@ -181,7 +181,12 @@ window.buscarClientePorPrefixo = async function(prefixo) {
     const clients = await window.carregarManifestoClientes();
     const cleanPref = String(prefixo || '').trim().toLowerCase();
     if (!cleanPref) return null;
-    return clients.find(c => String(c.prefix || c.clientId).toLowerCase() === cleanPref) || null;
+    return clients.find(c => {
+        const pref = String(c.prefix || '').toLowerCase();
+        const cid = String(c.clientId || '').toLowerCase();
+        const cname = String(c.companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return pref === cleanPref || cid === cleanPref || (pref.length > 3 && cleanPref.startsWith(pref)) || (cleanPref.length > 3 && pref.startsWith(cleanPref)) || cname === cleanPref;
+    }) || null;
 };
 
 window.conectarClienteSupabase = function(clienteConfig) {

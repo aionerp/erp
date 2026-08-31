@@ -472,9 +472,24 @@ BEGIN
         u.loja_id,
         l.nome as loja_nome,
         l.segmento as loja_segmento,
-        to_jsonb(c) as config_loja
+        jsonb_build_object(
+            'nome_fantasia', c.nome_fantasia,
+            'razao_social', c.razao_social,
+            'cnpj', c.cnpj,
+            'telefone', c.telefone,
+            'email', c.email,
+            'endereco', c.endereco,
+            'habilitar_seriais', coalesce(c.habilitar_seriais, true),
+            'habilitar_agendamentos', coalesce(c.habilitar_agendamentos, false),
+            'habilitar_mesas', coalesce(c.habilitar_mesas, false),
+            'habilitar_lotes', coalesce(c.habilitar_lotes, true),
+            'habilitar_variacoes', coalesce(c.habilitar_variacoes, false),
+            'termo_garantia', c.termo_garantia,
+            'termo_troca', c.termo_troca
+        ) as config_loja
     FROM public.usuarios u
     JOIN public.lojas l ON l.id = u.loja_id
+    LEFT JOIN public.config_loja c ON c.loja_id = u.loja_id
     WHERE u.email = p_email 
       AND (
           u.senha = crypt(p_senha, u.senha)
