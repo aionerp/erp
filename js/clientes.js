@@ -288,9 +288,15 @@ document.addEventListener('DOMContentLoaded', () => {
             observacao: document.getElementById('observacao').value.trim()
         };
         
-        if (!dados.nome || !dados.telefone) {
-            mostrarNotificacao('Preencha nome e telefone!', 'error');
+        // Se nenhum campo foi digitado, apenas fecha
+        const algumPreenchido = Object.values(dados).some(v => v && v.length > 0);
+        if (!algumPreenchido) {
+            document.getElementById('modal').style.display = 'none';
             return;
+        }
+
+        if (!dados.nome) {
+            dados.nome = dados.cpf_cnpj ? `Cliente ${dados.cpf_cnpj}` : (dados.telefone ? `Cliente ${dados.telefone}` : 'Cliente Avulso');
         }
         
         try {

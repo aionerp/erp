@@ -2131,18 +2131,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = document.getElementById('novoClienteEmail').value.trim();
         const endereco = document.getElementById('novoClienteEndereco').value.trim();
 
-        if (!nome || !telefone) {
-            mostrarNotificacao('Por favor, preencha o Nome e o Telefone!', 'error');
+        // Se nenhum dado foi informado, apenas fecha o modal
+        if (!nome && !telefone && !cpf_cnpj && !email && !endereco) {
+            fecharModalCliente();
             return;
         }
+
+        const nomeFinal = nome || (cpf_cnpj ? `Cliente ${cpf_cnpj}` : (telefone ? `Cliente ${telefone}` : 'Cliente Avulso'));
 
         btnSalvarNovoCliente.disabled = true;
         btnSalvarNovoCliente.textContent = 'Salvando...';
 
         try {
             const dados = {
-                nome,
-                telefone,
+                nome: nomeFinal,
+                telefone: telefone || null,
                 cpf_cnpj: cpf_cnpj || null,
                 email: email || null,
                 endereco: endereco || null,
