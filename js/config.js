@@ -714,32 +714,20 @@ window.obterProximoCodigoProduto = obterProximoCodigoProduto;
 // Inicialização Dinâmica de Branding no DOM
 document.addEventListener('DOMContentLoaded', () => {
     if (window.ENV) {
-        // Títulos de Páginas e Textos de Branding (Login)
-        if (window.ENV.COMPANY_NAME) {
-            const loginTitle = document.querySelector('.login-header h1');
-            if (loginTitle) {
-                loginTitle.textContent = window.ENV.COMPANY_NAME;
-            }
-            
-            const loginSubtitle = document.querySelector('.login-header .subtitle');
-            if (loginSubtitle) {
-                loginSubtitle.textContent = window.ENV.COMPANY_SUBTITLE || 'by AionLabs';
-            }
-            
-            const footerText = document.querySelector('.login-footer p');
-            if (footerText) {
-                footerText.innerHTML = `${window.ENV.COMPANY_NAME} &copy; ${new Date().getFullYear()} ${window.ENV.COMPANY_SUBTITLE ? window.ENV.COMPANY_SUBTITLE : ''}`;
-            }
-
-            // Títulos do Manual do Sistema se houver
-            const coverTitle = document.querySelector('.cover-subtitle');
-            if (coverTitle) {
-                coverTitle.textContent = `${window.ENV.COMPANY_NAME} - Guia Prático de Operação de Vendas (PDV) e Controle de Estoque`;
-            }
-            const coverLogoHeader = document.querySelector('.cover-logo + h2');
-            if (coverLogoHeader) {
-                coverLogoHeader.textContent = `🍀 Manual do Sistema ${window.ENV.COMPANY_NAME}`;
-            }
+        // A tela de login SEMPRE exibe estritamente: "Aion ERP" e "by AionLabs" (nunca nome ou id de cliente)
+        const loginTitle = document.querySelector('.login-header h1');
+        if (loginTitle) {
+            loginTitle.textContent = 'Aion ERP';
+        }
+        
+        const loginSubtitle = document.querySelector('.login-header .subtitle');
+        if (loginSubtitle) {
+            loginSubtitle.textContent = 'by AionLabs';
+        }
+        
+        const footerText = document.querySelector('.login-footer p');
+        if (footerText) {
+            footerText.innerHTML = `Aion ERP &copy; ${new Date().getFullYear()} by AionLabs`;
         }
         
         // Substituir logotipo no login se especificado
