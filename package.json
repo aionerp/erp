@@ -7,6 +7,7 @@
     "dev": "node server.js",
     "build": "node build.js",
     "serve": "node server.js dist",
+    "init-db": "node scripts/init_database.js",
     "build:cliente01": "node build.js cliente01",
     "build:cliente02": "node build.js cliente02",
     "build:cliente03": "node build.js cliente03"

@@ -2,6 +2,7 @@
   "clientId": "cliente03",
   "companyName": "Cliente 03 Orange",
   "companySubtitle": "by AionLabs (Cliente 03)",
+  "prefix": "cliente03",
   "cnpj": "11.222.333/0001-44",
   "supabase": {
     "url": "https://abc-cliente03.supabase.co",

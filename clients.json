@@ -1,0 +1,74 @@
+[
+  {
+    "clientId": "cliente01",
+    "companyName": "AionERP Oficial",
+    "companySubtitle": "by AionLabs",
+    "prefix": "aionerp",
+    "cnpj": "12345678000190",
+    "cnpjFormatted": "12.345.678/0001-90",
+    "supabase": {
+      "url": "https://madaoptvsbnhelamwyzp.supabase.co",
+      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4"
+    },
+    "branding": {
+      "primaryColor": "#0A4D68",
+      "primaryDarkColor": "#083F55",
+      "primaryLightColor": "#1D789B"
+    },
+    "features": {
+      "habilitar_seriais": true,
+      "habilitar_agendamentos": true,
+      "habilitar_mesas": false,
+      "habilitar_lotes": true,
+      "habilitar_variacoes": false
+    }
+  },
+  {
+    "clientId": "cliente02",
+    "companyName": "Cliente 02 Verde",
+    "companySubtitle": "by AionLabs (Cliente 02)",
+    "prefix": "cliente02",
+    "cnpj": "98765432000110",
+    "cnpjFormatted": "98.765.432/0001-10",
+    "supabase": {
+      "url": "https://jlpxureozcpgfliukztn.supabase.co",
+      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpscHh1cmVvemNwZ2ZsaXVrenRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTAxNTYsImV4cCI6MjEwMzc2NjE1Nn0.TDYRAbDaeRwQ0i3Uq6RxZUyZu1WMuugNO5nejq2og0s"
+    },
+    "branding": {
+      "primaryColor": "#00A86B",
+      "primaryDarkColor": "#007F51",
+      "primaryLightColor": "#10C17E"
+    },
+    "features": {
+      "habilitar_seriais": true,
+      "habilitar_agendamentos": true,
+      "habilitar_mesas": true,
+      "habilitar_lotes": true,
+      "habilitar_variacoes": true
+    }
+  },
+  {
+    "clientId": "cliente03",
+    "companyName": "Cliente 03 Orange",
+    "companySubtitle": "by AionLabs (Cliente 03)",
+    "prefix": "cliente03",
+    "cnpj": "11222333000144",
+    "cnpjFormatted": "11.222.333/0001-44",
+    "supabase": {
+      "url": "https://abc-cliente03.supabase.co",
+      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-key-cliente03-anon.example"
+    },
+    "branding": {
+      "primaryColor": "#EB5E28",
+      "primaryDarkColor": "#B83E15",
+      "primaryLightColor": "#FF8C61"
+    },
+    "features": {
+      "habilitar_seriais": true,
+      "habilitar_agendamentos": true,
+      "habilitar_mesas": true,
+      "habilitar_lotes": true,
+      "habilitar_variacoes": true
+    }
+  }
+]

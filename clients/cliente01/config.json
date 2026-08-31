@@ -1,7 +1,8 @@
 {
   "clientId": "cliente01",
-  "companyName": "Cliente 01 Oficial",
-  "companySubtitle": "by AionLabs (Cliente 01)",
+  "companyName": "AionERP Oficial",
+  "companySubtitle": "by AionLabs",
+  "prefix": "aionerp",
   "cnpj": "12.345.678/0001-90",
   "supabase": {
     "url": "https://madaoptvsbnhelamwyzp.supabase.co",

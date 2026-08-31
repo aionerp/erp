@@ -28,27 +28,75 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = true;
             btn.textContent = 'Entrando...';
             
+            const inputIdentificador = email.trim();
+
+            // Identificar prefixo no usuário (ex: adm.aionerp) e rotear para o cliente correto
+            if (inputIdentificador.includes('.') && !inputIdentificador.includes('@')) {
+                const parts = inputIdentificador.split('.');
+                const prefix = parts[parts.length - 1].toLowerCase();
+                if (typeof window.buscarClientePorPrefixo === 'function') {
+                    const matchedClient = await window.buscarClientePorPrefixo(prefix);
+                    if (matchedClient) {
+                        console.log(`Prefixo identificado (${prefix}). Conectando à loja: ${matchedClient.companyName}`);
+                        window.conectarClienteSupabase(matchedClient);
+                    }
+                }
+            }
+            
             try {
                 // Autenticar chamando a RPC segura (bypassa RLS)
                 let response = await supabaseClient
                     .rpc('autenticar_usuario', {
-                        p_email: email,
+                        p_email: inputIdentificador,
                         p_senha: senha
                     });
                 
                 let data = response.data;
                 let error = response.error;
                 
-                // Se a função autenticar_usuario não for encontrada (código PGRST202 ou status 404), tenta login_usuario
+                // Se a função autenticar_usuario não for encontrada, tenta login_usuario ou query direta
                 if (error && (error.code === 'PGRST202' || error.status === 404 || error.message?.includes('autenticar_usuario'))) {
                     console.log('RPC autenticar_usuario não encontrada. Tentando login_usuario (fallback)...');
                     const fallbackRes = await supabaseClient
                         .rpc('login_usuario', {
-                            p_email: email,
+                            p_email: inputIdentificador,
                             p_senha: senha
                         });
                     data = fallbackRes.data;
                     error = fallbackRes.error;
+                }
+
+                // Fallback direto na tabela usuarios se RPCs não estiverem presentes
+                if ((!data || data.length === 0) && (error || !response.data)) {
+                    try {
+                        const { data: directUsers } = await supabaseClient
+                            .from('usuarios')
+                            .select('*, lojas(nome, segmento), config_loja(*)')
+                            .eq('email', inputIdentificador)
+                            .eq('senha', senha)
+                            .eq('ativo', true)
+                            .limit(1);
+                        
+                        if (directUsers && directUsers.length > 0) {
+                            const u = directUsers[0];
+                            data = [{
+                                id: u.id,
+                                nome: u.nome,
+                                email: u.email,
+                                perfil: u.perfil,
+                                nivel_acesso: u.nivel_acesso,
+                                ativo: u.ativo,
+                                permissoes: u.permissoes,
+                                loja_id: u.loja_id,
+                                loja_nome: u.lojas?.nome || window.ENV?.COMPANY_NAME || 'Aion ERP',
+                                loja_segmento: u.lojas?.segmento || 'eletronico',
+                                config_loja: u.config_loja?.[0] || u.config_loja || null
+                            }];
+                            error = null;
+                        }
+                    } catch (e) {
+                        console.warn('Fallback direto falhou:', e);
+                    }
                 }
                 
                 if (error) {
@@ -57,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (!data || data.length === 0) {
-                    throw new Error('Email ou senha inválidos!');
+                    throw new Error('Usuário ou senha inválidos!');
                 }
 
                 const userData = data[0]; // Retorna uma lista de objetos

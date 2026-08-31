@@ -1,7 +1,7 @@
 // js/config.js
 // Configuração do Supabase
 
-// Tentar carregar env.js de forma síncrona se disponível para preencher window.ENV
+// 1. Tentar carregar env.js de forma síncrona se disponível para preencher window.ENV
 try {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', 'env.js', false); // Síncrono
@@ -10,13 +10,41 @@ try {
         eval(xhr.responseText);
     }
 } catch (e) {
-    console.log('Arquivo env.js não encontrado localmente. Usando fallbacks de ambiente.');
+    console.log('Arquivo env.js não encontrado localmente.');
+}
+
+// 2. Se houver um cliente ativo na sessão (definido no login ou primeiro acesso), usar suas credenciais
+const activeClientStr = sessionStorage.getItem('active_client');
+if (activeClientStr) {
+    try {
+        const activeClient = JSON.parse(activeClientStr);
+        if (activeClient && activeClient.supabase?.url && activeClient.supabase?.anonKey) {
+            window.ENV = {
+                ...window.ENV,
+                CLIENT_ID: activeClient.clientId,
+                COMPANY_NAME: activeClient.companyName,
+                COMPANY_SUBTITLE: activeClient.companySubtitle,
+                PREFIX: activeClient.prefix,
+                CNPJ: activeClient.cnpjFormatted || activeClient.cnpj,
+                SUPABASE_URL: activeClient.supabase.url,
+                SUPABASE_ANON_KEY: activeClient.supabase.anonKey,
+                BRANDING: activeClient.branding || {},
+                FEATURES: activeClient.features || {}
+            };
+        }
+    } catch (e) {
+        console.warn('Erro ao carregar active_client da sessão:', e);
+    }
 }
 
 // Injeção dinâmica de branding/cores se configuradas
 if (window.ENV?.BRANDING?.primaryColor) {
-    const style = document.createElement('style');
-    style.id = 'dynamic-branding-styles';
+    let style = document.getElementById('dynamic-branding-styles');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'dynamic-branding-styles';
+        document.head.appendChild(style);
+    }
     style.textContent = `
         :root {
             --primary: ${window.ENV.BRANDING.primaryColor} !important;
@@ -24,7 +52,6 @@ if (window.ENV?.BRANDING?.primaryColor) {
             ${window.ENV.BRANDING.primaryLightColor ? `--primary-light: ${window.ENV.BRANDING.primaryLightColor} !important;` : ''}
         }
     `;
-    document.head.appendChild(style);
 }
 
 const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://madaoptvsbnhelamwyzp.supabase.co';
@@ -34,8 +61,13 @@ if (!SUPABASE_ANON_KEY) {
     console.warn('⚠️ AVISO DE SEGURANÇA: SUPABASE_ANON_KEY não configurada!');
 }
 
-// Criar cliente Supabase
-if (typeof supabaseClient === 'undefined') {
+// Função para instanciar cliente Supabase com interceptador de multi-tenancy
+function criarClienteSupabase(url, anonKey) {
+    if (!url || !anonKey || typeof supabase === 'undefined') {
+        console.warn('Aviso: Supabase SDK não disponível ou credenciais ausentes.');
+        return null;
+    }
+
     const headers = {};
     const usuarioStr = sessionStorage.getItem('usuario');
     if (usuarioStr) {
@@ -49,66 +81,55 @@ if (typeof supabaseClient === 'undefined') {
         }
     }
     
-    var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const client = supabase.createClient(url, anonKey, {
         global: {
             headers: headers
         }
     });
-}
 
-// =====================================================
-// INTERCEPTADOR SUPABASE PARA MULTI-TENANCY AUTOMÁTICO
-// =====================================================
-if (typeof supabaseClient !== 'undefined' && !supabaseClient._isIntercepted) {
-    const originalFrom = supabaseClient.from;
-    supabaseClient.from = function(tableName) {
+    const originalFrom = client.from;
+    client.from = function(tableName) {
         let queryBuilder = originalFrom.apply(this, arguments);
-        
-        // Tabelas que contêm a coluna loja_id no schema relacional
         const tablesWithLojaField = [
             'usuarios', 'clientes', 'produtos', 'categorias', 'entradas', 'saidas',
             'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas', 'colaboradores', 'despesas', 'boletos_pagar'
         ];
         
         if (tablesWithLojaField.includes(tableName)) {
-            const usuarioStr = sessionStorage.getItem('usuario');
-            if (usuarioStr) {
+            const uStr = sessionStorage.getItem('usuario');
+            if (uStr) {
                 try {
-                    const usuario = JSON.parse(usuarioStr);
-                    if (usuario && usuario.loja_id) {
-                        // Injetar filtro loja_id automatico em SELECT
+                    const u = JSON.parse(uStr);
+                    if (u && u.loja_id) {
                         const originalSelect = queryBuilder.select;
                         queryBuilder.select = function() {
-                            return originalSelect.apply(this, arguments).eq('loja_id', usuario.loja_id);
+                            return originalSelect.apply(this, arguments).eq('loja_id', u.loja_id);
                         };
                         
-                        // Injetar filtro e dados de loja_id automatico em UPDATE
                         const originalUpdate = queryBuilder.update;
                         queryBuilder.update = function(values) {
                             if (values) {
                                 if (Array.isArray(values)) {
-                                    values.forEach(v => v.loja_id = usuario.loja_id);
+                                    values.forEach(v => v.loja_id = u.loja_id);
                                 } else {
-                                    values.loja_id = usuario.loja_id;
+                                    values.loja_id = u.loja_id;
                                 }
                             }
-                            return originalUpdate.apply(this, arguments).eq('loja_id', usuario.loja_id);
+                            return originalUpdate.apply(this, arguments).eq('loja_id', u.loja_id);
                         };
                         
-                        // Injetar filtro loja_id automatico em DELETE
                         const originalDelete = queryBuilder.delete;
                         queryBuilder.delete = function() {
-                            return originalDelete.apply(this, arguments).eq('loja_id', usuario.loja_id);
+                            return originalDelete.apply(this, arguments).eq('loja_id', u.loja_id);
                         };
                         
-                        // Injetar dados de loja_id automatico em INSERT
                         const originalInsert = queryBuilder.insert;
                         queryBuilder.insert = function(values) {
                             if (values) {
                                 if (Array.isArray(values)) {
-                                    values.forEach(v => v.loja_id = usuario.loja_id);
+                                    values.forEach(v => v.loja_id = u.loja_id);
                                 } else {
-                                    values.loja_id = usuario.loja_id;
+                                    values.loja_id = u.loja_id;
                                 }
                             }
                             return originalInsert.apply(this, arguments);
@@ -121,8 +142,97 @@ if (typeof supabaseClient !== 'undefined' && !supabaseClient._isIntercepted) {
         }
         return queryBuilder;
     };
-    supabaseClient._isIntercepted = true;
+    client._isIntercepted = true;
+    return client;
 }
+
+// Inicializar cliente Supabase padrão
+if (typeof supabaseClient === 'undefined') {
+    var supabaseClient = criarClienteSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+// =====================================================
+// MANIFESTO E RESOLUÇÃO MULTICLIENTE (CNPJ E PREFIXO)
+// =====================================================
+window.carregarManifestoClientes = async function() {
+    if (window._CLIENTS_MANIFEST && window._CLIENTS_MANIFEST.length > 0) {
+        return window._CLIENTS_MANIFEST;
+    }
+    try {
+        const res = await fetch('clients.json?t=' + Date.now());
+        if (res.ok) {
+            window._CLIENTS_MANIFEST = await res.json();
+            return window._CLIENTS_MANIFEST;
+        }
+    } catch (e) {
+        console.warn('clients.json não disponível via HTTP:', e);
+    }
+    return [];
+};
+
+window.buscarClientePorCnpj = async function(cnpj) {
+    const clients = await window.carregarManifestoClientes();
+    const cleanCnpj = String(cnpj || '').replace(/\D/g, '');
+    if (!cleanCnpj) return null;
+    return clients.find(c => String(c.cnpj).replace(/\D/g, '') === cleanCnpj) || null;
+};
+
+window.buscarClientePorPrefixo = async function(prefixo) {
+    const clients = await window.carregarManifestoClientes();
+    const cleanPref = String(prefixo || '').trim().toLowerCase();
+    if (!cleanPref) return null;
+    return clients.find(c => String(c.prefix || c.clientId).toLowerCase() === cleanPref) || null;
+};
+
+window.conectarClienteSupabase = function(clienteConfig) {
+    if (!clienteConfig || !clienteConfig.supabase?.url || !clienteConfig.supabase?.anonKey) {
+        console.error('Configuração de Supabase inválida para o cliente:', clienteConfig);
+        return null;
+    }
+    
+    // Atualizar window.ENV em tempo de execução
+    window.ENV = {
+        ...window.ENV,
+        CLIENT_ID: clienteConfig.clientId,
+        COMPANY_NAME: clienteConfig.companyName,
+        COMPANY_SUBTITLE: clienteConfig.companySubtitle,
+        PREFIX: clienteConfig.prefix,
+        CNPJ: clienteConfig.cnpjFormatted || clienteConfig.cnpj,
+        SUPABASE_URL: clienteConfig.supabase.url,
+        SUPABASE_ANON_KEY: clienteConfig.supabase.anonKey,
+        BRANDING: clienteConfig.branding || {},
+        FEATURES: clienteConfig.features || {}
+    };
+
+    // Salvar cliente ativo na sessão para persistir em todas as telas
+    try {
+        sessionStorage.setItem('active_client', JSON.stringify(clienteConfig));
+    } catch(e) {}
+    
+    // Aplicar branding dinâmico
+    if (clienteConfig.branding?.primaryColor) {
+        let style = document.getElementById('dynamic-branding-styles');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'dynamic-branding-styles';
+            document.head.appendChild(style);
+        }
+        style.textContent = `
+            :root {
+                --primary: ${clienteConfig.branding.primaryColor} !important;
+                ${clienteConfig.branding.primaryDarkColor ? `--primary-dark: ${clienteConfig.branding.primaryDarkColor} !important;` : ''}
+                ${clienteConfig.branding.primaryLightColor ? `--primary-light: ${clienteConfig.branding.primaryLightColor} !important;` : ''}
+            }
+        `;
+    }
+    
+    // Recriar o cliente Supabase apontando para o banco do cliente
+    supabaseClient = criarClienteSupabase(clienteConfig.supabase.url, clienteConfig.supabase.anonKey);
+    window.supabaseClient = supabaseClient;
+    return supabaseClient;
+};
+
+window.criarClienteSupabase = criarClienteSupabase;
 
 // Função para mostrar notificações
 function mostrarNotificacao(mensagem, tipo = 'info') {

@@ -41,10 +41,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     let usuarios = [];
-    
-    // =====================================================
-    // PERMISSÕES POR PERFIL
-    // =====================================================
+
+    // Obter prefixo da loja atual
+    function obterPrefixoLoja() {
+        if (window.ENV?.PREFIX) return window.ENV.PREFIX.toLowerCase();
+        if (window.ENV?.CLIENT_ID) return window.ENV.CLIENT_ID.toLowerCase();
+        const u = JSON.parse(sessionStorage.getItem('usuario'));
+        if (u && u.email && u.email.includes('.')) {
+            const parts = u.email.split('.');
+            return parts[parts.length - 1].toLowerCase();
+        }
+        return 'aionerp';
+    }
+
+    // Listener para o campo de nome de usuário com prefixo automático
+    const inputUsernameBase = document.getElementById('username_base');
+    if (inputUsernameBase) {
+        inputUsernameBase.addEventListener('input', (e) => {
+            const prefixo = obterPrefixoLoja();
+            const val = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            e.target.value = val;
+            const fullUser = val ? `${val}.${prefixo}` : '';
+            const emailHidden = document.getElementById('email');
+            const preview = document.getElementById('previewUsuarioGerado');
+            if (emailHidden) emailHidden.value = fullUser;
+            if (preview) preview.textContent = fullUser || `exemplo.${prefixo}`;
+        });
+    }
     
     const PERMISSOES_POR_PERFIL = {
         admin: {
@@ -320,8 +343,24 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalTitle').textContent = 'Editar Usuário';
             document.getElementById('usuarioId').value = usuario.id;
             document.getElementById('nome').value = usuario.nome || '';
+            
+            const prefixo = obterPrefixoLoja();
+            const badge = document.getElementById('prefixoLojaBadge');
+            if (badge) badge.textContent = '.' + prefixo;
+
+            let baseUser = usuario.email || '';
+            if (baseUser.endsWith('.' + prefixo)) {
+                baseUser = baseUser.substring(0, baseUser.length - (prefixo.length + 1));
+            }
+            const inputBase = document.getElementById('username_base');
+            if (inputBase) {
+                inputBase.value = baseUser;
+                inputBase.disabled = true;
+            }
             document.getElementById('email').value = usuario.email || '';
-            document.getElementById('email').disabled = true;
+            const preview = document.getElementById('previewUsuarioGerado');
+            if (preview) preview.textContent = usuario.email || '';
+
             document.getElementById('senha').value = '';
             document.getElementById('senha').placeholder = 'Deixe em branco para manter a senha atual';
             document.getElementById('senha').required = false;
@@ -366,7 +405,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function salvarUsuario() {
         const id = document.getElementById('usuarioId').value;
         const nome = document.getElementById('nome').value.trim();
-        const email = document.getElementById('email').value.trim();
+        let email = document.getElementById('email').value.trim();
+        const baseUser = document.getElementById('username_base')?.value.trim();
+        const prefixo = obterPrefixoLoja();
+
+        if (!email && baseUser) {
+            email = `${baseUser}.${prefixo}`;
+            document.getElementById('email').value = email;
+        }
+        
         const senha = document.getElementById('senha').value;
         const perfil = document.getElementById('perfil').value;
         const telefone = document.getElementById('telefone').value.trim();
@@ -374,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ativo = document.getElementById('ativo').value === 'true';
         
         if (!nome || !email) {
-            mostrarNotificacao('Preencha nome e email!', 'error');
+            mostrarNotificacao('Preencha o nome e o usuário de acesso!', 'error');
             return;
         }
         
@@ -430,7 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.getElementById('modalUsuario').style.display = 'none';
             document.getElementById('usuarioForm').reset();
-            document.getElementById('email').disabled = false;
+            const inputBase = document.getElementById('username_base');
+            if (inputBase) inputBase.disabled = false;
             document.getElementById('senha').required = true;
             document.getElementById('senha').placeholder = '';
             carregarUsuarios();
@@ -474,7 +522,20 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalTitle').textContent = 'Novo Usuário';
         document.getElementById('usuarioForm').reset();
         document.getElementById('usuarioId').value = '';
-        document.getElementById('email').disabled = false;
+        
+        const prefixo = obterPrefixoLoja();
+        const badge = document.getElementById('prefixoLojaBadge');
+        if (badge) badge.textContent = '.' + prefixo;
+
+        const inputBase = document.getElementById('username_base');
+        if (inputBase) {
+            inputBase.value = '';
+            inputBase.disabled = false;
+        }
+        document.getElementById('email').value = '';
+        const preview = document.getElementById('previewUsuarioGerado');
+        if (preview) preview.textContent = `nome.${prefixo}`;
+
         document.getElementById('senha').required = true;
         document.getElementById('senha').placeholder = '';
         document.getElementById('perfil').value = 'basico';

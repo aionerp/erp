@@ -1,12 +1,12 @@
 # Arquitetura Multicliente — Aion ERP CORE
 
-Este documento descreve a nova estrutura multicliente (multi-tenant) do **Aion ERP**, projetada para permitir que um único repositório de código-fonte compartilhado atenda a múltiplos clientes independentes, cada um com seu próprio banco de dados Supabase, configurações, recursos (Feature Flags) e identidade visual (branding).
+Este documento descreve a estrutura multicliente (multi-tenant) do **Aion ERP**, projetada para permitir que um único repositório de código-fonte compartilhado atenda a múltiplos clientes independentes, cada um com seu próprio banco de dados Supabase, configurações, recursos (Feature Flags), identidade visual (branding) e fluxo seguro de Primeiro Acesso por CNPJ.
 
 ---
 
 ## 1. Visão Geral da Arquitetura
 
-O sistema agora opera no modelo **ERP CORE** centralizado com compilação de deploys estáticos isolados.
+O sistema opera no modelo **ERP CORE** centralizado com compilação de deploys estáticos isolados e roteamento inteligente por CNPJ e Prefixo de Usuário.
 
 ```
                     ┌────────────────────────┐
@@ -22,33 +22,30 @@ O sistema agora opera no modelo **ERP CORE** centralizado com compilação de de
        (dist/)             (dist/)             (dist/)
        Supabase Proj 01    Supabase Proj 02    Supabase Proj 03
        Branding Azul       Branding Verde      Branding Laranja
+       adm.aionerp         adm.cliente02       adm.cliente03
 ```
-
-### Como Funciona:
-* **Código-fonte Comum:** Fica na raiz do projeto (HTML, CSS e JS principais).
-* **Módulo de Compilação (`build.js`):** Script Node.js que copia os arquivos comuns para a pasta `/dist` e injeta dinamicamente o arquivo `/dist/env.js` com os dados do cliente ativo.
-* **Mecanismo de Inicialização (Runtime):** O arquivo `js/config.js` carrega o `/dist/env.js` de forma síncrona, instanciando o cliente do Supabase e injetando as variáveis de cores CSS (`--primary`, `--primary-dark`, `--primary-light`) e marcas no DOM na inicialização.
 
 ---
 
 ## 2. Estrutura de Pastas do Projeto
 
-Abaixo estão os novos arquivos e diretórios essenciais para o suporte multicliente:
-
 ```
 erp-core/
 ├── clients/                  # Configurações específicas de cada cliente
 │   ├── cliente01/
-│   │   ├── config.json       # Credenciais, cores e flags do Cliente 01
+│   │   ├── config.json       # Credenciais, cores, prefixo e flags do Cliente 01
 │   │   └── logo.png          # Logotipo personalizado do Cliente 01 (opcional)
 │   ├── cliente02/
 │   │   └── config.json
 │   └── cliente03/
 │       └── config.json
+├── clients.json              # Manifesto compilado de todos os clientes registrados
 ├── dist/                     # Pasta gerada pelo build pronta para deploy (Gitignored)
 ├── js/
-│   ├── config.js             # Refatorado: inicializa Supabase e aplica cores/branding
-│   └── auth-check.js         # Refatorado: aplica títulos e mescla Feature Flags
+│   ├── config.js             # Inicializa Supabase, resolução de CNPJ/prefixo e branding
+│   ├── auth.js               # Autenticação com suporte a usuário prefixado (ex: adm.aionerp)
+│   ├── auth-check.js         # Aplica títulos e mescla Feature Flags
+│   └── primeiro-acesso.js    # Módulo de Primeiro Acesso por CNPJ com Trava de Segurança
 ├── .github/workflows/
 │   └── ci-cd.yml             # Executa validação de build para todos os clientes em cada Push/PR
 ├── .env.example              # Exemplo de variáveis de ambiente
@@ -60,18 +57,45 @@ erp-core/
 
 ---
 
-## 3. Como Configurar um Novo Cliente
+## 3. Primeiro Acesso & Trava de Segurança
 
-Para adicionar um cliente chamado `empresa-exemplo`, siga os passos abaixo:
+### Como Funciona o Primeiro Acesso (Onboarding):
+1. Na tela de login (`index.html`), o usuário clica em **"✨ Primeiro Acesso? Identificar Loja por CNPJ"**.
+2. O sistema solicita o **CNPJ da empresa**.
+3. O CNPJ é consultado no registro multicliente (`clients.json`).
+4. Ao localizar o cliente (ex: `clientId: "cliente01"`), o sistema se conecta ao banco Supabase correspondente.
+5. **Trava de Segurança (Anti-Repetição):**
+   * O sistema verifica se a loja ou o usuário `adm.<prefixo>` já foram criados no banco.
+   * Se já existirem, o cadastro é **bloqueado**, alertando que o primeiro acesso já foi concluído e preenchendo o login para entrada direta.
+6. Se for o primeiro acesso legítimo:
+   * Abre a **Ficha de Cadastro da Empresa** (Razão Social, Nome Fantasia, CNPJ, Segmento, Telefone, Email, Endereço).
+   * Exibe o usuário administrador fixo: **`adm.<prefixo>`**.
+   * Solicita o Nome do Responsável e a Senha do Administrador.
+7. Ao salvar:
+   * Cria o registro em `public.lojas` e `public.config_loja`.
+   * Cria o usuário administrador em `public.usuarios` com `perfil = 'admin'` e **todas as permissões do sistema ativadas** (`dashboard`, `clientes`, `produtos`, `categorias`, `estoque`, `entradas`, `saidas`, `fornecedores`, `ordens_servico`, `colaboradores`, `financeiro`, `relatorios`, `usuarios`).
+
+---
+
+## 4. Padrão de Login com Prefixo por Loja
+
+Para garantir o isolamento e a segurança das lojas:
+* Os logins utilizam o formato **`<usuario>.<prefixo>`** (ex: `adm.aionerp`, `vendedor.aionerp`, `caixa.cliente02`).
+* Quando um usuário digita `adm.aionerp` na tela inicial, o sistema detecta o sufixo `.aionerp`, identifica a loja correspondente e conecta automaticamente ao banco de dados do cliente antes de autenticar.
+
+---
+
+## 5. Como Cadastrar um Novo Cliente
 
 ### Passo 1: Criar pasta e arquivo de configuração
-Crie o diretório `clients/empresa-exemplo/` e o arquivo `config.json` com o seguinte formato:
+Crie a pasta `clients/empresa-exemplo/` e o arquivo `config.json`:
 
 ```json
 {
   "clientId": "empresa-exemplo",
   "companyName": "Exemplo Enterprise",
-  "companySubtitle": "Soluções de Tecnologia",
+  "companySubtitle": "Soluções em Tecnologia",
+  "prefix": "exemplo",
   "cnpj": "12.345.678/0001-99",
   "supabase": {
     "url": "https://sua-url-do-supabase.supabase.co",
@@ -92,60 +116,26 @@ Crie o diretório `clients/empresa-exemplo/` e o arquivo `config.json` com o seg
 }
 ```
 
-### Passo 2: Logotipo Personalizado (Opcional)
-Se o cliente tiver um logotipo próprio, salve-o na mesma pasta com o nome `logo.png` (formato quadrado recomendado):
-`clients/empresa-exemplo/logo.png`
+### Passo 2: Gerar manifesto e compilar
+```bash
+# Atualizar manifesto de clientes
+node build.js
 
-O script de compilação copiará automaticamente essa imagem para a pasta `/dist/assets/img/logo-cliente.png` e atualizará as referências.
+# Gerar build estático para o novo cliente
+node build.js empresa-exemplo
+```
 
 ---
 
-## 4. Como Executar e Gerar o Build
+## 6. Scripts de Automação
 
-### Rodar Localmente em Desenvolvimento (Sem Compilar)
-Renomeie o arquivo `.env.example` para `.env` e configure o cliente de desenvolvimento:
-```env
-CLIENTE=cliente01
-```
-Rode o servidor local:
 ```bash
+# Executar servidor de desenvolvimento local
 npm run dev
-```
 
-### Gerar Compilação (Build) de um Cliente Específico
-Para gerar a pasta `/dist` configurada para um cliente, você pode usar os scripts no `package.json` ou passar o nome do cliente como argumento do script de build:
-
-```bash
-# Método 1 (Recomendado/Cross-platform):
-node build.js cliente01
-
-# Método 2 (Através dos atalhos do package.json):
+# Gerar build do Cliente 01
 npm run build:cliente01
+
+# Servir a pasta compilada /dist
+npm run serve
 ```
-
-A pasta `/dist` conterá todo o código estático do ERP com o arquivo `env.js` injetado com as credenciais do Supabase e configurações específicas daquele cliente.
-
----
-
-## 5. Estratégia de Deploy e CI/CD
-
-### Deploy de Produção
-Para publicar o sistema para um cliente, basta gerar o build correspondente (`node build.js cliente01`) e apontar a hospedagem estática (Vercel, Netlify, IIS, Cloudflare Pages ou S3/Cloudfront) para a pasta `/dist`.
-
-### Integração Contínua (GitHub Actions)
-O arquivo `.github/workflows/ci-cd.yml` foi configurado para automatizar validações. Em cada `git push` ou `Pull Request` enviado para a branch principal (`main` ou `master`):
-1. Instala o Node.js.
-2. Varre o diretório `/clients` identificando todos os clientes cadastrados.
-3. Executa o build de cada um individualmente (`CLIENTE=[cliente] node build.js`).
-4. Relata sucesso ou aponta erros caso a configuração de algum cliente esteja corrompida.
-
----
-
-## 6. Atualização de Clientes Existentes
-
-Quando uma nova funcionalidade é adicionada ou um bug é corrigido no ERP CORE:
-1. Altere o código-fonte compartilhado na raiz do projeto (ex: `js/saidas.js`).
-2. Atualize a versão se necessário no `package.json`.
-3. Dê `git push` para o repositório principal.
-4. O CI/CD irá validar a compilação de todos os clientes.
-5. Os pipelines de deploy vinculados a cada cliente lerão a pasta `/dist` gerada do CORE e publicarão as atualizações de forma sincronizada e automática.

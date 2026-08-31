@@ -28,7 +28,45 @@ function cleanDir(dirPath) {
     fs.mkdirSync(dirPath, { recursive: true });
 }
 
-// 1. Load env variables from local .env if exists
+// Compilar lista/manifesto de todos os clientes registrados
+function generateClientsManifest() {
+    const clientsDir = path.join(__dirname, 'clients');
+    const manifest = [];
+
+    if (fs.existsSync(clientsDir)) {
+        fs.readdirSync(clientsDir).forEach(folder => {
+            const configPath = path.join(clientsDir, folder, 'config.json');
+            if (fs.existsSync(configPath)) {
+                try {
+                    const clientData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                    manifest.push({
+                        clientId: clientData.clientId || folder,
+                        companyName: clientData.companyName || folder,
+                        companySubtitle: clientData.companySubtitle || '',
+                        prefix: clientData.prefix || folder.toLowerCase().replace(/[^a-z0-9]/g, ''),
+                        cnpj: (clientData.cnpj || '').replace(/\D/g, ''),
+                        cnpjFormatted: clientData.cnpj || '',
+                        supabase: clientData.supabase || {},
+                        branding: clientData.branding || {},
+                        features: clientData.features || {}
+                    });
+                } catch (e) {
+                    console.warn(`Aviso: Erro ao processar configuração do cliente em ${folder}:`, e.message);
+                }
+            }
+        });
+    }
+
+    const manifestContent = JSON.stringify(manifest, null, 2);
+    fs.writeFileSync(path.join(__dirname, 'clients.json'), manifestContent, 'utf8');
+    console.log(`Manifesto de clientes gerado em clients.json com ${manifest.length} cliente(s).`);
+    return manifest;
+}
+
+// 1. Gera sempre o manifesto de clientes atualizado
+const allClients = generateClientsManifest();
+
+// 2. Load env variables from local .env if exists
 const env = {};
 const envPath = path.join(__dirname, '.env');
 if (fs.existsSync(envPath)) {
@@ -43,18 +81,17 @@ if (fs.existsSync(envPath)) {
     });
 }
 
-// 2. Identify target client
+// 3. Identify target client
 const client = process.env.CLIENTE || env.CLIENTE || env.VITE_CLIENT_ID || env.CLIENT_ID || process.argv[2];
 
 if (!client) {
-    console.error('ERRO: Defina a variável de ambiente CLIENTE antes de rodar o build.');
-    console.error('Exemplo: CLIENTE=cliente01 node build.js');
-    process.exit(1);
+    console.log('Nenhum cliente específico passado para build único. Manifesto clients.json atualizado.');
+    process.exit(0);
 }
 
 console.log(`Iniciando build para o cliente: ${client}...`);
 
-// 3. Load client configuration
+// 4. Load client configuration
 const clientConfigPath = path.join(__dirname, 'clients', client, 'config.json');
 if (!fs.existsSync(clientConfigPath)) {
     console.error(`ERRO: Configuração do cliente "${client}" não encontrada em: ${clientConfigPath}`);
@@ -69,11 +106,11 @@ try {
     process.exit(1);
 }
 
-// 4. Set up dist directory
+// 5. Set up dist directory
 const distPath = path.join(__dirname, 'dist');
 cleanDir(distPath);
 
-// 5. Copy core files
+// 6. Copy core files
 fs.readdirSync(__dirname).forEach(element => {
     const srcPath = path.join(__dirname, element);
     const destPath = path.join(distPath, element);
@@ -95,13 +132,17 @@ fs.readdirSync(__dirname).forEach(element => {
     }
 });
 
-// 6. Generate env.js content
+// Copiar manifesto clients.json para dist
+fs.writeFileSync(path.join(distPath, 'clients.json'), JSON.stringify(allClients, null, 2), 'utf8');
+
+// 7. Generate env.js content
 const logoUrl = (config.branding?.logo || fs.existsSync(path.join(__dirname, 'clients', client, 'logo.png'))) ? './assets/img/logo-cliente.png' : null;
 const envJsContent = `// Arquivo gerado automaticamente pelo script de build - NÃO MODIFIQUE DIRETAMENTE
 window.ENV = {
     CLIENT_ID: ${JSON.stringify(config.clientId)},
     COMPANY_NAME: ${JSON.stringify(config.companyName)},
     COMPANY_SUBTITLE: ${JSON.stringify(config.companySubtitle || "by AionLabs")},
+    PREFIX: ${JSON.stringify(config.prefix || config.clientId)},
     CNPJ: ${JSON.stringify(config.cnpj)},
     SUPABASE_URL: ${JSON.stringify(config.supabase?.url)},
     SUPABASE_ANON_KEY: ${JSON.stringify(config.supabase?.anonKey)},
@@ -118,7 +159,7 @@ window.ENV = {
 fs.writeFileSync(path.join(distPath, 'env.js'), envJsContent, 'utf8');
 console.log(`Arquivo env.js gerado com sucesso em: ${path.join(distPath, 'env.js')}`);
 
-// 7. Copy client custom logo if exists
+// 8. Copy client custom logo if exists
 const clientLogoPath = path.join(__dirname, 'clients', client, 'logo.png');
 if (fs.existsSync(clientLogoPath)) {
     const destLogoDir = path.join(distPath, 'assets', 'img');

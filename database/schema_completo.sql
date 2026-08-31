@@ -62,6 +62,30 @@ CREATE TABLE public.usuarios (
     CONSTRAINT unique_email_per_loja UNIQUE (email)
 );
 
+-- Trigger para Criptografar Senhas com Bcrypt (Blowfish) Automaticamente
+CREATE OR REPLACE FUNCTION public.fn_criptografar_senha_usuario()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.senha IS DISTINCT FROM OLD.senha)) THEN
+        IF NEW.senha IS NOT NULL AND length(NEW.senha) > 0 THEN
+            -- Se a senha não estiver no formato bcrypt ($2a$, $2b$) ou hash sha256 (64 chars hex)
+            IF NOT (NEW.senha ~ '^\$2[abxy]\$[0-9]{2}\$[A-Za-z0-9\.\/]{53}$' OR NEW.senha ~ '^[a-fA-F0-9]{64}$') THEN
+                NEW.senha := crypt(NEW.senha, gen_salt('bf', 10));
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_criptografar_senha_usuario ON public.usuarios;
+CREATE TRIGGER trg_criptografar_senha_usuario
+    BEFORE INSERT OR UPDATE OF senha ON public.usuarios
+    FOR EACH ROW
+    EXECUTE FUNCTION public.fn_criptografar_senha_usuario();
+
 -- 3. TABELA DE CATEGORIAS
 CREATE TABLE public.categorias (
     id SERIAL PRIMARY KEY,
@@ -451,30 +475,119 @@ BEGIN
         to_jsonb(c) as config_loja
     FROM public.usuarios u
     JOIN public.lojas l ON l.id = u.loja_id
-    LEFT JOIN public.config_loja c ON c.loja_id = u.loja_id
     WHERE u.email = p_email 
-      AND u.senha = p_senha 
+      AND (
+          u.senha = crypt(p_senha, u.senha)
+          OR u.senha = encode(digest(p_senha, 'sha256'), 'hex')
+          OR u.senha = p_senha
+      )
       AND u.ativo = true;
 END;
 $$;
 
 -- ============================================================================
--- SEED DATA - DADOS INICIAIS DA PRIMEIRA LOJA (LOJA PADRÃO)
+-- FUNÇÃO RPC PARA REGISTRAR PRIMEIRO ACESSO COM TRAVA DE SEGURANÇA
 -- ============================================================================
 
--- Inserir Loja 1 padrão
-INSERT INTO public.lojas (id, nome, segmento, cnpj, telefone, endereco) VALUES
-(1, 'Minha Empresa', 'eletronico', '00.000.000/0001-00', '(11) 99999-9999', 'Rua Principal, 100 - Centro')
-ON CONFLICT (id) DO NOTHING;
-SELECT setval('public.lojas_id_seq', 1);
+CREATE OR REPLACE FUNCTION public.registrar_primeiro_acesso(
+    p_razao_social text,
+    p_nome_fantasia text,
+    p_cnpj text,
+    p_segmento text,
+    p_telefone text,
+    p_email text,
+    p_endereco text,
+    p_usuario_adm text,
+    p_nome_adm text,
+    p_senha_adm text,
+    p_features jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_loja_id integer;
+    v_usuario_id integer;
+    v_permissoes jsonb;
+    v_clean_cnpj text;
+BEGIN
+    v_clean_cnpj := regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g');
 
--- Inserir Administrador Inicial (Senha: admin)
-INSERT INTO public.usuarios (id, loja_id, nome, email, senha, perfil, nivel_acesso, ativo, permissoes) VALUES
-(1, 1, 'Administrador Master', 'admin@admin.com', 'admin', 'admin', 'admin', true, '{}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
-SELECT setval('public.usuarios_id_seq', 1);
+    -- 1. Trava de Segurança: Verificar se já existe o usuário adm ou loja com mesmo CNPJ
+    IF EXISTS (SELECT 1 FROM public.usuarios WHERE email = p_usuario_adm) THEN
+        RAISE EXCEPTION 'TRAVA_SEGURANCA: O usuário % já existe no banco de dados.', p_usuario_adm;
+    END IF;
 
--- Inserir Configurações da Loja
-INSERT INTO public.config_loja (loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco, habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes) VALUES
-(1, 'Minha Empresa', 'Minha Empresa Ltda', '00.000.000/0001-00', '(11) 99999-9999', 'admin@admin.com', 'Rua Principal, 100 - Centro', true, true, true, true, true)
-ON CONFLICT (loja_id) DO NOTHING;
+    IF v_clean_cnpj <> '' AND EXISTS (SELECT 1 FROM public.lojas WHERE regexp_replace(coalesce(cnpj, ''), '\D', '', 'g') = v_clean_cnpj) THEN
+        RAISE EXCEPTION 'TRAVA_SEGURANCA: O CNPJ % já foi cadastrado no banco de dados.', p_cnpj;
+    END IF;
+
+    -- 2. Inserir Loja
+    INSERT INTO public.lojas (nome, segmento, cnpj, telefone, endereco)
+    VALUES (p_razao_social, coalesce(p_segmento, 'eletronico'), p_cnpj, p_telefone, p_endereco)
+    RETURNING id INTO v_loja_id;
+
+    -- 3. Inserir Configurações da Loja
+    INSERT INTO public.config_loja (
+        loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco,
+        habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes
+    ) VALUES (
+        v_loja_id,
+        coalesce(p_nome_fantasia, p_razao_social),
+        p_razao_social,
+        p_cnpj,
+        p_telefone,
+        p_email,
+        p_endereco,
+        coalesce((p_features->>'habilitar_seriais')::boolean, true),
+        coalesce((p_features->>'habilitar_agendamentos')::boolean, false),
+        coalesce((p_features->>'habilitar_mesas')::boolean, false),
+        coalesce((p_features->>'habilitar_lotes')::boolean, true),
+        coalesce((p_features->>'habilitar_variacoes')::boolean, false)
+    );
+
+    -- 4. Montar Permissões Totais do Administrador
+    v_permissoes := '{
+        "dashboard": { "ver": true },
+        "clientes": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "produtos": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "categorias": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "estoque": { "ver": true, "ajustar": true },
+        "entradas": { "ver": true, "criar": true, "excluir": true },
+        "saidas": { "ver": true, "criar": true, "cancelar": true, "ver_vendas_outros": true },
+        "fornecedores": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "ordens_servico": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "colaboradores": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "financeiro": { "ver": true, "criar": true, "editar": true, "excluir": true },
+        "relatorios": { "ver": true, "exportar": true },
+        "usuarios": { "ver": true, "criar": true, "editar": true, "excluir": true }
+    }'::jsonb;
+
+    -- 5. Inserir Usuário Administrador
+    INSERT INTO public.usuarios (loja_id, nome, email, senha, perfil, nivel_acesso, permissoes, ativo)
+    VALUES (v_loja_id, p_nome_adm, p_usuario_adm, p_senha_adm, 'admin', 'admin', v_permissoes, true)
+    RETURNING id INTO v_usuario_id;
+
+    RETURN jsonb_build_object(
+        'sucesso', true,
+        'loja_id', v_loja_id,
+        'usuario_id', v_usuario_id,
+        'usuario', p_usuario_adm
+    );
+END;
+$$;
+
+-- ============================================================================
+-- CONCESSÃO DE PERMISSÕES PARA API SUPABASE (ANON, AUTHENTICATED, SERVICE_ROLE)
+-- ============================================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+

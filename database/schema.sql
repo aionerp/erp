@@ -48,10 +48,32 @@ CREATE TABLE public.usuarios (
     cargo VARCHAR(100),
     telefone VARCHAR(20),
     ativo BOOLEAN DEFAULT true NOT NULL,
-    ultimo_acesso TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     CONSTRAINT unique_email_per_loja UNIQUE (email)
 );
+
+-- Trigger para Criptografar Senhas com Bcrypt (Blowfish) Automaticamente
+CREATE OR REPLACE FUNCTION public.fn_criptografar_senha_usuario()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.senha IS DISTINCT FROM OLD.senha)) THEN
+        IF NEW.senha IS NOT NULL AND length(NEW.senha) > 0 THEN
+            -- Se a senha não estiver no formato bcrypt ($2a$, $2b$) ou hash sha256 (64 chars hex)
+            IF NOT (NEW.senha ~ '^\$2[abxy]\$[0-9]{2}\$[A-Za-z0-9\.\/]{53}$' OR NEW.senha ~ '^[a-fA-F0-9]{64}$') THEN
+                NEW.senha := crypt(NEW.senha, gen_salt('bf', 10));
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_criptografar_senha_usuario ON public.usuarios;
+CREATE TRIGGER trg_criptografar_senha_usuario
+    BEFORE INSERT OR UPDATE OF senha ON public.usuarios
+    FOR EACH ROW
+    EXECUTE FUNCTION public.fn_criptografar_senha_usuario();
 
 -- 3. TABELA DE CATEGORIAS
 CREATE TABLE public.categorias (
@@ -442,90 +464,23 @@ BEGIN
         to_jsonb(c) as config_loja
     FROM public.usuarios u
     JOIN public.lojas l ON l.id = u.loja_id
-    LEFT JOIN public.config_loja c ON c.loja_id = u.loja_id
     WHERE u.email = p_email 
-      AND u.senha = p_senha 
+      AND (
+          u.senha = crypt(p_senha, u.senha)
+          OR u.senha = encode(digest(p_senha, 'sha256'), 'hex')
+          OR u.senha = p_senha
+      )
       AND u.ativo = true;
 END;
 $$;
 
 
 -- =====================================================
--- DADOS SEMENTES (SEED DATA) PARA TESTES E DEMONSTRAÇÃO
+-- ESTRUTURA LIMPA PARA NOVAS LOJAS (SEM DADOS DE TESTE)
 -- =====================================================
+-- Todas as novas lojas/bases iniciam 100% em branco.
+-- Os cadastros de loja, usuários e produtos são feitos pelo painel ou Primeiro Acesso.
 
--- Inserir loja padrão única (configurável pelo painel)
-INSERT INTO public.lojas (id, nome, segmento, cnpj, telefone, endereco) VALUES
-(1, 'Minha Empresa', 'eletronico', '00.000.000/0001-00', '(11) 99999-9999', 'Rua Principal, 100 - Centro');
-
--- Reiniciar contador de ID da tabela lojas
-SELECT setval('public.lojas_id_seq', 1);
-
--- Inserir usuário administrador master único (senha: admin)
-INSERT INTO public.usuarios (id, loja_id, nome, email, senha, perfil, nivel_acesso, ativo, permissoes) VALUES
-(1, 1, 'Ailton Rocha Cordeiro', 'arc48388528@gmail.com', 'admin', 'admin', 'admin', true, '{}'::jsonb),
-(2, 1, 'Administrador Master', 'admin@admin.com', 'admin', 'admin', 'admin', true, '{}'::jsonb);
-
-SELECT setval('public.usuarios_id_seq', 2);
-
--- Inserir configurações iniciais da loja única (todas as verticais ativas por padrão para experimentação)
-INSERT INTO public.config_loja (loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco, habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes) VALUES
-(1, 'Minha Empresa', 'Minha Empresa Ltda', '00.000.000/0001-00', '(11) 99999-9999', 'arc48388528@gmail.com', 'Rua Principal, 100 - Centro', true, true, true, true, true);
-
--- Inserir algumas categorias padrão para a Loja 1 (Eletrônicos)
-INSERT INTO public.categorias (id, loja_id, nome, descricao, exige_imei, exige_serial, ativo) VALUES
-(1, 1, 'Celulares', 'Smartphones e aparelhos móveis', true, true, true),
-(2, 1, 'Acessórios', 'Capas, carregadores, etc.', false, false, true);
-SELECT setval('public.categorias_id_seq', 2);
-
--- Inserir alguns clientes padrão para a loja única
-INSERT INTO public.clientes (id, loja_id, nome, tipo, cpf_cnpj, telefone, email, cidade, estado) VALUES
-(1, 1, 'Carlos Silva (Cliente Eletrônicos)', 'cliente', '123.456.789-00', '(11) 91111-2222', 'carlos@email.com', 'São Paulo', 'SP'),
-(2, 1, 'Maria Santos (Cliente Mercado)', 'cliente', '234.567.890-11', '(11) 92222-3333', 'maria@email.com', 'São Paulo', 'SP'),
-(3, 1, 'Ana Oliveira (Cliente Estética)', 'cliente', '345.678.901-22', '(11) 93333-4444', 'ana@email.com', 'São Paulo', 'SP'),
-(4, 1, 'Pedro Souza (Cliente Restaurante)', 'cliente', '456.789.012-33', '(11) 94444-5555', 'pedro@email.com', 'São Paulo', 'SP'),
-(5, 1, 'Fernanda Lima (Cliente Joias)', 'cliente', '567.890.123-44', '(11) 95555-6666', 'fernanda@email.com', 'São Paulo', 'SP'),
--- Fornecedores
-(6, 1, 'Distribuidora Tech (Fornecedor)', 'fornecedor', '12.345.678/0001-90', '(11) 3333-4444', 'contato@techdist.com', 'São Paulo', 'SP'),
-(7, 1, 'Hortifruti Central (Fornecedor)', 'fornecedor', '23.456.789/0001-01', '(11) 3333-5555', 'vendas@horticentral.com', 'São Paulo', 'SP');
-
-SELECT setval('public.clientes_id_seq', 7);
-
--- Inserir produtos padrão para a Loja 1 (Eletrônicos)
-INSERT INTO public.produtos (id, loja_id, codigo, nome, categoria, categoria_id, marca, modelo, descricao, valor_compra, valor_venda, estoque_total, estoque_minimo, garantia_dias, imagem, ativo) VALUES
-(1, 1, 'CEL-IPHONE15', 'iPhone 15 128GB', 'Celulares', 1, 'Apple', 'iPhone 15', 'Aparelho Celular Apple iPhone 15', 4500.00, 5999.00, 2, 2, 365, '', true),
-(2, 1, 'ACE-CABOLIGHTNING', 'Cabo Lightning 1m', 'Acessórios', 2, 'Apple', 'Cabo Lightning', 'Cabo de carregamento Apple original 1 metro', 50.00, 129.00, 15, 5, 90, '', true);
-
-SELECT setval('public.produtos_id_seq', 2);
-
--- Inserir seriais para os iPhones cadastrados
-INSERT INTO public.produtos_seriais (id, produto_id, numero_serie, serial, imei, status, disponivel, valor_compra, valor_venda) VALUES
-(1, 1, 'IPH15-SERIAL-001', 'IPH15-SERIAL-001', '358291002938471', 'disponivel', true, 4500.00, 5999.00),
-(2, 1, 'IPH15-SERIAL-002', 'IPH15-SERIAL-002', '358291002938472', 'disponivel', true, 4500.00, 5999.00);
-
-SELECT setval('public.produtos_seriais_id_seq', 2);
-
--- Inserir produtos padrão adicionais para a loja única (Mercado)
-INSERT INTO public.produtos (id, loja_id, codigo, nome, categoria, marca, descricao, valor_compra, valor_venda, estoque_total, estoque_minimo, garantia_dias, ativo) VALUES
-(3, 1, 'MER-ARROZ5KG', 'Arroz Prato Fino 5kg', 'Alimentos', 'Prato Fino', 'Arroz agulhinha tipo 1 pacote 5kg', 18.00, 26.90, 50, 10, 0, true),
-(4, 1, 'MER-LECHE1L', 'Leite Integral Elegê 1L', 'Laticínios', 'Elegê', 'Leite UHT integral 1 litro', 3.20, 4.89, 120, 20, 0, true);
-
-SELECT setval('public.produtos_id_seq', 4);
-
--- Inserir mesas de teste para a loja única (Restaurante)
-INSERT INTO public.mesas_comandas (loja_id, numero, tipo, status, valor_acumulado) VALUES
-(1, 'Mesa 01', 'mesa', 'livre', 0.00),
-(1, 'Mesa 02', 'mesa', 'livre', 0.00),
-(1, 'Mesa 03', 'mesa', 'ocupada', 45.50),
-(1, 'Comanda 101', 'comanda', 'livre', 0.00),
-(1, 'Comanda 102', 'comanda', 'ocupada', 128.90);
-
--- Inserir agendamentos de teste para a loja única (Estética)
-INSERT INTO public.agendamentos (id, loja_id, cliente_id, profissional_id, servico_id, data_hora, status, valor, observacoes) VALUES
-(1, 1, 3, 1, 2, date_trunc('hour', now() + interval '1 day' + interval '10 hours'), 'agendado', 129.00, 'Design de Sobrancelha / Ajuste de Produto'),
-(2, 1, 4, 1, 2, date_trunc('hour', now() + interval '2 days' + interval '14 hours'), 'confirmado', 129.00, 'Limpeza de Pele');
-
-SELECT setval('public.agendamentos_id_seq', 2);
 
 
 

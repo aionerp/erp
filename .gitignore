@@ -3,3 +3,4 @@ env.js
 /dist
 /node_modules
 *.log
+scratch/
