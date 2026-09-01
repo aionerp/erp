@@ -160,14 +160,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     async function produtoExigeSerial(produto) {
         const cat = categorias.find(c => c.nome === produto.categoria);
-        if (cat?.exige_serial === true || cat?.exige_imei === true) return true;
-        if (produto.categoria === 'Celular') return true;
-        return false;
+        return cat?.exige_serial === true;
     }
     
     async function produtoExigeIMEI(produto) {
         const cat = categorias.find(c => c.nome === produto.categoria);
         if (cat?.exige_imei === true) return true;
+        if (produto.categoria === 'Celular') return true;
+        return false;
+    }
+
+    async function produtoControlaSeriais(produto) {
+        const cat = categorias.find(c => c.nome === produto.categoria);
+        if (cat?.exige_serial === true || cat?.exige_imei === true) return true;
         if (produto.categoria === 'Celular') return true;
         return false;
     }
@@ -188,12 +193,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const exigeSerial = await produtoExigeSerial(produto);
         const exigeIMEI = await produtoExigeIMEI(produto);
+        const controlaSeriais = await produtoControlaSeriais(produto);
         const controlaLote = await produtoControlaLote(produto);
         const alertaPadrao = obterAlertaVencimentoPadrao(produto);
         
         if (existente) {
             existente.quantidade += 1;
-            if (exigeSerial) {
+            if (existente.controla_seriais) {
                 existente.seriais.push({ serial: '', imei: '' });
             }
         } else {
@@ -205,13 +211,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 valor_compra: produto.valor_compra || 0,
                 valor_venda: produto.valor_venda || (produto.valor_compra ? produto.valor_compra * 1.3 : 0),
                 quantidade: 1,
+                controla_seriais: controlaSeriais,
                 exige_serial: exigeSerial,
                 exige_imei: exigeIMEI,
                 controla_lote: controlaLote,
                 lote: produto.lote || '',
                 data_validade: produto.data_validade || '',
                 alerta_vencimento_dias: produto.alerta_vencimento_dias || alertaPadrao,
-                seriais: exigeSerial ? [{ serial: '', imei: '' }] : []
+                seriais: controlaSeriais ? [{ serial: '', imei: '' }] : []
             });
         }
         
@@ -242,11 +249,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const subtotal = item.quantidade * item.valor_compra;
             
             let serialHtml = '';
-            if (item.exige_serial) {
+            if (item.controla_seriais) {
+                let badgeTitulo = '🔢 Número de Série Obrigatório';
+                if (item.exige_serial && item.exige_imei) {
+                    badgeTitulo = '🔢📱 Número de Série e IMEI Obrigatórios';
+                } else if (item.exige_imei) {
+                    badgeTitulo = '📱 IMEI Obrigatório (Série Opcional)';
+                }
+                
                 serialHtml = `
                     <div class="serial-inputs-container">
                         <strong style="font-size:11px; color:var(--danger); display:block; margin-bottom:5px;">
-                            🔢 Números de Série / IMEI Obrigatórios (Qtd: ${item.quantidade})
+                            ${badgeTitulo} (Qtd: ${item.quantidade})
                         </strong>
                         ${Array.from({ length: item.quantidade }).map((_, idx) => {
                             const valSerial = item.seriais[idx]?.serial || '';
@@ -255,23 +269,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                             return `
                                 <div class="serial-input-row" data-id="${item.id}" data-index="${idx}">
                                     <input type="text" 
-                                           placeholder="Nº Série #${idx + 1} *" 
-                                           class="serial-input-field required" 
+                                           placeholder="Nº Série #${idx + 1} ${item.exige_serial ? '*' : '(opcional)'}" 
+                                           class="serial-input-field ${item.exige_serial ? 'required' : ''}" 
                                            value="${valSerial}"
                                            oninput="atualizarSerial(${item.id}, ${idx}, 'serial', this.value)">
-                                    ${item.exige_imei ? `
-                                        <input type="text" 
-                                               placeholder="IMEI #${idx + 1} *" 
-                                               class="imei-input-field required" 
-                                               value="${valImei}"
-                                               oninput="atualizarSerial(${item.id}, ${idx}, 'imei', this.value)">
-                                    ` : `
-                                        <input type="text" 
-                                               placeholder="IMEI (opcional)" 
-                                               class="imei-input-field" 
-                                               value="${valImei}"
-                                               oninput="atualizarSerial(${item.id}, ${idx}, 'imei', this.value)">
-                                    `}
+                                    <input type="text" 
+                                           placeholder="IMEI #${idx + 1} ${item.exige_imei ? '*' : '(opcional)'}" 
+                                           class="imei-input-field ${item.exige_imei ? 'required' : ''}" 
+                                           value="${valImei}"
+                                           oninput="atualizarSerial(${item.id}, ${idx}, 'imei', this.value)">
                                 </div>
                             `;
                         }).join('')}
@@ -669,10 +675,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const todosSeriais = [];
         for (const item of carrinho) {
-            if (item.exige_serial) {
+            if (item.controla_seriais) {
                 for (let i = 0; i < item.seriais.length; i++) {
                     const s = item.seriais[i];
-                    if (!s.serial) {
+                    if (item.exige_serial && !s.serial) {
                         mostrarNotificacao(`Preencha o Nº Série #${i+1} do produto "${item.nome}"!`, 'error');
                         return;
                     }
@@ -680,11 +686,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                         mostrarNotificacao(`Preencha o IMEI #${i+1} do produto "${item.nome}"!`, 'error');
                         return;
                     }
-                    if (todosSeriais.includes(s.serial)) {
-                        mostrarNotificacao(`Nº série duplicado: ${s.serial}`, 'error');
+                    if (!item.exige_serial && !item.exige_imei && !s.serial && !s.imei) {
+                        mostrarNotificacao(`Preencha ao menos o Nº Série ou o IMEI no item #${i+1} do produto "${item.nome}"!`, 'error');
                         return;
                     }
-                    todosSeriais.push(s.serial);
+                    if (s.serial) {
+                        if (todosSeriais.includes(s.serial)) {
+                            mostrarNotificacao(`Nº série duplicado: ${s.serial}`, 'error');
+                            return;
+                        }
+                        todosSeriais.push(s.serial);
+                    }
                 }
             }
             if (item.controla_lote) {
@@ -802,15 +814,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .update(updatePayload)
                     .eq('id', item.id);
                 
-                if (item.exige_serial) {
+                if (item.controla_seriais) {
                     for (const s of item.seriais) {
                         await supabaseClient
                             .from('produtos_seriais')
                             .insert([{
                                 produto_id: item.id,
-                                numero_serie: s.serial,
+                                numero_serie: s.serial || null,
+                                serial: s.serial || null,
                                 imei: s.imei || null,
                                 status: 'disponivel',
+                                disponivel: true,
                                 data_entrada: new Date().toISOString(),
                                 valor_compra: item.valor_compra,
                                 valor_venda: item.valor_venda,

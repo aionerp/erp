@@ -1057,26 +1057,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const estoque = produto.estoque_total ?? produto.estoque ?? 0;
         if (!isServico && !permitirVendaSemSaldo && estoque <= 0) { mostrarNotificacao('Produto sem estoque disponível!', 'error'); return; }
 
-        let exigeIMEI = false;
+        let exigeControleSerial = false;
         try {
             const { data: categoria } = await supabaseClient
                 .from('categorias')
-                .select('exige_imei')
+                .select('exige_imei, exige_serial')
                 .eq('nome', produto.categoria)
                 .maybeSingle();
-            exigeIMEI = categoria?.exige_imei === true || produto.categoria === 'Celular';
+            exigeControleSerial = categoria?.exige_imei === true || categoria?.exige_serial === true || produto.categoria === 'Celular';
         } catch {
-            exigeIMEI = produto.categoria === 'Celular';
+            exigeControleSerial = produto.categoria === 'Celular';
         }
 
-        if (exigeIMEI) {
+        if (exigeControleSerial) {
             const { data: seriais, error } = await supabaseClient
                 .from('produtos_seriais')
                 .select('*')
                 .eq('produto_id', produtoId)
                 .eq('status', 'disponivel');
 
-            if (error) { mostrarNotificacao('Erro ao verificar IMEIs!', 'error'); return; }
+            if (error) { mostrarNotificacao('Erro ao verificar Números de Série / IMEIs!', 'error'); return; }
 
             produtoSerialPendente = produto;
             seriaisDisponiveis    = seriais || [];

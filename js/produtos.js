@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPage = 1;
     let itemsPerPage = 10;
     let exigeIMEIActual = false;
+    let exigeSerialActual = false;
     
     // =====================================================
     // CARREGAR DADOS
@@ -118,19 +119,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectFiltro) selectFiltro.innerHTML = options;
             if (selectProduto) {
                 selectProduto.innerHTML = '<option value="">Selecione uma categoria</option>' +
-                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei}" data-exige-serial="${c.exige_serial || c.exige_imei}" data-controla-lote="${c.controla_lote_validade || false}" data-aviso-vencimento="${c.aviso_vencimento_dias || 30}">${c.nome}</option>`).join('');
+                    (data || []).map(c => `<option value="${c.nome}" data-exige-imei="${c.exige_imei === true}" data-exige-serial="${c.exige_serial === true}" data-controla-lote="${c.controla_lote_validade || false}" data-aviso-vencimento="${c.aviso_vencimento_dias || 30}">${c.nome}</option>`).join('');
                 
                 selectProduto.addEventListener('change', (e) => {
                     const selectedOption = e.target.options[e.target.selectedIndex];
+                    const seriaisContainer = document.getElementById('seriaisContainer');
+                    const avisoIMEI = document.getElementById('avisoIMEI');
+                    
                     if (!selectedOption || selectedOption.value === "") {
-                        document.getElementById('seriaisContainer').style.display = 'none';
+                        if (seriaisContainer) seriaisContainer.style.display = 'none';
                         const groupLoteValidade = document.getElementById('groupLoteValidade');
                         if (groupLoteValidade) groupLoteValidade.style.display = 'none';
+                        if (avisoIMEI) avisoIMEI.remove();
+                        exigeIMEIActual = false;
+                        exigeSerialActual = false;
                         return;
                     }
                     const exigeIMEI = selectedOption.getAttribute('data-exige-imei') === 'true';
-                    const exigeSerial = selectedOption.getAttribute('data-exige-serial') === 'true' || exigeIMEI;
+                    const exigeSerial = selectedOption.getAttribute('data-exige-serial') === 'true';
                     exigeIMEIActual = exigeIMEI;
+                    exigeSerialActual = exigeSerial;
                     
                     const controlaLote = selectedOption.getAttribute('data-controla-lote') === 'true';
                     const avisoVencimento = selectedOption.getAttribute('data-aviso-vencimento') || '30';
@@ -143,15 +151,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     
-                    const seriaisContainer = document.getElementById('seriaisContainer');
-                    const avisoIMEI = document.getElementById('avisoIMEI');
+                    const temControleUnitario = (exigeSerial || exigeIMEI) && (usuario.config_loja?.habilitar_seriais !== false);
                     
-                    if (exigeSerial) {
+                    if (temControleUnitario) {
                         if (seriaisContainer) seriaisContainer.style.display = 'block';
                         const quantidade = parseInt(document.getElementById('quantidade_estoque').value) || 1;
-                        gerarCamposSerial(quantidade, exigeIMEIActual);
+                        gerarCamposSerial(quantidade, exigeSerialActual, exigeIMEIActual);
                         
-                        if (exigeIMEIActual) {
+                        let textoAviso = '';
+                        if (exigeIMEIActual && exigeSerialActual) {
+                            textoAviso = '📱🔢 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do Número de Série e do IMEI para cada unidade!';
+                        } else if (exigeIMEIActual) {
+                            textoAviso = '📱 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do IMEI para cada unidade! (Número de série opcional)';
+                        } else if (exigeSerialActual) {
+                            textoAviso = '🔢 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do Número de Série para cada unidade!';
+                        }
+                        
+                        if (textoAviso) {
                             if (!avisoIMEI) {
                                 const msg = document.createElement('div');
                                 msg.id = 'avisoIMEI';
@@ -159,8 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 msg.style.marginTop = '10px';
                                 msg.style.padding = '10px';
                                 msg.style.borderRadius = '8px';
-                                msg.innerHTML = '📱 <strong>ATENÇÃO:</strong> Esta categoria exige o preenchimento obrigatório do IMEI para cada unidade!';
+                                msg.innerHTML = textoAviso;
                                 document.getElementById('seriaisContainer').before(msg);
+                            } else {
+                                avisoIMEI.innerHTML = textoAviso;
                             }
                         } else {
                             if (avisoIMEI) avisoIMEI.remove();
@@ -190,10 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // FUNÇÕES DE SERIAL
     // =====================================================
     
-    function gerarCamposSerial(quantidade, exigeIMEI = false) {
+    function gerarCamposSerial(quantidade, exigeSerial = false, exigeIMEI = false) {
         const container = document.getElementById('seriaisList');
         if (!container) return;
         
+        exigeSerialActual = exigeSerial;
         exigeIMEIActual = exigeIMEI;
         
         let html = '';
@@ -201,24 +220,15 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `
                 <div class="serial-item" data-serial-index="${i}">
                     <input type="text" 
-                           placeholder="Número de Série * (obrigatório)" 
-                           class="serial-numero" 
+                           placeholder="${exigeSerial ? 'Número de Série * (obrigatório)' : 'Número de Série (opcional)'}" 
+                           class="serial-numero ${exigeSerial ? 'required' : ''}" 
                            data-index="${i}" 
-                           required
-                           style="border-left: 4px solid #dc3545;">
-                    ${exigeIMEI ? `
+                           ${exigeSerial ? 'required style="border-left: 4px solid #dc3545;"' : 'style="border-left: 4px solid #6c757d;"'}>
                     <input type="text" 
-                           placeholder="IMEI * (obrigatório para esta categoria)" 
-                           class="serial-imei" 
+                           placeholder="${exigeIMEI ? 'IMEI * (obrigatório para esta categoria)' : 'IMEI (opcional)'}" 
+                           class="serial-imei ${exigeIMEI ? 'required' : ''}" 
                            data-index="${i}"
-                           required
-                           style="border-left: 4px solid #dc3545;">
-                    ` : `
-                    <input type="text" 
-                           placeholder="IMEI (opcional)" 
-                           class="serial-imei" 
-                           data-index="${i}">
-                    `}
+                           ${exigeIMEI ? 'required style="border-left: 4px solid #dc3545;"' : 'style="border-left: 4px solid #6c757d;"'}>
                     <button type="button" 
                             class="btn-remove-serial" 
                             onclick="removerSerial(${i})" 
@@ -233,62 +243,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.value.trim() !== '') {
                     this.style.border = '1px solid #28a745';
                     this.style.borderLeft = '4px solid #28a745';
-                } else {
+                } else if (exigeSerialActual) {
                     this.style.border = '1px solid #dc3545';
                     this.style.borderLeft = '4px solid #dc3545';
+                } else {
+                    this.style.border = '1px solid var(--border)';
+                    this.style.borderLeft = '4px solid #6c757d';
                 }
             });
         });
         
-        if (exigeIMEI) {
-            document.querySelectorAll('.serial-imei').forEach(input => {
-                input.addEventListener('input', function() {
-                    if (this.value.trim() !== '') {
-                        this.style.border = '1px solid #28a745';
-                        this.style.borderLeft = '4px solid #28a745';
-                    } else {
-                        this.style.border = '1px solid #dc3545';
-                        this.style.borderLeft = '4px solid #dc3545';
-                    }
-                });
+        document.querySelectorAll('.serial-imei').forEach(input => {
+            input.addEventListener('input', function() {
+                if (this.value.trim() !== '') {
+                    this.style.border = '1px solid #28a745';
+                    this.style.borderLeft = '4px solid #28a745';
+                } else if (exigeIMEIActual) {
+                    this.style.border = '1px solid #dc3545';
+                    this.style.borderLeft = '4px solid #dc3545';
+                } else {
+                    this.style.border = '1px solid var(--border)';
+                    this.style.borderLeft = '4px solid #6c757d';
+                }
             });
-        }
+        });
     }
     
     window.removerSerial = (index) => {
         const quantidade = parseInt(document.getElementById('quantidade_estoque').value);
         if (quantidade <= 1) {
-            mostrarNotificacao('O produto precisa ter pelo menos um número de série!', 'error');
+            mostrarNotificacao('O produto precisa ter pelo menos um item!', 'error');
             return;
         }
         document.getElementById('quantidade_estoque').value = quantidade - 1;
-        gerarCamposSerial(quantidade - 1, exigeIMEIActual);
+        gerarCamposSerial(quantidade - 1, exigeSerialActual, exigeIMEIActual);
     };
     
     function validarSeriais() {
         const camposNumero = document.querySelectorAll('.serial-numero');
+        const camposIMEI = document.querySelectorAll('.serial-imei');
         let todosPreenchidos = true;
-        let vazios = [];
+        let vaziosSerial = 0;
+        let vaziosIMEI = 0;
         
-        for (let i = 0; i < camposNumero.length; i++) {
-            const valor = camposNumero[i].value.trim();
-            if (valor === '') {
-                todosPreenchidos = false;
-                vazios.push(i + 1);
-                camposNumero[i].style.border = '1px solid #dc3545';
-                camposNumero[i].style.borderLeft = '4px solid #dc3545';
-            } else {
-                camposNumero[i].style.border = '1px solid #28a745';
-                camposNumero[i].style.borderLeft = '4px solid #28a745';
+        if (exigeSerialActual) {
+            for (let i = 0; i < camposNumero.length; i++) {
+                const valor = camposNumero[i].value.trim();
+                if (valor === '') {
+                    todosPreenchidos = false;
+                    vaziosSerial++;
+                    camposNumero[i].style.border = '1px solid #dc3545';
+                    camposNumero[i].style.borderLeft = '4px solid #dc3545';
+                } else {
+                    camposNumero[i].style.border = '1px solid #28a745';
+                    camposNumero[i].style.borderLeft = '4px solid #28a745';
+                }
             }
         }
         
         if (exigeIMEIActual) {
-            const camposIMEI = document.querySelectorAll('.serial-imei');
             for (let i = 0; i < camposIMEI.length; i++) {
                 const valor = camposIMEI[i].value.trim();
                 if (valor === '') {
                     todosPreenchidos = false;
+                    vaziosIMEI++;
                     camposIMEI[i].style.border = '1px solid #dc3545';
                     camposIMEI[i].style.borderLeft = '4px solid #dc3545';
                 } else {
@@ -298,8 +316,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // Se a seção está visível, cada unidade deve possuir ao menos uma identificação (Serial ou IMEI)
+        for (let i = 0; i < camposNumero.length; i++) {
+            const valNum = camposNumero[i].value.trim();
+            const valImei = camposIMEI[i]?.value.trim() || '';
+            if (!valNum && !valImei) {
+                camposNumero[i].style.border = '1px solid #dc3545';
+                camposNumero[i].style.borderLeft = '4px solid #dc3545';
+                if (camposIMEI[i]) {
+                    camposIMEI[i].style.border = '1px solid #dc3545';
+                    camposIMEI[i].style.borderLeft = '4px solid #dc3545';
+                }
+                mostrarNotificacao(`Informe ao menos o Número de Série ou o IMEI no item #${i + 1}!`, 'error');
+                return false;
+            }
+        }
+        
         if (!todosPreenchidos) {
-            mostrarNotificacao(`Preencha todos os campos obrigatórios! Faltam ${vazios.length} campo(s).`, 'error');
+            let msgs = [];
+            if (vaziosSerial > 0) msgs.push(`${vaziosSerial} campo(s) de Número de Série`);
+            if (vaziosIMEI > 0) msgs.push(`${vaziosIMEI} campo(s) de IMEI`);
+            mostrarNotificacao(`Preencha os campos obrigatórios: ${msgs.join(' e ')}!`, 'error');
             return false;
         }
         return true;
@@ -307,20 +344,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function coletarSeriais() {
         const seriaisList = [];
-        const camposNumero = document.querySelectorAll('.serial-numero');
+        const rows = document.querySelectorAll('.serial-item');
         
-        for (let campo of camposNumero) {
-            const numeroSerie = campo.value.trim();
-            if (numeroSerie) {
-                const index = campo.getAttribute('data-index');
-                const imei = document.querySelector(`.serial-imei[data-index="${index}"]`)?.value || '';
+        rows.forEach(row => {
+            const numeroSerie = row.querySelector('.serial-numero')?.value.trim() || '';
+            const imei = row.querySelector('.serial-imei')?.value.trim() || '';
+            
+            if (numeroSerie || imei) {
                 seriaisList.push({
-                    numero_serie: numeroSerie,
-                    imei: imei,
+                    numero_serie: numeroSerie || null,
+                    serial: numeroSerie || null,
+                    imei: imei || null,
                     status: 'disponivel'
                 });
             }
-        }
+        });
         return seriaisList;
     }
     
@@ -453,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <tr>
                     <td><strong>${s.produtos?.nome || '-'}</strong><br><small>${s.produtos?.codigo || ''}</small></td>
-                    <td><code>${s.numero_serie}</code></td>
+                    <td><code>${s.numero_serie || '-'}</code></td>
                     <td>${s.imei || '-'}</td>
                     <td><span class="${statusClass}">${statusText}</span></td>
                     <td>R$ ${(s.valor_compra || 0).toFixed(2)}</td>
@@ -646,18 +684,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                const exigeSerial = (usuario.config_loja?.habilitar_seriais !== false) && 
-                                    (selectedOption?.getAttribute('data-exige-serial') === 'true' || 
-                                     selectedOption?.getAttribute('data-exige-imei') === 'true');
+                const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true';
+                const exigeIMEI = selectedOption?.getAttribute('data-exige-imei') === 'true';
+                const controlaItemUnico = (usuario.config_loja?.habilitar_seriais !== false) && 
+                                          (exigeSerial || exigeIMEI) && 
+                                          dadosProduto.tipo !== 'servico';
                 
-                if (exigeSerial) {
+                if (controlaItemUnico) {
                     const seriaisValidos = validarSeriais();
                     if (!seriaisValidos) return;
                     
                     const seriaisList = coletarSeriais();
                     
                     if (seriaisList.length !== quantidadeEstoque) {
-                        mostrarNotificacao(`Preencha todos os ${quantidadeEstoque} números de série!`, 'error');
+                        mostrarNotificacao(`Preencha os dados de todas as ${quantidadeEstoque} unidades em estoque!`, 'error');
                         return;
                     }
                     
@@ -675,9 +715,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             .from('produtos_seriais')
                             .insert([{
                                 produto_id: produtoId,
-                                numero_serie: serial.numero_serie,
-                                imei: serial.imei,
+                                numero_serie: serial.numero_serie || null,
+                                serial: serial.numero_serie || null,
+                                imei: serial.imei || null,
                                 status: 'disponivel',
+                                disponivel: true,
                                 data_entrada: new Date().toISOString(),
                                 valor_compra: dadosProduto.valor_compra,
                                 valor_venda: dadosProduto.valor_venda
@@ -691,9 +733,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         .update({ estoque_total: seriaisList.length })
                         .eq('id', produtoId);
                     
-                    mostrarNotificacao(`Produto cadastrado com ${seriaisList.length} número(s) de série!`, 'success');
+                    mostrarNotificacao(`Produto cadastrado com ${seriaisList.length} item(ns) em estoque!`, 'success');
                 } else {
-                    // Outros nichos: salva direto com a quantidade informada
+                    // Outros nichos / sem controle de serial/IMEI: salva direto com a quantidade informada
                     dadosProduto.estoque_total = dadosProduto.tipo === 'servico' ? 0 : quantidadeEstoque;
                     const { error } = await supabaseClient
                         .from('produtos')
@@ -795,6 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('quantidade_estoque').value = 1;
         document.getElementById('quantidade_estoque').disabled = false;
         exigeIMEIActual = false;
+        exigeSerialActual = false;
         
         const groupLoteValidade = document.getElementById('groupLoteValidade');
         if (groupLoteValidade) groupLoteValidade.style.display = 'none';
@@ -858,9 +901,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const selectProduto = document.getElementById('categoria');
             const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
-            const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true' || selectedOption?.getAttribute('data-exige-imei') === 'true';
+            const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true';
+            const exigeIMEI = selectedOption?.getAttribute('data-exige-imei') === 'true';
             if (seriaisContainer) {
-                seriaisContainer.style.display = exigeSerial ? 'block' : 'none';
+                seriaisContainer.style.display = (exigeSerial || exigeIMEI) ? 'block' : 'none';
             }
         }
     });
@@ -880,11 +924,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('quantidade_estoque')?.addEventListener('input', (e) => {
         const selectProduto = document.getElementById('categoria');
         const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
-        const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true' || selectedOption?.getAttribute('data-exige-imei') === 'true';
-        if (exigeSerial) {
+        const exigeSerial = selectedOption?.getAttribute('data-exige-serial') === 'true';
+        const exigeIMEI = selectedOption?.getAttribute('data-exige-imei') === 'true';
+        if (exigeSerial || exigeIMEI) {
             const quantidade = parseInt(e.target.value) || 0;
             if (quantidade > 0) {
-                gerarCamposSerial(quantidade, exigeIMEIActual);
+                gerarCamposSerial(quantidade, exigeSerialActual, exigeIMEIActual);
             }
         }
     });

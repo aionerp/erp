@@ -667,14 +667,19 @@ async function processarImportacaoProduto(row) {
 
     // Validar se exige serial pela categoria
     const catMeta = categoriasMetaMap[catName];
-    const exigeSerial = catMeta && (catMeta.exige_serial || catMeta.exige_imei) && tipo !== 'servico';
+    const exigeSerial = catMeta && catMeta.exige_serial && tipo !== 'servico';
+    const exigeIMEI = catMeta && catMeta.exige_imei && tipo !== 'servico';
+    const controlaItens = (exigeSerial || exigeIMEI) && tipo !== 'servico';
 
-    if (exigeSerial) {
+    if (controlaItens) {
         const seriais = row.numeros_serie ? row.numeros_serie.split(',').map(s => s.trim()).filter(s => s) : [];
         const imeis = row.imeis ? row.imeis.split(',').map(m => m.trim()).filter(m => m) : [];
 
-        if (seriais.length !== estoqueTotal) {
-            throw new Error(`A categoria "${catName}" exige seriais. Planilha contém ${seriais.length} seriais, mas estoque é ${estoqueTotal}.`);
+        if (exigeSerial && seriais.length !== estoqueTotal) {
+            throw new Error(`A categoria "${catName}" exige números de série. Planilha contém ${seriais.length} seriais, mas estoque é ${estoqueTotal}.`);
+        }
+        if (exigeIMEI && imeis.length !== estoqueTotal) {
+            throw new Error(`A categoria "${catName}" exige IMEIs. Planilha contém ${imeis.length} IMEIs, mas estoque é ${estoqueTotal}.`);
         }
 
         // Salvar produto
@@ -687,12 +692,14 @@ async function processarImportacaoProduto(row) {
         const prodId = insertedProd[0].id;
 
         // Inserir seriais na tabela produtos_seriais
-        for (let idx = 0; idx < seriais.length; idx++) {
+        for (let idx = 0; idx < estoqueTotal; idx++) {
             const serialObj = {
                 produto_id: prodId,
-                numero_serie: seriais[idx],
+                numero_serie: seriais[idx] || null,
+                serial: seriais[idx] || null,
                 imei: imeis[idx] || null,
                 status: 'disponivel',
+                disponivel: true,
                 data_entrada: new Date().toISOString(),
                 valor_compra: valorCompra,
                 valor_venda: valorVenda,
@@ -704,10 +711,10 @@ async function processarImportacaoProduto(row) {
                 .insert([serialObj]);
 
             if (errSerial) {
-                adicionarLinhaLog(`⚠️ Erro ao inserir número de série "${seriais[idx]}" do produto "${dadosProduto.nome}".`, 'warning');
+                adicionarLinhaLog(`⚠️ Erro ao inserir serial/IMEI do produto "${dadosProduto.nome}".`, 'warning');
             }
         }
-        adicionarLinhaLog(`✔️ Linha ${row._linha}: Produto serializado "${dadosProduto.nome}" cadastrado com ${seriais.length} serial(is).`, 'success');
+        adicionarLinhaLog(`✔️ Linha ${row._linha}: Produto serializado "${dadosProduto.nome}" cadastrado com ${estoqueTotal} item(ns).`, 'success');
     } else {
         // Salvar produto simples
         const { error } = await supabaseClient
