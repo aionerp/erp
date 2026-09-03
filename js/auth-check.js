@@ -84,24 +84,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     justify-content: space-between;
                     align-items: center;
                     padding: 10px 14px;
-                    color: rgba(255, 252, 242, 0.55);
+                    color: #64748B;
                     font-size: 11px;
                     font-weight: 700;
                     text-transform: uppercase;
-                    letter-spacing: 1.2px;
+                    letter-spacing: 1px;
                     cursor: pointer;
                     user-select: none;
-                    transition: color var(--transition-fast), background-color var(--transition-fast);
+                    transition: all var(--transition-fast);
                     margin-top: 10px;
                     margin-bottom: 2px;
                     border-radius: var(--radius-sm);
                 }
                 .sidebar-group-header:hover {
-                    color: var(--floral-white);
-                    background: rgba(255, 255, 255, 0.04);
+                    color: #FFFFFF;
+                    background: rgba(255, 255, 255, 0.06);
                 }
                 .sidebar-group-header.active {
-                    color: var(--floral-white);
+                    color: #FFFFFF;
                 }
                 .sidebar-group-header .arrow {
                     font-size: 9px;
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 .sidebar-subnav {
                     list-style: none;
-                    padding-left: 14px !important;
+                    padding-left: 12px !important;
                     margin: 0;
                     display: none;
                 }
@@ -124,19 +124,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 .sidebar-subnav li a {
                     font-size: 13px !important;
                     padding: 8px 12px !important;
-                    opacity: 0.85;
+                    color: #94A3B8 !important;
+                    transition: all var(--transition-fast) !important;
                 }
                 .sidebar-subnav li a:hover {
-                    opacity: 1;
+                    color: #FFFFFF !important;
+                    background: rgba(255, 255, 255, 0.06) !important;
                     transform: translateX(3px) !important;
                 }
                 .sidebar-subnav li a.active {
-                    background: rgba(235, 94, 40, 0.2) !important;
-                    color: var(--floral-white) !important;
-                    box-shadow: none !important;
+                    background: #FFFFFF !important;
+                    color: #0A1628 !important;
+                    font-weight: 700 !important;
+                    border-left: 4px solid #EAB308 !important;
+                    border-radius: 6px !important;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
                 }
                 .sidebar-subnav li a.active::after {
-                    width: 30% !important;
+                    display: none !important;
                 }
             `;
             document.head.appendChild(style);
@@ -264,12 +269,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sidebar.innerHTML = `
-            <div class="sidebar-header" style="padding: 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                <h2 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span style="background: var(--primary); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">ERP</span>
+            <div class="sidebar-header" style="padding: 22px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <h2 style="font-size: 17px; font-weight: 700; color: #FFFFFF; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: -0.2px;">
+                    <span style="background: #EAB308; color: #0A1628; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px;">ERP</span>
                     <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</span>
                 </h2>
-                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #D4AF37; margin-top: 4px; font-weight: bold;">
+                <div style="font-size: 11px; letter-spacing: 0.8px; color: #94A3B8; margin-top: 4px; font-weight: 500;">
                     ${window.ENV?.COMPANY_SUBTITLE || 'by AionLabs'}
                 </div>
             </div>
@@ -301,13 +306,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const cleanTitle = document.title.replace(' - Sistema de Estoque', '');
     document.title = `${window.ENV?.COMPANY_NAME || 'Aion ERP'} | ${cleanTitle}`;
     
-    // Mostrar informações do usuário
+    // Mostrar informações do usuário & Avatar Modern SaaS
     const userNameElement = document.getElementById('userName');
     const userPerfilElement = document.getElementById('userPerfil');
+    const userInfoWrapper = document.querySelector('.user-info');
     
     if (userNameElement) {
         userNameElement.textContent = usuario.nome || 'Usuário';
     }
+    
+    // Injetar Avatar Redondo com Iniciais
+    if (userInfoWrapper && !document.getElementById('userAvatarCircle')) {
+        const nomes = (usuario.nome || 'Aion User').trim().split(' ');
+        const iniciais = (nomes.length > 1 ? nomes[0][0] + nomes[nomes.length - 1][0] : nomes[0].substring(0, 2)).toUpperCase();
+        
+        const avatarEl = document.createElement('div');
+        avatarEl.id = 'userAvatarCircle';
+        avatarEl.className = 'user-avatar';
+        avatarEl.textContent = iniciais;
+        avatarEl.title = usuario.nome || 'Perfil';
+        
+        if (userNameElement) {
+            userInfoWrapper.insertBefore(avatarEl, userNameElement);
+        } else {
+            userInfoWrapper.prepend(avatarEl);
+        }
+    }
+
     if (userPerfilElement) {
         const perfilLabels = {
             admin: '👑 Administrador',
@@ -319,8 +344,82 @@ document.addEventListener('DOMContentLoaded', () => {
         userPerfilElement.textContent = perfilLabels[usuario.perfil] || usuario.perfil || 'Usuário';
     }
 
-    // === BOTÃO DADOS DA EMPRESA ===
+    // === RELÓGIO EM TEMPO REAL E DATA NA BARRA SUPERIOR ===
+    const topBar = document.querySelector('.top-bar');
+    if (topBar && !document.getElementById('topBarClock')) {
+        const clockContainer = document.createElement('div');
+        clockContainer.id = 'topBarClock';
+        clockContainer.className = 'top-bar-clock';
+        
+        const atualizarHorario = () => {
+            const agora = new Date();
+            const dia = String(agora.getDate()).padStart(2, '0');
+            const mes = String(agora.getMonth() + 1).padStart(2, '0');
+            const ano = agora.getFullYear();
+            const horas = String(agora.getHours()).padStart(2, '0');
+            const minutos = String(agora.getMinutes()).padStart(2, '0');
+            const segundos = String(agora.getSeconds()).padStart(2, '0');
+            
+            clockContainer.innerHTML = `
+                <span class="clock-date">📅 ${dia}/${mes}/${ano}</span>
+                <span class="clock-divider">|</span>
+                <span class="clock-time">⏰ ${horas}:${minutos}:${segundos}</span>
+            `;
+        };
+        
+        atualizarHorario();
+        setInterval(atualizarHorario, 1000);
+        
+        const userInfoEl = document.querySelector('.user-info');
+        if (userInfoEl) {
+            topBar.insertBefore(clockContainer, userInfoEl);
+        } else {
+            topBar.appendChild(clockContainer);
+        }
+    }
+
+    // === FILTRO DE COR (DARK / LIGHT MODE) ===
+    const aplicarTemaGlobal = (tema) => {
+        if (tema === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.body?.classList.add('dark-theme');
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.body?.classList.remove('dark-theme');
+        }
+    };
+
     const userInfo = document.querySelector('.user-info');
+    if (userInfo && !document.getElementById('btnThemeToggle')) {
+        const btnTheme = document.createElement('button');
+        btnTheme.id = 'btnThemeToggle';
+        btnTheme.className = 'theme-toggle-btn';
+        btnTheme.setAttribute('type', 'button');
+        
+        let temaAtual = localStorage.getItem('aion_theme') || 'light';
+        aplicarTemaGlobal(temaAtual);
+        
+        btnTheme.innerHTML = temaAtual === 'dark' ? '☀️' : '🌙';
+        btnTheme.title = temaAtual === 'dark' ? 'Modo Escuro Ativo (Clique para Modo Claro)' : 'Modo Claro Ativo (Clique para Modo Escuro)';
+        
+        btnTheme.addEventListener('click', () => {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.body.classList.contains('dark-theme');
+            const novoTema = isDark ? 'light' : 'dark';
+            aplicarTemaGlobal(novoTema);
+            try { localStorage.setItem('aion_theme', novoTema); } catch(e) {}
+            btnTheme.innerHTML = novoTema === 'dark' ? '☀️' : '🌙';
+            btnTheme.title = novoTema === 'dark' ? 'Modo Escuro Ativo (Clique para Modo Claro)' : 'Modo Claro Ativo (Clique para Modo Escuro)';
+        });
+        
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            userInfo.insertBefore(btnTheme, logoutBtn);
+        } else {
+            userInfo.appendChild(btnTheme);
+        }
+    }
+
+    // === BOTÃO DADOS DA EMPRESA ===
     if (userInfo && !document.getElementById('btnConfigLoja') && (usuario.perfil === 'admin' || usuario.perfil === 'gerente')) {
         const btnConfig = document.createElement('button');
         btnConfig.id = 'btnConfigLoja';

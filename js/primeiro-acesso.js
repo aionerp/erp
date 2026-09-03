@@ -13,8 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 left: 0;
                 width: 100vw;
                 height: 100vh;
-                background: rgba(17, 24, 39, 0.7);
-                backdrop-filter: blur(6px);
+                background: rgba(10, 22, 40, 0.7);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
                 z-index: 10000;
                 display: flex;
                 align-items: center;
@@ -30,17 +31,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 pointer-events: auto;
             }
             .modal-pa-card {
-                background: #ffffff;
+                background: #FFFFFF;
                 border-radius: 16px;
                 width: 100%;
                 max-width: 560px;
                 max-height: 90vh;
                 overflow-y: auto;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-                border: 1px solid rgba(255,255,255,0.2);
-                transform: scale(0.95);
-                transition: transform 0.25s ease;
-                padding: 24px;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);
+                border: 1px solid #E2E8F0;
+                transform: scale(0.97);
+                transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+                padding: 28px;
                 box-sizing: border-box;
                 font-family: inherit;
             }
@@ -51,14 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                border-bottom: 1px solid #e5e7eb;
+                border-bottom: 1px solid #E2E8F0;
                 padding-bottom: 14px;
                 margin-bottom: 18px;
             }
             .modal-pa-header h2 {
                 margin: 0;
                 font-size: 18px;
-                color: #111827;
+                color: #0F172A;
                 display: flex;
                 align-items: center;
                 gap: 8px;
@@ -69,17 +70,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 border: none;
                 font-size: 24px;
                 cursor: pointer;
-                color: #6b7280;
+                color: #64748B;
                 line-height: 1;
+                padding: 2px 6px;
+                border-radius: 4px;
+                transition: all 0.2s ease;
             }
-            .modal-pa-close:hover { color: #111827; }
+            .modal-pa-close:hover { 
+                color: #EF4444; 
+                background: #FEE2E2; 
+            }
             .pa-step-badge {
                 display: inline-flex;
                 align-items: center;
                 padding: 4px 10px;
                 border-radius: 20px;
-                background: #EEF2FF;
-                color: #4F46E5;
+                background: rgba(234, 179, 8, 0.15);
+                color: #B45309;
                 font-size: 12px;
                 font-weight: 700;
                 margin-bottom: 12px;
@@ -91,22 +98,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 display: block;
                 font-size: 13px;
                 font-weight: 600;
-                color: #374151;
+                color: #334155;
                 margin-bottom: 5px;
             }
             .pa-form-group input, .pa-form-group select {
                 width: 100%;
                 padding: 10px 12px;
-                border: 1px solid #d1d5db;
+                border: 1px solid #CBD5E1;
                 border-radius: 8px;
-                font-size: 14px;
+                font-size: 13.5px;
                 box-sizing: border-box;
                 transition: border-color 0.2s, box-shadow 0.2s;
+                font-family: inherit;
             }
             .pa-form-group input:focus, .pa-form-group select:focus {
                 outline: none;
-                border-color: var(--primary, #0A4D68);
-                box-shadow: 0 0 0 3px rgba(10, 77, 104, 0.15);
+                border-color: #0A1628;
+                box-shadow: 0 0 0 3px rgba(10, 22, 40, 0.1);
             }
             .pa-alert {
                 padding: 12px;
@@ -115,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 line-height: 1.4;
                 margin-bottom: 16px;
             }
-            .pa-alert-info { background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+            .pa-alert-info { background: #F8FAFC; color: #0A1628; border: 1px solid #CBD5E1; }
             .pa-alert-warning { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
             .pa-alert-error { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
             .pa-alert-success { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
@@ -124,19 +132,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 padding: 12px;
                 border-radius: 8px;
                 border: none;
-                background: var(--primary, #0A4D68);
-                color: #fff;
+                background: #0A1628;
+                color: #FFFFFF;
                 font-weight: 700;
                 font-size: 14px;
                 cursor: pointer;
-                transition: opacity 0.2s;
+                transition: all 0.2s ease;
                 margin-top: 8px;
+                box-shadow: 0 4px 14px rgba(10, 22, 40, 0.25);
             }
-            .pa-btn:hover { opacity: 0.9; }
-            .pa-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+            .pa-btn:hover { 
+                background: #1E293B;
+                transform: translateY(-1px);
+                box-shadow: 0 6px 18px rgba(10, 22, 40, 0.35);
+            }
+            .pa-btn:disabled { 
+                opacity: 0.6; 
+                cursor: not-allowed; 
+                transform: none; 
+                box-shadow: none;
+            }
             .pa-user-highlight {
-                background: #F3F4F6;
-                border: 1px dashed #9CA3AF;
+                background: #F8FAFC;
+                border: 1px dashed #CBD5E1;
                 padding: 10px 14px;
                 border-radius: 8px;
                 display: flex;
@@ -144,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 align-items: center;
                 margin-bottom: 14px;
             }
-            .pa-user-highlight span { font-weight: 800; color: #111827; font-size: 15px; }
+            .pa-user-highlight span { font-weight: 800; color: #0F172A; font-size: 15px; }
         `;
         document.head.appendChild(style);
     }

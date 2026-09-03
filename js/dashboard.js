@@ -37,18 +37,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Saudação & Data Atual
+    const hora = new Date().getHours();
+    const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+    const nomePrimeiro = usuario.nome?.split(' ')[0] || 'Ailton';
+    const textoSaudacao = `${saudacao}, ${nomePrimeiro}!`;
+    const textoData = new Date().toLocaleDateString('pt-BR', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+    });
+
     const saudacaoEl = document.getElementById('saudacaoDashboard');
-    if (saudacaoEl) {
-        const hora = new Date().getHours();
-        const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-        saudacaoEl.textContent = `${saudacao}, ${usuario.nome?.split(' ')[0] || 'usuário'}! 👋`;
-    }
+    if (saudacaoEl) saudacaoEl.textContent = textoSaudacao;
 
     const dataEl = document.getElementById('dataAtual');
-    if (dataEl) {
-        dataEl.textContent = new Date().toLocaleDateString('pt-BR', {
-            weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
-        });
+    if (dataEl) dataEl.textContent = textoData;
+
+    const topGreetingEl = document.getElementById('topBarUserGreeting');
+    if (topGreetingEl) topGreetingEl.textContent = textoSaudacao;
+
+    const topDateEl = document.getElementById('topBarSubDate');
+    if (topDateEl) topDateEl.textContent = textoData;
+
+    // Avatar
+    const avatarEl = document.getElementById('userAvatarCircle');
+    if (avatarEl && usuario.nome) {
+        const nomes = usuario.nome.trim().split(' ');
+        const iniciais = (nomes.length > 1 ? nomes[0][0] + nomes[nomes.length - 1][0] : nomes[0].substring(0, 2)).toUpperCase();
+        avatarEl.textContent = iniciais;
     }
 
     // =====================================================
@@ -89,37 +103,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =====================================================
     async function carregarDashboard() {
         try {
-            // 1. Carregar contagem de clientes ativos
-            const { count: totalClientes, error: errorClientes } = await supabaseClient
-                .from('clientes')
-                .select('id', { count: 'exact', head: true })
-                .eq('ativo', true);
-            
-            document.getElementById('kpiTotalClientes').textContent = totalClientes !== null ? totalClientes : 0;
+            // 1. Carregar contagem de clientes com tratamento seguro
+            try {
+                const { count: totalClientes, error: errorClientes } = await supabaseClient
+                    .from('clientes')
+                    .select('id', { count: 'exact', head: true });
+                
+                const kpiClientesEl = document.getElementById('kpiTotalClientes');
+                if (kpiClientesEl) {
+                    kpiClientesEl.textContent = (totalClientes !== null && totalClientes !== undefined) ? totalClientes : 0;
+                }
+            } catch (e) {
+                console.warn('Aviso ao carregar contagem de clientes:', e);
+            }
 
             // 2. Carregar todas as vendas não canceladas (respeitando a permissão de ver vendas de outros)
-            const verOutros = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
-            let querySaidas = supabaseClient
-                .from('saidas')
-                .select('*')
-                .eq('cancelado', false);
-            
-            if (!verOutros && usuario?.id) {
-                querySaidas = querySaidas.eq('usuario_id', usuario.id);
-            }
-            
-            const { data: saidasData, error: errorSaidas } = await querySaidas;
+            try {
+                const verOutros = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
+                let querySaidas = supabaseClient
+                    .from('saidas')
+                    .select('*');
+                
+                if (!verOutros && usuario?.id) {
+                    querySaidas = querySaidas.eq('usuario_id', usuario.id);
+                }
+                
+                const { data: saidasData, error: errorSaidas } = await querySaidas;
 
-            if (errorSaidas) throw errorSaidas;
-            vendas = saidasData || [];
+                if (!errorSaidas && saidasData) {
+                    // Filtrar no cliente para garantir que vendas canceladas sejam ignoradas
+                    vendas = saidasData.filter(v => v.cancelado !== true);
+                } else {
+                    console.warn('Aviso na busca de saídas:', errorSaidas);
+                    vendas = [];
+                }
+            } catch (e) {
+                console.warn('Erro ao carregar saídas:', e);
+                vendas = [];
+            }
 
             // 3. Processar métricas de faturamento e ticket médio
             processarMetricasFaturamento();
 
-            // 4. Carregar e preencher as últimas compras (Entradas)
+            // 4. Carregar e preencher as últimas compras (Entradas) de forma isolada
             await carregarEntradasRecentes();
 
-            // 5. Carregar e preencher o Ranking Top 20 Produtos
+            // 5. Carregar e preencher o Ranking Top 20 Produtos de forma isolada
             await carregarRankingProdutos();
 
             // 6. Inicializar Gráficos
@@ -127,7 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             inicializarGraficoMovimentoDiario();
 
         } catch (error) {
-            console.error('Erro ao processar dados do dashboard:', error);
+            console.error('Erro geral ao processar dados do dashboard:', error);
             mostrarNotificacao('Erro ao carregar dados do Dashboard', 'error');
         }
     }
@@ -161,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let somaFaturamentoTotal = 0;
 
         vendas.forEach(v => {
-            const valor = v.total || 0;
+            const valor = Number(v.total) || 0;
             const dataVenda = parseDateLocal(v.data);
 
             somaFaturamentoTotal += valor;
@@ -183,11 +212,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Ticket Médio = Faturamento Total / Quantidade de Vendas
         const ticketMedio = vendas.length > 0 ? (somaFaturamentoTotal / vendas.length) : 0;
 
-        document.getElementById('kpiVendasHoje').textContent = fmt(totalHoje);
-        document.getElementById('kpiVendasSemana').textContent = fmt(totalSemana);
-        document.getElementById('kpiVendasMes').textContent = fmt(totalMes);
-        document.getElementById('kpiVendasAno').textContent = fmt(totalAno);
-        document.getElementById('kpiTicketMedio').textContent = fmt(ticketMedio);
+        const elHoje = document.getElementById('kpiVendasHoje');
+        const elSemana = document.getElementById('kpiVendasSemana');
+        const elMes = document.getElementById('kpiVendasMes');
+        const elAno = document.getElementById('kpiVendasAno');
+        const elTicket = document.getElementById('kpiTicketMedio');
+
+        if (elHoje) elHoje.textContent = fmt(totalHoje);
+        if (elSemana) elSemana.textContent = fmt(totalSemana);
+        if (elMes) elMes.textContent = fmt(totalMes);
+        if (elAno) elAno.textContent = fmt(totalAno);
+        if (elTicket) elTicket.textContent = fmt(ticketMedio);
     }
 
     // =====================================================
@@ -212,36 +247,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         const labels = Object.keys(faturamentoMensal);
         const dataValues = Object.values(faturamentoMensal);
 
-        // Se não houver dados, exibir placeholder
+        // Se não houver dados, exibir placeholder elegante
         if (labels.length === 0) {
-            labels.push('Sem Dados');
+            const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            labels.push(mesAtual);
             dataValues.push(0);
         }
 
         const ctx = canvas.getContext('2d');
         const gradient = ctx.createLinearGradient(0, 0, 0, 240);
-        gradient.addColorStop(0, 'rgba(10, 77, 104, 0.35)');
-        gradient.addColorStop(1, 'rgba(10, 77, 104, 0.00)');
+        gradient.addColorStop(0, '#EAB308');
+        gradient.addColorStop(1, '#CA8A04');
 
         if (chartSaidasAcumuladas) chartSaidasAcumuladas.destroy();
 
         chartSaidasAcumuladas = new Chart(canvas, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
                     label: 'Faturamento Mensal',
                     data: dataValues,
-                    borderColor: '#0A4D68',
-                    borderWidth: 3.5,
                     backgroundColor: gradient,
-                    fill: true,
-                    tension: 0.45,
-                    pointBackgroundColor: '#1D789B',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    pointRadius: 5,
-                    pointHoverRadius: 7
+                    borderRadius: 8,
+                    borderSkipped: false
                 }]
             },
             options: {
@@ -322,21 +351,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const canvas = document.getElementById('chartMovimentoDiario');
         if (chartMovDiario) chartMovDiario.destroy();
 
-        const ctx = canvas.getContext('2d');
-        const gradientBar = ctx.createLinearGradient(0, 0, 0, 240);
-        gradientBar.addColorStop(0, '#0A4D68');
-        gradientBar.addColorStop(1, '#1D789B');
-
         chartMovDiario = new Chart(canvas, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: labels,
                 datasets: [{
                     label: 'Faturamento do Dia',
                     data: dataValues,
-                    backgroundColor: gradientBar,
-                    borderRadius: 6,
-                    borderSkipped: false
+                    borderColor: '#CA8A04',
+                    borderWidth: 2.5,
+                    backgroundColor: 'rgba(234, 179, 8, 0.08)',
+                    fill: false,
+                    tension: 0.2,
+                    pointBackgroundColor: '#EAB308',
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
                 }]
             },
             options: {
@@ -375,26 +406,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!container) return;
 
         try {
-            // Buscar itens vendidos e suas vendas correspondentes (respeitando permissões)
-            const { data: itensData, error } = await supabaseClient
-                .from('saida_itens')
-                .select('quantidade, subtotal, produto_id, produtos(nome, codigo), saidas(cancelado, usuario_id)');
+            if (!vendas || vendas.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--gray);">Nenhuma venda registrada até o momento.</div>';
+                return;
+            }
 
-            if (error) throw error;
+            const idsValidos = vendas.map(v => v.id).filter(Boolean);
+            if (idsValidos.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--gray);">Nenhuma venda registrada até o momento.</div>';
+                return;
+            }
 
-            // Filtrar apenas itens de vendas ativas (cancelado = false)
-            const verOutrosRank = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
-            const itensVendasAtivas = (itensData || []).filter(item => {
-                if (!item.saidas || item.saidas.cancelado === true) return false;
-                if (!verOutrosRank && usuario?.id && item.saidas.usuario_id !== usuario.id) return false;
-                return true;
-            });
+            // Buscar itens das vendas válidas
+            let itensData = [];
+            try {
+                const res = await supabaseClient
+                    .from('saida_itens')
+                    .select('quantidade, subtotal, produto_id, produtos(id, nome, codigo)')
+                    .in('saida_id', idsValidos.slice(0, 300));
+                
+                if (!res.error && res.data) {
+                    itensData = res.data;
+                } else {
+                    // Fallback sem join
+                    const fallbackRes = await supabaseClient
+                        .from('saida_itens')
+                        .select('quantidade, subtotal, produto_id')
+                        .in('saida_id', idsValidos.slice(0, 300));
+                    if (fallbackRes.data) itensData = fallbackRes.data;
+                }
+            } catch (errQ) {
+                console.warn('Erro ao consultar saida_itens:', errQ);
+            }
+
+            if (!itensData || itensData.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--gray);">Nenhum produto vendido até o momento.</div>';
+                return;
+            }
 
             // Agrupar estatísticas por produto
             const rankingMap = {};
-            itensVendasAtivas.forEach(item => {
-                const prodId = item.produto_id;
-                const nome = item.produtos?.nome || 'Produto Não Cadastrado';
+            itensData.forEach(item => {
+                const prodId = item.produto_id || 'item';
+                const nome = item.produtos?.nome || ('Produto #' + prodId);
                 const codigo = item.produtos?.codigo || prodId;
 
                 if (!rankingMap[prodId]) {
@@ -405,8 +459,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         faturamentoGerado: 0
                     };
                 }
-                rankingMap[prodId].qtdVendida += (item.quantidade || 0);
-                rankingMap[prodId].faturamentoGerado += (item.subtotal || 0);
+                rankingMap[prodId].qtdVendida += (Number(item.quantidade) || 0);
+                rankingMap[prodId].faturamentoGerado += (Number(item.subtotal) || 0);
             });
 
             // Ordenar por quantidade vendida desc e pegar os top 20
@@ -446,8 +500,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
 
         } catch (error) {
-            console.error('Erro ao montar ranking de produtos:', error);
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--danger);">Erro ao carregar o ranking de produtos</div>';
+            console.warn('Aviso ao montar ranking de produtos:', error);
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--gray);">Nenhum dado de ranking disponível.</div>';
         }
     }
 
@@ -460,19 +514,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Ocultar card de entradas se o usuário não tiver permissão
         if (typeof temPermissao === 'function' && !temPermissao('entradas', 'ver')) {
-            const card = tbody.closest('.dashboard-card');
+            const card = tbody.closest('.dashboard-list-card') || tbody.closest('.dashboard-card');
             if (card) card.style.display = 'none';
             return;
         }
 
         try {
-            const { data: entradasData, error } = await supabaseClient
-                .from('entradas')
-                .select('*, clientes:fornecedor_id(nome)')
-                .order('id', { ascending: false })
-                .limit(10);
+            let entradasData = [];
+            try {
+                const res = await supabaseClient
+                    .from('entradas')
+                    .select('*, clientes:fornecedor_id(nome)')
+                    .order('id', { ascending: false })
+                    .limit(10);
 
-            if (error) throw error;
+                if (!res.error && res.data) {
+                    entradasData = res.data;
+                } else {
+                    const fallbackRes = await supabaseClient
+                        .from('entradas')
+                        .select('*')
+                        .order('id', { ascending: false })
+                        .limit(10);
+                    if (fallbackRes.data) entradasData = fallbackRes.data;
+                }
+            } catch (errE) {
+                console.warn('Erro na busca de entradas:', errE);
+            }
 
             if (!entradasData || entradasData.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray);">Nenhuma nota de entrada registrada.</td></tr>';
@@ -483,7 +551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const obs = e.observacao || '';
                 const numMatch = obs.match(/Nota:\s*([^\s|]+)/);
                 const serieMatch = obs.match(/Série:\s*([^\s|]+)/);
-                const numeroNota = numMatch ? numMatch[1] : '-';
+                const numeroNota = numMatch ? numMatch[1] : (e.id ? '#' + e.id : '-');
                 const serieNota = serieMatch ? serieMatch[1] : '-';
 
                 return `
@@ -501,8 +569,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
 
         } catch (error) {
-            console.error('Erro ao carregar entradas do painel:', error);
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger);">Erro ao carregar entradas</td></tr>';
+            console.warn('Aviso ao carregar entradas do painel:', error);
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray);">Nenhuma entrada disponível.</td></tr>';
         }
     }
 

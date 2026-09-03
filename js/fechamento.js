@@ -223,57 +223,78 @@ async function exibirCaixaAberto(caixa) {
 
 async function carregarVendasCaixa(caixa) {
     try {
-        let queryVendas = supabaseClient.from('saidas').select('*').eq('cancelado', false);
-        
-        let vendas = [];
-        let useDateFallback = false;
-        
+        // 1. Buscar vendas da loja
+        let todasSaidas = [];
         try {
-            const { data, error } = await queryVendas.eq('caixa_id', caixa.id);
-            if (error) {
-                if (error.code === 'PGRST116' || error.message.includes('caixa_id')) {
-                    useDateFallback = true;
-                } else {
-                    throw error;
-                }
-            } else {
-                vendas = data || [];
-            }
-        } catch (err) {
-            useDateFallback = true;
-        }
-        
-        if (useDateFallback) {
-            // Filtrar vendas onde data_finalizacao >= data_abertura
             const { data, error } = await supabaseClient
                 .from('saidas')
-                .select('*')
-                .eq('cancelado', false)
-                .gte('data_finalizacao', caixa.data_abertura);
-            if (error) throw error;
-            vendas = data || [];
+                .select('*');
+            if (!error && data) {
+                todasSaidas = data;
+            } else if (error) {
+                console.warn('Erro ao consultar saidas:', error);
+            }
+        } catch (errQ) {
+            console.warn('Erro de rede/query em saidas:', errQ);
         }
 
-        // Carregar despesas do período do caixa
+        // 2. Filtrar vendas pertencentes a este caixa
+        const dataAbertura = new Date(caixa.data_abertura);
+        const dataFechamento = caixa.data_fechamento ? new Date(caixa.data_fechamento) : null;
+        const dataAberturaStr = caixa.data_abertura ? caixa.data_abertura.substring(0, 10) : '';
+
+        const vendas = todasSaidas.filter(v => {
+            if (v.cancelado === true) return false;
+            
+            // Vínculo explícito por caixa_id
+            if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixa.id)) {
+                return true;
+            }
+            
+            // Se caixa_id for nulo ou ausente, validar por período/data
+            if (!v.caixa_id) {
+                const dtVenda = v.data_finalizacao ? new Date(v.data_finalizacao) : (v.created_at ? new Date(v.created_at) : null);
+                if (dtVenda && !isNaN(dtVenda.getTime())) {
+                    if (dtVenda >= dataAbertura && (!dataFechamento || dtVenda <= dataFechamento)) {
+                        return true;
+                    }
+                }
+                if (v.data && dataAberturaStr) {
+                    const str = String(v.data).substring(0, 10);
+                    if (str === dataAberturaStr) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+
+        // 3. Carregar despesas do período do caixa
         let despesas = [];
         try {
-            let queryDespesas = supabaseClient
+            const { data: despesasData, error: despesasError } = await supabaseClient
                 .from('despesas')
-                .select('*')
-                .gte('created_at', caixa.data_abertura);
-            if (caixa.data_fechamento) {
-                queryDespesas = queryDespesas.lte('created_at', caixa.data_fechamento);
-            }
-            const { data: despesasData, error: despesasError } = await queryDespesas;
-            if (!despesasError) {
-                despesas = despesasData || [];
+                .select('*');
+            if (!despesasError && despesasData) {
+                despesas = despesasData.filter(d => {
+                    const dt = d.data_pagamento ? new Date(d.data_pagamento) : (d.created_at ? new Date(d.created_at) : (d.data ? new Date(d.data) : null));
+                    if (dt && !isNaN(dt.getTime())) {
+                        if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) {
+                            return true;
+                        }
+                    }
+                    if (d.data && dataAberturaStr && String(d.data).substring(0, 10) === dataAberturaStr) {
+                        return true;
+                    }
+                    return false;
+                });
             }
         } catch (e) {
             console.warn('Erro ao carregar despesas do caixa:', e);
         }
-        const totalDespesas = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+        const totalDespesas = despesas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
         
-        // Calcular totais
+        // 4. Calcular totais
         let totalVendas = 0;
         let totalDescontos = 0;
         let totalItens = 0;
@@ -283,59 +304,76 @@ async function carregarVendasCaixa(caixa) {
         const vendaIds = [];
         
         vendas.forEach(v => {
-            totalVendas += v.total || 0;
-            totalDescontos += v.desconto || 0;
+            const valTotal = Number(v.total) || 0;
+            const valDesc = Number(v.desconto) || 0;
+            totalVendas += valTotal;
+            totalDescontos += valDesc;
             vendaIds.push(v.id);
             
             // Agrupar por forma de pagamento
-            const fp = v.forma_pagamento || 'Não Informado';
-            formasPagamento[fp] = (formasPagamento[fp] || 0) + (v.total || 0);
+            const fp = v.forma_pagamento || 'Outro / Não Informado';
+            formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
             
             if (fp.toLowerCase().includes('dinheiro')) {
-                dinheiroVendas += v.total || 0;
+                dinheiroVendas += valTotal;
             }
         });
         
         // Exibir KPIs
-        document.getElementById('kpiVendasDia').textContent = formatarMoeda(totalVendas);
-        if (document.getElementById('kpiDespesasDia')) {
-            document.getElementById('kpiDespesasDia').textContent = formatarMoeda(totalDespesas);
-        }
-        document.getElementById('kpiTotalCaixa').textContent = formatarMoeda(caixa.saldo_inicial + totalVendas - totalDespesas);
-        document.getElementById('kpiDescontos').textContent = formatarMoeda(totalDescontos);
+        const elVendasDia = document.getElementById('kpiVendasDia');
+        const elDespesasDia = document.getElementById('kpiDespesasDia');
+        const elTotalCaixa = document.getElementById('kpiTotalCaixa');
+        const elDescontos = document.getElementById('kpiDescontos');
+        const elSaldoFinal = document.getElementById('saldoFinal');
+
+        if (elVendasDia) elVendasDia.textContent = formatarMoeda(totalVendas);
+        if (elDespesasDia) elDespesasDia.textContent = formatarMoeda(totalDespesas);
+        if (elTotalCaixa) elTotalCaixa.textContent = formatarMoeda((Number(caixa.saldo_inicial) || 0) + totalVendas - totalDespesas);
+        if (elDescontos) elDescontos.textContent = formatarMoeda(totalDescontos);
         
         // Sugerir saldo final na gaveta (Saldo Inicial + Vendas em Dinheiro - Despesas)
-        const saldoFinalEsperado = caixa.saldo_inicial + dinheiroVendas - totalDespesas;
-        document.getElementById('saldoFinal').value = Math.max(0, saldoFinalEsperado).toFixed(2);
+        const saldoFinalEsperado = (Number(caixa.saldo_inicial) || 0) + dinheiroVendas - totalDespesas;
+        if (elSaldoFinal) elSaldoFinal.value = Math.max(0, saldoFinalEsperado).toFixed(2);
         
-        // Se houver vendas, carregar itens
+        // 5. Carregar itens vendidos com fallback seguro
         let itens = [];
         if (vendaIds.length > 0) {
-            const { data: itensData, error: errorItens } = await supabaseClient
-                .from('saida_itens')
-                .select('*, produtos(*)')
-                .in('saida_id', vendaIds);
+            try {
+                const { data: itensData, error: errorItens } = await supabaseClient
+                    .from('saida_itens')
+                    .select('quantidade, subtotal, produto_id, produtos(nome, categoria)')
+                    .in('saida_id', vendaIds.slice(0, 300));
                 
-            if (errorItens) throw errorItens;
-            itens = itensData || [];
+                if (!errorItens && itensData) {
+                    itens = itensData;
+                } else {
+                    const fallbackRes = await supabaseClient
+                        .from('saida_itens')
+                        .select('quantidade, subtotal, produto_id')
+                        .in('saida_id', vendaIds.slice(0, 300));
+                    if (fallbackRes.data) itens = fallbackRes.data;
+                }
+            } catch (errI) {
+                console.warn('Aviso ao buscar itens para fechamento:', errI);
+            }
         }
         
-        // Calcular total itens
-        itens.forEach(item => {
-            totalItens += item.quantidade || 0;
-        });
-        document.getElementById('kpiItensVendidos').textContent = totalItens;
-        
-        // Agrupar por categoria / plano
+        // Calcular total itens e categorias
         const categorias = {};
         itens.forEach(item => {
-            const cat = item.produtos?.categoria || 'Sem Categoria';
+            const qtd = Number(item.quantidade) || 0;
+            const sub = Number(item.subtotal) || 0;
+            totalItens += qtd;
+            const cat = item.produtos?.categoria || 'Serviços e Produtos';
             if (!categorias[cat]) {
                 categorias[cat] = { qtd: 0, total: 0 };
             }
-            categorias[cat].qtd += item.quantidade || 0;
-            categorias[cat].total += item.subtotal || 0;
+            categorias[cat].qtd += qtd;
+            categorias[cat].total += sub;
         });
+
+        const elItensVendidos = document.getElementById('kpiItensVendidos');
+        if (elItensVendidos) elItensVendidos.textContent = totalItens;
 
         // Guardar para impressão
         dadosVendasAtivo = {
@@ -788,55 +826,65 @@ async function imprimirRelatorioPorCaixa(caixa) {
         }
 
         // 2. Buscar vendas
-        let queryVendas = supabaseClient.from('saidas').select('*').eq('cancelado', false);
-        let vendas = [];
-        let useDateFallback = false;
-        
+        let todasSaidas = [];
         try {
-            const { data, error } = await queryVendas.eq('caixa_id', caixa.id);
-            if (error) {
-                if (error.code === 'PGRST116' || error.message.includes('caixa_id')) {
-                    useDateFallback = true;
-                } else {
-                    throw error;
-                }
-            } else {
-                vendas = data || [];
-            }
-        } catch (err) {
-            useDateFallback = true;
-        }
-        
-        if (useDateFallback) {
-            let q = supabaseClient
+            const { data, error } = await supabaseClient
                 .from('saidas')
-                .select('*')
-                .eq('cancelado', false)
-                .gte('data_finalizacao', caixa.data_abertura);
-            if (caixa.data_fechamento) {
-                q = q.lte('data_finalizacao', caixa.data_fechamento);
+                .select('*');
+            if (!error && data) {
+                todasSaidas = data;
             }
-            const { data, error } = await q;
-            if (error) throw error;
-            vendas = data || [];
+        } catch (errQ) {
+            console.warn('Erro ao buscar saidas para impressão:', errQ);
         }
+
+        const dataAbertura = new Date(caixa.data_abertura);
+        const dataFechamento = caixa.data_fechamento ? new Date(caixa.data_fechamento) : null;
+        const dataAberturaStr = caixa.data_abertura ? caixa.data_abertura.substring(0, 10) : '';
+
+        const vendas = todasSaidas.filter(v => {
+            if (v.cancelado === true) return false;
+            if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixa.id)) {
+                return true;
+            }
+            if (!v.caixa_id) {
+                const dtVenda = v.data_finalizacao ? new Date(v.data_finalizacao) : (v.created_at ? new Date(v.created_at) : null);
+                if (dtVenda && !isNaN(dtVenda.getTime())) {
+                    if (dtVenda >= dataAbertura && (!dataFechamento || dtVenda <= dataFechamento)) {
+                        return true;
+                    }
+                }
+                if (v.data && dataAberturaStr && String(v.data).substring(0, 10) === dataAberturaStr) {
+                    return true;
+                }
+            }
+            return false;
+        });
 
         // Buscar despesas para impressão histórica
         let despesas = [];
         try {
-            let qDesp = supabaseClient
+            const { data: despesasData, error: errorDespesas } = await supabaseClient
                 .from('despesas')
-                .select('*')
-                .gte('created_at', caixa.data_abertura);
-            if (caixa.data_fechamento) {
-                qDesp = qDesp.lte('created_at', caixa.data_fechamento);
+                .select('*');
+            if (!errorDespesas && despesasData) {
+                despesas = despesasData.filter(d => {
+                    const dt = d.data_pagamento ? new Date(d.data_pagamento) : (d.created_at ? new Date(d.created_at) : (d.data ? new Date(d.data) : null));
+                    if (dt && !isNaN(dt.getTime())) {
+                        if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) {
+                            return true;
+                        }
+                    }
+                    if (d.data && dataAberturaStr && String(d.data).substring(0, 10) === dataAberturaStr) {
+                        return true;
+                    }
+                    return false;
+                });
             }
-            const { data: despesasData, error: errorDespesas } = await qDesp;
-            if (!errorDespesas) despesas = despesasData || [];
         } catch (e) {
             console.error('Erro ao buscar despesas para impressão:', e);
         }
-        const totalDespesas = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+        const totalDespesas = despesas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
 
         // 3. Totais e agregação
         let totalVendas = 0;
@@ -846,23 +894,36 @@ async function imprimirRelatorioPorCaixa(caixa) {
         const vendaIds = [];
         
         vendas.forEach(v => {
-            totalVendas += v.total || 0;
-            totalDescontos += v.desconto || 0;
+            const valTotal = Number(v.total) || 0;
+            const valDesc = Number(v.desconto) || 0;
+            totalVendas += valTotal;
+            totalDescontos += valDesc;
             vendaIds.push(v.id);
             
-            const fp = v.forma_pagamento || 'Não Informado';
-            formasPagamento[fp] = (formasPagamento[fp] || 0) + (v.total || 0);
+            const fp = v.forma_pagamento || 'Outro / Não Informado';
+            formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
         });
 
         // 4. Buscar itens
         let itens = [];
         if (vendaIds.length > 0) {
-            const { data: itensData, error: errorItens } = await supabaseClient
-                .from('saida_itens')
-                .select('*, produtos(*)')
-                .in('saida_id', vendaIds);
-            if (errorItens) throw errorItens;
-            itens = itensData || [];
+            try {
+                const { data: itensData, error: errorItens } = await supabaseClient
+                    .from('saida_itens')
+                    .select('quantidade, subtotal, produto_id, serial_id, produtos(nome, categoria)')
+                    .in('saida_id', vendaIds.slice(0, 300));
+                if (!errorItens && itensData) {
+                    itens = itensData;
+                } else {
+                    const fallbackRes = await supabaseClient
+                        .from('saida_itens')
+                        .select('quantidade, subtotal, produto_id, serial_id')
+                        .in('saida_id', vendaIds.slice(0, 300));
+                    if (fallbackRes.data) itens = fallbackRes.data;
+                }
+            } catch (errI) {
+                console.warn('Erro ao buscar itens para relatório:', errI);
+            }
         }
 
         const categorias = {};

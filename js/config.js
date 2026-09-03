@@ -1,6 +1,17 @@
 // js/config.js
 // Configuração do Supabase
 
+// 0. Aplicar tema salvo imediatamente para evitar flash de tela clara
+(function() {
+    try {
+        const savedTheme = localStorage.getItem('aion_theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (document.body) document.body.classList.add('dark-theme');
+        }
+    } catch (e) {}
+})();
+
 // 1. Tentar carregar env.js de forma síncrona se disponível para preencher window.ENV
 try {
     const xhr = new XMLHttpRequest();
@@ -19,6 +30,13 @@ if (activeClientStr) {
     try {
         const activeClient = JSON.parse(activeClientStr);
         if (activeClient && activeClient.supabase?.url && activeClient.supabase?.anonKey) {
+            // Atualizar cor legada #0A4D68 para o novo padrão Modern SaaS #0A1628
+            if (activeClient.branding?.primaryColor === '#0A4D68') {
+                activeClient.branding.primaryColor = '#0A1628';
+                activeClient.branding.primaryDarkColor = '#060D18';
+                activeClient.branding.primaryLightColor = '#1E293B';
+                try { sessionStorage.setItem('active_client', JSON.stringify(activeClient)); } catch(e){}
+            }
             window.ENV = {
                 ...window.ENV,
                 CLIENT_ID: activeClient.clientId,
@@ -38,7 +56,7 @@ if (activeClientStr) {
 }
 
 // Injeção dinâmica de branding/cores se configuradas
-if (window.ENV?.BRANDING?.primaryColor) {
+if (window.ENV?.BRANDING?.primaryColor && window.ENV.BRANDING.primaryColor !== '#0A1628') {
     let style = document.getElementById('dynamic-branding-styles');
     if (!style) {
         style = document.createElement('style');

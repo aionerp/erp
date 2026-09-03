@@ -14,9 +14,9 @@
       "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4"
     },
     "branding": {
-      "primaryColor": "#0A4D68",
-      "primaryDarkColor": "#083F55",
-      "primaryLightColor": "#1D789B"
+      "primaryColor": "#0A1628",
+      "primaryDarkColor": "#060D18",
+      "primaryLightColor": "#1E293B"
     },
     "features": {
       "habilitar_seriais": true,

@@ -353,26 +353,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     let vendasCaixa = [];
                     let despesasCaixa = [];
                     try {
-                        // Buscar vendas vinculadas ao caixa
+                        // 1. Buscar vendas da loja
                         const { data: vData, error: vErr } = await supabaseClient
                             .from('saidas')
-                            .select('total, forma_pagamento, cancelado')
-                            .eq('caixa_id', caixaAtivo.id);
+                            .select('*');
                         
-                        if (vErr) throw vErr;
-                        vendasCaixa = vData || [];
+                        if (!vErr && vData) {
+                            const dataAbertura = new Date(caixaAtivo.data_abertura);
+                            const dataAberturaStr = caixaAtivo.data_abertura ? caixaAtivo.data_abertura.substring(0, 10) : '';
 
-                        // Buscar despesas pagas no período do caixa
+                            vendasCaixa = vData.filter(v => {
+                                if (v.cancelado === true) return false;
+                                if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixaAtivo.id)) {
+                                    return true;
+                                }
+                                if (!v.caixa_id) {
+                                    const dtVenda = v.data_finalizacao ? new Date(v.data_finalizacao) : (v.created_at ? new Date(v.created_at) : null);
+                                    if (dtVenda && !isNaN(dtVenda.getTime()) && dtVenda >= dataAbertura) {
+                                        return true;
+                                    }
+                                    if (v.data && dataAberturaStr && String(v.data).substring(0, 10) === dataAberturaStr) {
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            });
+                        }
+
+                        // 2. Buscar despesas pagas no período do caixa
                         const { data: dData, error: dErr } = await supabaseClient
-                            .from('financeiro')
-                            .select('valor, status')
-                            .eq('loja_id', usuario.loja_id)
-                            .gte('created_at', caixaAtivo.data_abertura);
+                            .from('despesas')
+                            .select('*');
                         
-                        if (dErr) throw dErr;
-                        despesasCaixa = dData || [];
+                        if (!dErr && dData) {
+                            const dataAbertura = new Date(caixaAtivo.data_abertura);
+                            const dataAberturaStr = caixaAtivo.data_abertura ? caixaAtivo.data_abertura.substring(0, 10) : '';
+                            despesasCaixa = dData.filter(d => {
+                                const dt = d.data_pagamento ? new Date(d.data_pagamento) : (d.created_at ? new Date(d.created_at) : (d.data ? new Date(d.data) : null));
+                                if (dt && !isNaN(dt.getTime()) && dt >= dataAbertura) return true;
+                                if (d.data && dataAberturaStr && String(d.data).substring(0, 10) === dataAberturaStr) return true;
+                                return false;
+                            });
+                        }
                     } catch (e) {
-                        console.warn('Erro ao obter dados consolidados:', e);
+                        console.warn('Erro ao obter dados consolidados do caixa:', e);
                     }
 
                     // Processar os valores
@@ -399,9 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     let totalDespesas = 0;
                     despesasCaixa.forEach(d => {
-                        if (d.status === 'pago') {
-                            totalDespesas += parseFloat(d.valor || 0);
-                        }
+                        totalDespesas += parseFloat(d.valor || 0);
                     });
 
                     const saldoInicial = parseFloat(caixaAtivo.saldo_inicial || 0);
@@ -1574,7 +1596,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 observacao:         obsFinal || null,
                 usuario_id:         usuario.id,
                 data_finalizacao:   new Date().toISOString(),
-                caixa_id:           caixaAtivo.id,
+                caixa_id:           caixaAtivo ? caixaAtivo.id : null,
                 colaborador_id:     colabIdVal,
                 comissao_calculada: comissaoCalculada,
                 comissao_paga:      false
