@@ -10,9 +10,9 @@
 
 :root {
     /* ── Paleta de Cores Oficial - Modern SaaS (Gold & Deep Navy) ── */
-    --primary: #0A1628;          /* Azul Profundo (Sidebar) */
-    --primary-dark: #060D18;
-    --primary-light: #1E293B;
+    --primary: #111824;          /* Azul Profundo (Sidebar) */
+    --primary-dark: #0a1525;
+    --primary-light: #152031;
     
     --accent: #EAB308;           /* Dourado / Âmbar */
     --accent-gold: #D4AF37;

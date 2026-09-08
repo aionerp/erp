@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'ordem-servico.html': 'ordens_servico',
         'agendamentos.html': 'dashboard',
         'mesas.html': 'saidas',
+        'promocoes.html': 'saidas',
         'relatorios.html': 'relatorios',
         'usuarios.html': 'usuarios'
     };
@@ -199,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: '💰 Faturamento',
                 items: [
                     { label: labelVendas, href: 'saidas.html', modulo: 'saidas' },
+                    { label: '🎯 Ações Promocionais', href: 'promocoes.html', modulo: 'saidas' },
                     { label: '💵 Fechamento de Caixa', href: 'fechamento.html', modulo: 'saidas' },
                     { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },
                     { label: '💸 Comissões a Pagar', href: 'comissoes.html', modulo: 'relatorios' },
@@ -708,7 +710,7 @@ function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
                 clientes: { ver: true, criar: true, editar: true, excluir: false },
                 produtos: { ver: true, criar: true, editar: true, excluir: false },
                 categorias: { ver: true, criar: false, editar: false, excluir: false },
-                estoque: { ver: true, ajustar: false },
+                estoque: { ver: true, ajustar: true },
                 entradas: { ver: true, criar: true, excluir: false },
                 saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
                 fornecedores: { ver: true, criar: true, editar: true, excluir: false },

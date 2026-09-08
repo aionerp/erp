@@ -110,7 +110,8 @@ function criarClienteSupabase(url, anonKey) {
         let queryBuilder = originalFrom.apply(this, arguments);
         const tablesWithLojaField = [
             'usuarios', 'clientes', 'produtos', 'categorias', 'entradas', 'saidas',
-            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas', 'colaboradores', 'despesas', 'boletos_pagar'
+            'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas', 'colaboradores', 'despesas', 'boletos_pagar',
+            'promocoes', 'promocao_produtos'
         ];
         
         if (tablesWithLojaField.includes(tableName)) {
@@ -369,7 +370,7 @@ function temPermissao(modulo, acao = 'ver') {
                 clientes: { ver: true, criar: true, editar: true, excluir: false },
                 produtos: { ver: true, criar: true, editar: true, excluir: false },
                 categorias: { ver: true, criar: false, editar: false, excluir: false },
-                estoque: { ver: true, ajustar: false },
+                estoque: { ver: true, ajustar: true },
                 entradas: { ver: true, criar: true, excluir: false },
                 saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
                 fornecedores: { ver: true, criar: true, editar: true, excluir: false },

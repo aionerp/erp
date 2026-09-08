@@ -164,6 +164,7 @@ CREATE TABLE public.produtos (
     data_validade DATE,
     lote VARCHAR(100),
     alerta_vencimento_dias INTEGER DEFAULT 30,
+    lotes JSONB DEFAULT '[]'::jsonb,
     
     -- Múltiplos Códigos de Barras
     codigos_barras JSONB DEFAULT '[]'::jsonb,

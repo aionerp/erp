@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -171,6 +171,7 @@
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">💳 PDV / Vendas</a></li>
+                <li><a href="promocoes.html">🎯 Ações Promocionais</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 <li><a href="#">🔧 OS (Sob Pedido)</a></li>
@@ -317,7 +318,7 @@
                         </div>
                         <div class="form-group">
                             <label class="required-label">Valor Venda (R$)</label>
-                            <input type="number" step="0.01" id="valor_venda" required>
+                            <input type="number" step="0.01" min="0.01" id="valor_venda" placeholder="Mínimo 0.01" required>
                         </div>
                     </div>
                     

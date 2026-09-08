@@ -409,6 +409,8 @@ function realizarPreValidacao() {
             }
             if (row.valor_venda && isNaN(parseFloat(row.valor_venda))) {
                 erros.push(`Linha ${row._linha}: Valor de Venda "${row.valor_venda}" inválido (precisa ser numérico).`);
+            } else if (!row.valor_venda || parseFloat(row.valor_venda) < 0.01) {
+                erros.push(`Linha ${row._linha}: Preço de Venda nunca pode ser zero (mínimo R$ 0,01).`);
             }
             if (row.estoque_total && isNaN(parseInt(row.estoque_total))) {
                 erros.push(`Linha ${row._linha}: Estoque Total "${row.estoque_total}" inválido (precisa ser um número inteiro).`);
@@ -643,6 +645,9 @@ async function processarImportacaoProduto(row) {
 
     const valorCompra = parseFloat(row.valor_compra) || 0;
     const valorVenda = parseFloat(row.valor_venda) || 0;
+    if (valorVenda < 0.01) {
+        throw new Error(`Preço de Venda do produto "${row.nome}" não pode ser zero (mínimo R$ 0,01)`);
+    }
     const estoqueMinimo = parseInt(row.estoque_minimo) || 5;
     const estoqueTotal = parseInt(row.estoque_total) || 0;
     const garantiaDias = parseInt(row.garantia_dias) || 0;

@@ -668,6 +668,12 @@ document.addEventListener('DOMContentLoaded', () => {
             mostrarNotificacao('Preencha código e nome do produto!', 'error');
             return;
         }
+
+        if (isNaN(dadosProduto.valor_venda) || dadosProduto.valor_venda < 0.01) {
+            mostrarNotificacao('O preço de venda do item nunca pode ser zero. O preço mínimo permitido é R$ 0,01.', 'error');
+            document.getElementById('valor_venda')?.focus();
+            return;
+        }
         
         try {
             if (id) {

@@ -44,6 +44,113 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =====================================================
+    // CONTROLE DE LOTES E VALIDADE (AUXILIARES)
+    // =====================================================
+
+    function salvarLotesLocal(produtoId, lotes) {
+        try {
+            if (!produtoId || !Array.isArray(lotes)) return;
+            localStorage.setItem(`aion_lotes_prod_${produtoId}`, JSON.stringify(lotes));
+        } catch (e) {
+            console.warn('Aviso: erro ao salvar lotes no localStorage:', e);
+        }
+    }
+
+    function obterLotesLocal(produtoId) {
+        try {
+            if (!produtoId) return null;
+            const item = localStorage.getItem(`aion_lotes_prod_${produtoId}`);
+            if (!item) return null;
+            const parsed = JSON.parse(item);
+            return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function sincronizarLotesComEstoqueTotal(lotes, estoqueTotal) {
+        if (!Array.isArray(lotes) || lotes.length === 0) return lotes;
+        const totalLotes = lotes.reduce((sum, l) => sum + (parseInt(l.quantidade) || 0), 0);
+        const diff = (parseInt(estoqueTotal) || 0) - totalLotes;
+        if (diff !== 0) {
+            const loteAjustar = lotes.find(l => (parseInt(l.quantidade) || 0) + diff >= 0) || lotes[0];
+            if (loteAjustar) {
+                loteAjustar.quantidade = Math.max(0, (parseInt(loteAjustar.quantidade) || 0) + diff);
+            }
+        }
+        return lotes;
+    }
+
+    function obterLotesProdutoSaidas(produto) {
+        if (!produto) return [];
+        if (Array.isArray(produto.lotes) && produto.lotes.length > 0) {
+            return produto.lotes.map(l => ({
+                lote: String(l.lote || '').trim(),
+                data_validade: l.data_validade || '',
+                quantidade: (l.quantidade !== undefined && l.quantidade !== null) ? parseInt(l.quantidade) : 0,
+                alerta_vencimento_dias: parseInt(l.alerta_vencimento_dias) || 30
+            })).filter(l => l.lote || l.data_validade);
+        }
+
+        const local = obterLotesLocal(produto.id);
+        if (Array.isArray(local) && local.length > 0) {
+            const estoque = parseInt(produto.estoque_total || produto.estoque) || 0;
+            const sincronizados = sincronizarLotesComEstoqueTotal(local, estoque);
+            produto.lotes = sincronizados;
+            return sincronizados.map(l => ({
+                lote: String(l.lote || '').trim(),
+                data_validade: l.data_validade || '',
+                quantidade: (l.quantidade !== undefined && l.quantidade !== null) ? parseInt(l.quantidade) : 0,
+                alerta_vencimento_dias: parseInt(l.alerta_vencimento_dias) || 30
+            })).filter(l => l.lote || l.data_validade);
+        }
+
+        if (produto.lote || produto.data_validade) {
+            return [{
+                lote: String(produto.lote || 'LOTE-PADRAO').trim(),
+                data_validade: produto.data_validade || '',
+                quantidade: parseInt(produto.estoque_total || produto.estoque) || 0,
+                alerta_vencimento_dias: parseInt(produto.alerta_vencimento_dias) || 30
+            }];
+        }
+        return [];
+    }
+
+    function calcularStatusValidadeSaidas(dataValidade, alertaDias = 30) {
+        if (!dataValidade) return { dataFormatada: '-', badge: '', diffDays: 999 };
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const [ano, mes, dia] = dataValidade.split('-').map(Number);
+        const dataVal = new Date(ano, mes - 1, dia);
+        const diffTime = dataVal - hoje;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const dataFormatada = dataValidade.split('-').reverse().join('/');
+
+        if (diffDays < 0) {
+            return {
+                dataFormatada,
+                diffDays,
+                status: 'vencido',
+                badge: `<span style="background:#fee2e2; color:#991b1b; font-size:10px; padding:1px 6px; border-radius:4px; font-weight:700; display:inline-block;">🔴 Vencido (${Math.abs(diffDays)}d)</span>`
+            };
+        } else if (diffDays <= alertaDias) {
+            return {
+                dataFormatada,
+                diffDays,
+                status: 'alerta',
+                badge: `<span style="background:#fef3c7; color:#92400e; font-size:10px; padding:1px 6px; border-radius:4px; font-weight:700; display:inline-block;">⚠️ Vence em ${diffDays}d</span>`
+            };
+        } else {
+            return {
+                dataFormatada,
+                diffDays,
+                status: 'normal',
+                badge: `<span style="background:#dcfce7; color:#166534; font-size:10px; padding:1px 6px; border-radius:4px; font-weight:700; display:inline-block;">🟢 ${diffDays}d</span>`
+            };
+        }
+    }
+
+    // =====================================================
     // AUTENTICAÇÃO
     // =====================================================
 
@@ -90,8 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let carrinho = [];
     let formaPagamentoSelecionada = null;
     let produtoSerialPendente = null;
+    let produtoLotePendente = null;
     let seriaisDisponiveis = [];
     let searchTimer = null;
+    let promocoesVigentes = [];
+    let produtosPromocaoVigentes = [];
 
     // =====================================================
     // CARREGAR DADOS
@@ -99,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //    .neq('ativo', false) para incluir produtos com ativo=null
     // =====================================================
 
-    async function carregarDados() {
+    async function carregarDados(novoIdDestaque = null) {
         try {
             const [produtosRes, clientesRes, configRes, vendasRes, categoriasRes] = await Promise.all([
                 supabaseClient
@@ -127,7 +237,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     .then(res => res, err => ({ data: [], error: err }))
             ]);
 
-            produtos   = produtosRes.data  || [];
+            produtos   = (produtosRes.data || []).map(p => {
+                if (!Array.isArray(p.lotes) || p.lotes.length === 0) {
+                    const local = obterLotesLocal(p.id);
+                    if (Array.isArray(local) && local.length > 0) {
+                        const estoque = parseInt(p.estoque_total || p.estoque) || 0;
+                        p.lotes = sincronizarLotesComEstoqueTotal(local, estoque);
+                    }
+                } else {
+                    salvarLotesLocal(p.id, p.lotes);
+                }
+                return p;
+            });
             clientes   = clientesRes.data  || [];
             configLoja = configRes.data?.[0] || {};
             categorias = (categoriasRes && categoriasRes.data) || [];
@@ -164,7 +285,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inputProd) {
                 inputProd.placeholder = `🔍 Informe o cód. de barras, código ou serial (${produtos.length} produtos disponíveis)...`;
             }
-            renderizarVendas(vendasRes.data || []);
+            // Carregar Ações Promocionais Vigentes e Produtos Participantes
+            try {
+                if (window.PromocoesAPI) {
+                    promocoesVigentes = await window.PromocoesAPI.obterPromocoesVigentes();
+                    const vinculosPromises = promocoesVigentes.map(p => window.PromocoesAPI.listarProdutosPromocao(p.id));
+                    const vinculosArray = await Promise.all(vinculosPromises);
+                    produtosPromocaoVigentes = vinculosArray.flat().filter(v => v.ativo !== false);
+                }
+            } catch (promoErr) {
+                console.warn('Erro ao carregar promoções ativas para o PDV:', promoErr);
+                promocoesVigentes = [];
+                produtosPromocaoVigentes = [];
+            }
+
+            renderizarVendas(vendasRes.data || [], novoIdDestaque);
 
             // === VERIFICAR STATUS DO CAIXA DIÁRIO ===
             let caixaAtivo = null;
@@ -790,11 +925,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<br><small style="color:#2563eb;font-weight:600;">🔢 Serial/IMEI: ${p._serialMatch}</small>`
                 : '';
 
+            const vinculo = produtosPromocaoVigentes.find(v => v.produto_id === p.id);
+            const promo = vinculo ? promocoesVigentes.find(pr => pr.id === vinculo.promocao_id) : null;
+            const promoBadge = promo ? `<span style="background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:800;border:1px solid #FDE68A;margin-left:5px;">🏷️ ${promo.nome}</span>` : '';
+
             return `
                 <div class="produto-suggestion-item ${bloqueado ? 'sem-estoque' : ''}"
                      ${bloqueado ? '' : `onclick="selecionarSugestaoProduto(${p.id})"`}>
                     <div>
-                        <strong>${p.nome}</strong><br>
+                        <strong>${p.nome}</strong> ${promoBadge}<br>
                         <small>Cód: ${p.codigo || p.id} | ${p.categoria || 'Sem Categoria'} ${estoqueBadge}</small>
                         ${serialBadge}
                     </div>
@@ -926,12 +1065,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZAR VENDAS
     // =====================================================
 
-    function renderizarVendas(vendas) {
+    function renderizarVendas(vendas, novoIdDestaque = null) {
         const tbody = document.getElementById('vendasTableBody');
+        const badgeTotal = document.getElementById('badgeVendasRecentes');
+        
+        if (badgeTotal) {
+            const count = (vendas && vendas.length) || 0;
+            badgeTotal.textContent = `${count} ${count === 1 ? 'venda' : 'vendas'}`;
+        }
+
         if (!tbody) return;
 
         if (!vendas || vendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--gray);">Nenhuma venda encontrada</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:25px;color:var(--gray);">Nenhuma venda recente registrada</td></tr>';
             return;
         }
 
@@ -945,11 +1091,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? '<span class="status-estoque status-critico">❌ Cancelada</span>'
                 : '<span class="status-estoque status-normal">✅ Ativa</span>';
 
+            let nomeCli = v.cliente_nome || v.clientes?.nome;
+            if (!nomeCli && v.observacao && v.observacao.includes('Cliente:')) {
+                const match = v.observacao.match(/Cliente:\s*([^|(\n]+)/);
+                if (match) nomeCli = match[1].trim();
+            }
+            nomeCli = nomeCli || '<span style="color:#9ca3af">Consumidor Final</span>';
+
+            const isRecente = novoIdDestaque && Number(v.id) === Number(novoIdDestaque);
+            const rowClass = isRecente ? 'class="row-nova-venda"' : '';
+            const idCol = isRecente
+                ? `<strong>#${v.id}</strong> <span style="background:#10b981; color:#fff; font-size:10px; padding:2px 6px; border-radius:10px; margin-left:4px; font-weight:700;">🆕 Nova</span>`
+                : `<strong>#${v.id}</strong>`;
+
             return `
-                <tr>
-                    <td><strong>#${v.id}</strong></td>
+                <tr ${rowClass}>
+                    <td>${idCol}</td>
                     <td>${formatarData(v.data)}</td>
-                    <td>${v.cliente_nome || v.clientes?.nome || '<span style="color:#9ca3af">Consumidor Final</span>'}</td>
+                    <td>${nomeCli}</td>
                     <td><strong style="color:var(--primary)">${formatarMoeda(v.total)}</strong></td>
                     <td>${v.forma_pagamento || '—'}</td>
                     <td>${statusHtml}</td>
@@ -1143,9 +1302,119 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalSerial').style.display = 'flex';
             document.getElementById('numeroSerie').focus();
         } else {
-            adicionarAoCarrinho(produto, null);
+            processarAdicaoProduto(produto, null);
         }
     };
+
+    function processarAdicaoProduto(produto, serial) {
+        const lotes = obterLotesProdutoSaidas(produto);
+        if (lotes.length > 0) {
+            const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
+            const isServico = produto.tipo === 'servico';
+
+            // Calcular saldo disponível de cada lote considerando o que já está no carrinho
+            const lotesComSaldo = lotes.map(l => {
+                const noCarrinho = carrinho
+                    .filter(item => item.id === produto.id && item.lote === l.lote)
+                    .reduce((sum, item) => sum + item.quantidade, 0);
+                const saldoRestante = Math.max(0, (parseInt(l.quantidade) || 0) - noCarrinho);
+                return { ...l, saldoDisponivel: saldoRestante };
+            }).filter(l => l.saldoDisponivel > 0);
+
+            if (lotesComSaldo.length > 1) {
+                abrirModalSelecaoLote(produto, serial, lotesComSaldo);
+                return;
+            } else if (lotesComSaldo.length === 1) {
+                adicionarAoCarrinho(produto, serial, lotesComSaldo[0]);
+                return;
+            } else {
+                if (permitirVendaSemSaldo || isServico) {
+                    adicionarAoCarrinho(produto, serial, lotes[0] || null);
+                    return;
+                } else {
+                    mostrarNotificacao('Todos os lotes deste produto estão com saldo esgotado!', 'error');
+                    return;
+                }
+            }
+        } else {
+            adicionarAoCarrinho(produto, serial, null);
+        }
+    }
+
+    function abrirModalSelecaoLote(produto, serial, lotesComSaldo) {
+        produtoLotePendente = { produto, serial, lotes: lotesComSaldo };
+        const nomeEl = document.getElementById('loteProdutoNome');
+        if (nomeEl) nomeEl.value = produto.nome;
+
+        const lotesOrdenados = [...lotesComSaldo].sort((a, b) => {
+            if (!a.data_validade) return 1;
+            if (!b.data_validade) return -1;
+            return new Date(a.data_validade) - new Date(b.data_validade);
+        });
+
+        const container = document.getElementById('listaLotesDisponiveisVenda');
+        if (container) {
+            container.innerHTML = lotesOrdenados.map((l, idx) => {
+                const st = calcularStatusValidadeSaidas(l.data_validade, l.alerta_vencimento_dias);
+                const isPrimeiroFEFO = idx === 0;
+                const badgeFEFO = isPrimeiroFEFO 
+                    ? `<span style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:800; margin-left:4px;">✨ 1º A VENCER (FEFO)</span>` 
+                    : '';
+                const loteEscaped = String(l.lote).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+                return `
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div>
+                            <div style="font-size:13px; font-weight:700; color:#1e293b; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+                                <span>📦 Lote: <strong>${l.lote || '-'}</strong></span>
+                                <span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700;">Saldo: ${l.saldoDisponivel} un</span>
+                                ${badgeFEFO}
+                            </div>
+                            <div style="font-size:12px; color:#64748b; margin-top:4px;">
+                                Validade: <strong>${st.dataFormatada}</strong> ${st.badge}
+                            </div>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="window.selecionarLotePorCodigo('${loteEscaped}')" style="padding:6px 14px; font-size:12px; border-radius:6px; cursor:pointer; font-weight:600; white-space:nowrap;">
+                            Selecionar Lote
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const modalLote = document.getElementById('modalLote');
+        if (modalLote) modalLote.style.display = 'flex';
+    }
+
+    window.selecionarLotePorCodigo = (loteCodigo) => {
+        if (!produtoLotePendente) return;
+        const { produto, serial, lotes } = produtoLotePendente;
+        const loteEscolhido = lotes.find(l => String(l.lote) === String(loteCodigo));
+        if (!loteEscolhido) {
+            mostrarNotificacao('Lote selecionado não encontrado!', 'error');
+            return;
+        }
+        const modalLote = document.getElementById('modalLote');
+        if (modalLote) modalLote.style.display = 'none';
+        const prod = produto;
+        const s = serial;
+        produtoLotePendente = null;
+        adicionarAoCarrinho(prod, s, loteEscolhido);
+    };
+
+    document.getElementById('btnCancelarLote')?.addEventListener('click', () => {
+        const modalLote = document.getElementById('modalLote');
+        if (modalLote) modalLote.style.display = 'none';
+        produtoLotePendente = null;
+    });
+
+    document.querySelectorAll('.close-lote').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modalLote = document.getElementById('modalLote');
+            if (modalLote) modalLote.style.display = 'none';
+            produtoLotePendente = null;
+        });
+    });
 
     window.selecionarSerialPorId = (serialId) => {
         const s = seriaisDisponiveis.find(item => item.id === serialId);
@@ -1153,9 +1422,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = s.numero_serie || s.imei || String(s.id);
             document.getElementById('numeroSerie').value = val;
             if (produtoSerialPendente) {
-                adicionarAoCarrinho(produtoSerialPendente, s);
-                document.getElementById('modalSerial').style.display = 'none';
+                const prod = produtoSerialPendente;
                 produtoSerialPendente = null;
+                document.getElementById('modalSerial').style.display = 'none';
+                processarAdicaoProduto(prod, s);
             }
         }
     };
@@ -1197,11 +1467,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (produtoSerialPendente) {
-            adicionarAoCarrinho(produtoSerialPendente, serialObj || null);
+            const prod = produtoSerialPendente;
+            produtoSerialPendente = null;
+            document.getElementById('modalSerial').style.display = 'none';
+            processarAdicaoProduto(prod, serialObj || null);
+        } else {
+            document.getElementById('modalSerial').style.display = 'none';
         }
-
-        document.getElementById('modalSerial').style.display = 'none';
-        produtoSerialPendente = null;
     });
 
     document.getElementById('btnCancelarSerial')?.addEventListener('click', () => {
@@ -1217,20 +1489,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // CARRINHO
     // =====================================================
 
-    function adicionarAoCarrinho(produto, serial) {
+    function adicionarAoCarrinho(produto, serial, loteEscolhido = null) {
+        const valorOriginal = parseFloat(produto.valor_venda) || 0;
+
+        // REGRA DE NEGÓCIO: O preço de venda nunca pode ser zero (mínimo R$ 0,01)
+        if (valorOriginal < 0.01) {
+            mostrarNotificacao('O preço de venda do produto não pode ser zero. O preço mínimo permitido é R$ 0,01.', 'error');
+            return;
+        }
+
         const estoque = produto.estoque_total ?? produto.estoque ?? 0;
+        const isServico = produto.tipo === 'servico';
+        const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
 
         // Calcular a quantidade total deste produto já adicionada ao carrinho
         const totalNoCarrinho = carrinho
             .filter(item => item.id === produto.id)
             .reduce((sum, item) => sum + item.quantidade, 0);
 
-        const isServico = produto.tipo === 'servico';
-        const permitirVendaSemSaldo = configLoja.permitir_venda_sem_saldo === true;
-
         if (!isServico && !permitirVendaSemSaldo && (totalNoCarrinho + 1 > estoque)) {
             mostrarNotificacao(`Estoque insuficiente! Disponível: ${estoque} (Já no carrinho: ${totalNoCarrinho})`, 'error');
             return;
+        }
+
+        // Validação de saldo específico do lote selecionado
+        if (loteEscolhido && !isServico && !permitirVendaSemSaldo) {
+            const totalDesteLoteNoCarrinho = carrinho
+                .filter(item => item.id === produto.id && item.lote === loteEscolhido.lote)
+                .reduce((sum, item) => sum + item.quantidade, 0);
+            const saldoLote = parseInt(loteEscolhido.quantidade) || 0;
+            if (totalDesteLoteNoCarrinho + 1 > saldoLote) {
+                mostrarNotificacao(`Saldo insuficiente para o lote "${loteEscolhido.lote}"! Disponível: ${saldoLote} (Já no carrinho: ${totalDesteLoteNoCarrinho})`, 'error');
+                return;
+            }
         }
 
         if (serial) {
@@ -1242,8 +1533,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Verificar se o produto faz parte de alguma Ação Promocional vigente
+        let promocaoAplicada = null;
+        let descontoUnitario = 0;
+        let origemDesconto = null;
+        let promocaoId = null;
+
+        const vinculoPromo = produtosPromocaoVigentes.find(v => v.produto_id === produto.id);
+        if (vinculoPromo) {
+            const promo = promocoesVigentes.find(p => p.id === vinculoPromo.promocao_id);
+            if (promo && promo.ativo !== false) {
+                promocaoAplicada = promo;
+                promocaoId = promo.id;
+                origemDesconto = promo.nome; // Ex: "Ação Verão"
+                if (window.PromocoesAPI) {
+                    const calc = window.PromocoesAPI.calcularDescontoItem(valorOriginal, vinculoPromo.tipo_desconto, vinculoPromo.valor_desconto);
+                    descontoUnitario = calc.descontoUnitario || 0;
+                }
+            }
+        }
+
         const itemExistente = carrinho.find(item =>
             item.id === produto.id &&
+            ((!item.lote && !loteEscolhido) || (item.lote && loteEscolhido && item.lote === loteEscolhido.lote)) &&
             (!serial || item.serial === serial?.numero_serie)
         );
 
@@ -1252,23 +1564,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 mostrarNotificacao('Este número de série/IMEI já está no carrinho!', 'error');
                 return;
             }
+            if (loteEscolhido && !isServico && !permitirVendaSemSaldo) {
+                const saldoLote = parseInt(loteEscolhido.quantidade) || 0;
+                if (itemExistente.quantidade + 1 > saldoLote) {
+                    mostrarNotificacao(`Saldo insuficiente para o lote "${loteEscolhido.lote}"! Limite: ${saldoLote}`, 'error');
+                    return;
+                }
+            }
             itemExistente.quantidade++;
+
+            // Recalcular desconto proporcional da promoção se presente
+            if (itemExistente.desconto_unitario && itemExistente.desconto_unitario > 0) {
+                itemExistente.desconto = Math.round(itemExistente.desconto_unitario * itemExistente.quantidade * 100) / 100;
+            }
+
+            // Trava de segurança: garantir preço mínimo de R$ 0,01 por unidade
+            const maxDesconto = Math.max(0, (itemExistente.quantidade * itemExistente.valor_venda) - (itemExistente.quantidade * 0.01));
+            if ((itemExistente.desconto || 0) > maxDesconto) {
+                itemExistente.desconto = maxDesconto;
+            }
+
             itemExistente.subtotal = (itemExistente.quantidade * itemExistente.valor_venda) - (itemExistente.desconto || 0) + (itemExistente.acrescimo || 0);
         } else {
+            const qtdInicial = 1;
+            const descInicial = Math.round(descontoUnitario * qtdInicial * 100) / 100;
+            const subtotalInicial = (qtdInicial * valorOriginal) - descInicial;
+
             carrinho.push({
                 id:          produto.id,
                 nome:        produto.nome,
                 codigo:      produto.codigo,
                 categoria:   produto.categoria,
                 tipo:        produto.tipo || 'produto',
+                lote:        loteEscolhido?.lote || null,
+                data_validade: loteEscolhido?.data_validade || null,
                 comissao_habilitada: produto.comissao_habilitada || false,
                 comissao_100_porcento: produto.comissao_100_porcento || false,
                 comissao_valor: produto.comissao_valor || 0,
-                valor_venda: produto.valor_venda || 0,
-                quantidade:  1,
-                desconto:    0,
+                valor_venda: valorOriginal,
+                quantidade:  qtdInicial,
+                desconto:    descInicial,
+                desconto_unitario: descontoUnitario,
+                origem_desconto: origemDesconto,
+                promocao_id: promocaoId,
                 acrescimo:   0,
-                subtotal:    produto.valor_venda || 0,
+                subtotal:    subtotalInicial,
                 serial:      serial?.numero_serie || null,
                 imei:        serial?.imei || null,
                 serial_id:   serial?.id || null
@@ -1277,7 +1617,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderizarCarrinho();
         calcularTotais();
-        mostrarNotificacao(`${produto.nome} adicionado ao carrinho!`, 'success');
+
+        const infoLoteMsg = loteEscolhido ? ` (Lote: ${loteEscolhido.lote})` : '';
+        if (origemDesconto && descontoUnitario > 0) {
+            mostrarNotificacao(`${produto.nome}${infoLoteMsg} adicionado com desconto da promoção "${origemDesconto}"!`, 'success');
+        } else {
+            mostrarNotificacao(`${produto.nome}${infoLoteMsg} adicionado ao carrinho!`, 'success');
+        }
     }
 
     function renderizarCarrinho() {
@@ -1302,6 +1648,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${item.serial ? `<br><span style="color:#2563eb;font-weight:600;">🔢 Serial: <code>${item.serial}</code></span>` : ''}
                         ${item.imei   ? `<br><span style="color:#4b5563;">📱 IMEI: ${item.imei}</span>` : ''}
                     </small>
+                    ${item.lote ? `
+                        <div style="display:inline-flex; align-items:center; gap:4px; margin-top:3px; background:#eff6ff; color:#1d4ed8; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:800; border: 1px solid #bfdbfe; width: fit-content;" title="Lote selecionado para baixa">
+                            <span>📦</span> Lote: <strong>${item.lote}</strong> ${item.data_validade ? `(Val: ${formatarData(item.data_validade)})` : ''}
+                        </div>` : ''}
+                    ${item.origem_desconto && item.desconto > 0 ? `
+                        <div style="display:inline-flex; align-items:center; gap:4px; margin-top:4px; background:#FEF3C7; color:#92400E; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:800; border: 1px solid #FDE68A; width: fit-content;" title="Desconto Promocional: ${item.origem_desconto}">
+                            <span>🏷️</span> ${item.origem_desconto}
+                        </div>` : ''}
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
                     <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Unit.</span>
@@ -1325,6 +1679,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                onchange="atualizarDescontoItem(${index}, this.value)"
                                placeholder="0.00" title="Desconto no Produto (R$)">
                     </div>
+                    ${item.origem_desconto && item.desconto > 0 ? `
+                        <span style="font-size: 9px; color: #B45309; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95px;" title="Origem: ${item.origem_desconto}">
+                            🏷️ ${item.origem_desconto}
+                        </span>` : ''}
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
                     <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Acréscimo</span>
@@ -1377,15 +1735,32 @@ document.addEventListener('DOMContentLoaded', () => {
             quantidade = estoque;
         }
 
+        if (cartItem.lote && !isServico && !permitirVendaSemSaldo) {
+            const lotes = obterLotesProdutoSaidas(produto);
+            const loteAtual = lotes.find(l => l.lote === cartItem.lote);
+            const limiteLote = loteAtual ? (parseInt(loteAtual.quantidade) || 0) : estoque;
+            if (quantidade > limiteLote) {
+                mostrarNotificacao(`Estoque insuficiente para o lote "${cartItem.lote}"! Disponível: ${limiteLote}`, 'error');
+                quantidade = limiteLote;
+            }
+        }
+
         cartItem.quantidade = quantidade;
         
-        const maxDesconto = quantidade * cartItem.valor_venda;
+        // Recalcular desconto promocional proporcional se o produto tem desconto da ação
+        if (cartItem.desconto_unitario && cartItem.desconto_unitario > 0) {
+            cartItem.desconto = Math.round(cartItem.desconto_unitario * quantidade * 100) / 100;
+        }
+
+        // REGRA DE NEGÓCIO: Preço mínimo de R$ 0,01 por unidade após desconto
+        const precoMinimoTotal = quantidade * 0.01;
+        const maxDesconto = Math.max(0, (quantidade * cartItem.valor_venda) - precoMinimoTotal);
         if ((cartItem.desconto || 0) > maxDesconto) {
             cartItem.desconto = maxDesconto;
-            mostrarNotificacao(`Desconto do item ajustado para R$ ${maxDesconto.toFixed(2)} devido à alteração de quantidade.`, 'warning');
+            mostrarNotificacao(`Desconto do item ajustado para R$ ${maxDesconto.toFixed(2)} para manter preço mínimo de R$ 0,01 por unidade.`, 'warning');
         }
         
-        cartItem.subtotal   = (quantidade * cartItem.valor_venda) - (cartItem.desconto || 0) + (cartItem.acrescimo || 0);
+        cartItem.subtotal = (quantidade * cartItem.valor_venda) - (cartItem.desconto || 0) + (cartItem.acrescimo || 0);
         renderizarCarrinho();
         calcularTotais();
     };
@@ -1395,10 +1770,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(desconto) || desconto < 0) desconto = 0;
 
         const cartItem = carrinho[index];
-        const maxDesconto = cartItem.quantidade * cartItem.valor_venda;
+
+        // REGRA DE NEGÓCIO: Preço de venda do item nunca pode ser zero (mínimo R$ 0,01 por unidade)
+        const precoMinimoTotal = cartItem.quantidade * 0.01;
+        const maxDesconto = Math.max(0, (cartItem.quantidade * cartItem.valor_venda) - precoMinimoTotal);
         if (desconto > maxDesconto) {
-            mostrarNotificacao(`Desconto não pode ser maior que o subtotal (R$ ${maxDesconto.toFixed(2)})!`, 'error');
+            mostrarNotificacao(`O produto nunca pode ser vendido por R$ 0,00 (mínimo R$ 0,01 por unidade). Desconto máximo permitido: R$ ${maxDesconto.toFixed(2)}!`, 'error');
             desconto = maxDesconto;
+        }
+
+        // Rastrear origem do desconto (se foi editado manualmente ou restaurado)
+        const descPromocionalOriginal = Math.round((cartItem.desconto_unitario || 0) * cartItem.quantidade * 100) / 100;
+        if (desconto !== descPromocionalOriginal) {
+            if (cartItem.promocao_id && cartItem.origem_desconto && !cartItem.origem_desconto.startsWith('Manual')) {
+                cartItem.origem_desconto = `Manual (${cartItem.origem_desconto})`;
+            } else if (!cartItem.origem_desconto && desconto > 0) {
+                cartItem.origem_desconto = 'Manual';
+            }
+        } else if (cartItem.promocao_id) {
+            const promo = promocoesVigentes.find(p => p.id === cartItem.promocao_id);
+            if (promo) cartItem.origem_desconto = promo.nome;
+        }
+
+        if (desconto === 0) {
+            cartItem.origem_desconto = null;
         }
 
         cartItem.desconto = desconto;
@@ -1428,9 +1823,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const subtotalOriginal = carrinho.reduce((s, i) => s + (i.quantidade * i.valor_venda), 0);
         const descontoProdutos = carrinho.reduce((s, i) => s + (i.desconto || 0), 0);
         const acrescimoProdutos = carrinho.reduce((s, i) => s + (i.acrescimo || 0), 0);
-        const descontoVenda    = parseFloat(document.getElementById('desconto')?.value)  || 0;
+        let descontoVenda    = parseFloat(document.getElementById('desconto')?.value)  || 0;
         const acrescimo        = parseFloat(document.getElementById('acrescimo')?.value) || 0;
-        const total            = Math.max(0, subtotalOriginal - descontoProdutos - descontoVenda + acrescimo + acrescimoProdutos);
+
+        // REGRA DE NEGÓCIO: O total da venda e os itens nunca podem ser R$ 0,00
+        const totalQtd = carrinho.reduce((sum, i) => sum + i.quantidade, 0);
+        const precoMinimoGlobal = totalQtd * 0.01;
+        const maxDescontoVendaPermitido = Math.max(0, (subtotalOriginal - descontoProdutos) - precoMinimoGlobal);
+
+        if (descontoVenda > maxDescontoVendaPermitido && carrinho.length > 0) {
+            mostrarNotificacao(`Desconto geral limitado a R$ ${maxDescontoVendaPermitido.toFixed(2)} para preservar o preço mínimo de R$ 0,01 por item.`, 'warning');
+            descontoVenda = maxDescontoVendaPermitido;
+            const inputDesc = document.getElementById('desconto');
+            if (inputDesc) inputDesc.value = descontoVenda.toFixed(2);
+        }
+
+        const total = Math.max(carrinho.length > 0 ? precoMinimoGlobal : 0, subtotalOriginal - descontoProdutos - descontoVenda + acrescimo + acrescimoProdutos);
 
         if (document.getElementById('subtotal')) {
             document.getElementById('subtotal').textContent = formatarMoeda(subtotalOriginal);
@@ -1526,6 +1934,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // REGRA DE NEGÓCIO: Preço de venda nunca pode ser zero (mínimo R$ 0,01 por unidade)
+        for (const item of carrinho) {
+            if (!item.valor_venda || item.valor_venda < 0.01) {
+                mostrarNotificacao(`O produto "${item.nome}" não pode ser vendido por R$ 0,00. Preço mínimo: R$ 0,01.`, 'error');
+                return;
+            }
+            const minCobrado = item.quantidade * 0.01;
+            if (item.subtotal < minCobrado) {
+                mostrarNotificacao(`O valor final do produto "${item.nome}" não pode ser menor que R$ 0,01 por unidade. Ajuste o desconto!`, 'error');
+                return;
+            }
+        }
+
         if (!formaPagamentoSelecionada) {
             mostrarNotificacao('Selecione a forma de pagamento!', 'error');
             return;
@@ -1584,11 +2005,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (acrescimo > 0) {
                 obsFinal = obsFinal ? `${obsFinal} | Acréscimo: R$ ${acrescimo.toFixed(2)}` : `Acréscimo: R$ ${acrescimo.toFixed(2)}`;
             }
+            if (!clienteId && clienteNome) {
+                const idInfo = clienteCpf ? `${clienteNome} (CPF: ${clienteCpf})` : clienteNome;
+                obsFinal = obsFinal ? `${obsFinal} | Cliente: ${idInfo}` : `Cliente: ${idInfo}`;
+            }
 
             let insertData = {
                 cliente_id:         clienteId || null,
-                cliente_nome:       clienteNome,
-                cliente_cpf:        clienteCpf,
                 data:               dataVenda,
                 total:              total,
                 desconto:           desconto,
@@ -1610,17 +2033,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (vendaError) {
                 console.warn('⚠️ Erro ao inserir venda direta na tabela public.saidas. Retentando fallback seguro...', vendaError);
-                delete insertData.cliente_nome;
-                delete insertData.cliente_cpf;
-                delete insertData.caixa_id;
+                // NUNCA deletar caixa_id! Ele é essencial para o fechamento de caixa.
                 delete insertData.colaborador_id;
                 delete insertData.comissao_calculada;
                 delete insertData.comissao_paga;
-
-                if (!clienteId && clienteNome) {
-                    const idInfo = clienteCpf ? `${clienteNome} (CPF: ${clienteCpf})` : clienteNome;
-                    insertData.observacao = insertData.observacao ? `${insertData.observacao} | Cliente: ${idInfo}` : `Cliente: ${idInfo}`;
-                }
 
                 const retryResult = await supabaseClient
                     .from('saidas')
@@ -1633,15 +2049,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (vendaError) throw vendaError;
 
+            const itensGravadosParaRelatorio = [];
+
             for (const item of carrinho) {
-                await supabaseClient.from('saida_itens').insert([{
-                    saida_id:      venda.id,
-                    produto_id:    item.id,
-                    quantidade:    item.quantidade,
+                const itemPayload = {
+                    saida_id:       venda.id,
+                    produto_id:     item.id,
+                    quantidade:     item.quantidade,
                     valor_unitario: item.valor_venda,
-                    subtotal:      item.subtotal,
+                    subtotal:       item.subtotal,
+                    desconto:       item.desconto || 0,
+                    origem_desconto: item.desconto > 0 ? (item.origem_desconto || 'Manual') : null,
+                    promocao_id:    item.promocao_id || null,
                     ...(item.serial_id ? { serial_id: item.serial_id } : {})
-                }]);
+                };
+
+                itensGravadosParaRelatorio.push({
+                    ...itemPayload,
+                    produto_nome: item.nome,
+                    produto_codigo: item.codigo
+                });
+
+                let { error: itemErr } = await supabaseClient.from('saida_itens').insert([itemPayload]);
+                if (itemErr) {
+                    console.warn('Fallback: colunas de desconto ainda não disponíveis em saida_itens, inserindo payload básico:', itemErr.message);
+                    delete itemPayload.desconto;
+                    delete itemPayload.origem_desconto;
+                    delete itemPayload.promocao_id;
+                    await supabaseClient.from('saida_itens').insert([itemPayload]);
+                }
 
                 const produto = produtos.find(p => p.id === item.id);
                 const isServico = item.tipo === 'servico' || produto?.tipo === 'servico';
@@ -1652,9 +2088,89 @@ document.addEventListener('DOMContentLoaded', () => {
                     const novoEstRaw = estAtual - item.quantidade;
                     const novoEst = permitirVendaSemSaldo ? novoEstRaw : Math.max(0, novoEstRaw);
 
-                    await supabaseClient.from('produtos')
-                        .update({ estoque_total: novoEst, ultima_movimentacao: new Date().toISOString() })
+                    // ===============================================
+                    // ATUALIZAÇÃO DE LOTES E BAIXA ESPECÍFICA DE SALDO
+                    // ===============================================
+                    let lotesProduto = obterLotesProdutoSaidas(produto);
+                    let loteAtivoFEFO = null;
+
+                    if (lotesProduto.length > 0) {
+                        let loteAlvo = null;
+                        if (item.lote) {
+                            loteAlvo = lotesProduto.find(l => l.lote === item.lote);
+                        }
+
+                        if (loteAlvo) {
+                            // Abate do lote específico selecionado
+                            const saldoLoteAtual = parseInt(loteAlvo.quantidade) || 0;
+                            loteAlvo.quantidade = Math.max(0, saldoLoteAtual - item.quantidade);
+                        } else {
+                            // Se não especificou lote mas produto tem lotes, abate em ordem FEFO
+                            let restante = item.quantidade;
+                            for (const l of lotesProduto) {
+                                if (restante <= 0) break;
+                                const qtdLote = parseInt(l.quantidade) || 0;
+                                if (qtdLote > 0) {
+                                    const deduzir = Math.min(qtdLote, restante);
+                                    l.quantidade = qtdLote - deduzir;
+                                    restante -= deduzir;
+                                }
+                            }
+                        }
+
+                        // Ordenar FEFO por data de validade
+                        lotesProduto.sort((a, b) => {
+                            if (!a.data_validade) return 1;
+                            if (!b.data_validade) return -1;
+                            return new Date(a.data_validade) - new Date(b.data_validade);
+                        });
+
+                        // Salvar no localStorage imediatamente
+                        salvarLotesLocal(item.id, lotesProduto);
+
+                        // Atualizar produto em memória
+                        if (produto) {
+                            produto.lotes = lotesProduto;
+                        }
+
+                        // Localizar lote com saldo > 0 para preencher os campos legados (ou o primeiro se todos 0)
+                        loteAtivoFEFO = lotesProduto.find(l => (parseInt(l.quantidade) || 0) > 0) || lotesProduto[0];
+                    }
+
+                    if (produto) {
+                        produto.estoque_total = novoEst;
+                        produto.estoque = novoEst;
+                    }
+
+                    // Montar payload de atualização do produto no Supabase
+                    const updateProdPayload = {
+                        estoque_total: novoEst,
+                        ultima_movimentacao: new Date().toISOString()
+                    };
+
+                    if (lotesProduto.length > 0) {
+                        updateProdPayload.lotes = lotesProduto;
+                        if (loteAtivoFEFO) {
+                            updateProdPayload.lote = loteAtivoFEFO.lote;
+                            updateProdPayload.data_validade = loteAtivoFEFO.data_validade;
+                            if (loteAtivoFEFO.alerta_vencimento_dias) {
+                                updateProdPayload.alerta_vencimento_dias = loteAtivoFEFO.alerta_vencimento_dias;
+                            }
+                        }
+                    }
+
+                    // Tentar update com lotes; se a coluna não existir no Supabase, fallback sem a coluna
+                    let { error: updErr } = await supabaseClient.from('produtos')
+                        .update(updateProdPayload)
                         .eq('id', item.id);
+
+                    if (updErr) {
+                        console.warn('Fallback: coluna lotes não existe em produtos, atualizando campos padrão:', updErr.message);
+                        delete updateProdPayload.lotes;
+                        await supabaseClient.from('produtos')
+                            .update(updateProdPayload)
+                            .eq('id', item.id);
+                    }
 
                     if (item.serial_id) {
                         await supabaseClient.from('produtos_seriais')
@@ -1662,13 +2178,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             .eq('id', item.serial_id);
                     }
 
+                    const motivoMovimento = `Venda #${venda.id}${item.lote ? ` - Lote: ${item.lote}` : ''}`;
+
                     await supabaseClient.from('movimentos_estoque').insert([{
                         produto_id:          item.id,
                         tipo:                'saida',
                         quantidade:          item.quantidade,
                         quantidade_anterior: estAtual,
                         quantidade_nova:     novoEst,
-                        motivo:              `Venda #${venda.id}`,
+                        motivo:              motivoMovimento,
                         data:                new Date().toISOString(),
                         usuario_id:          usuario.id
                     }]);
@@ -1704,6 +2222,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Armazenar histórico detalhado com origens de descontos para relatórios
+            try {
+                const lojaId = usuario.loja_id || 1;
+                const relKey = `erp_vendas_descontos_loja_${lojaId}`;
+                let listaVendasDesc = JSON.parse(localStorage.getItem(relKey) || '[]');
+                listaVendasDesc.unshift({
+                    venda_id: venda.id,
+                    data: venda.data,
+                    created_at: venda.data_finalizacao || new Date().toISOString(),
+                    cliente_nome: venda.cliente_nome || clienteNome,
+                    total: venda.total,
+                    desconto_total: venda.desconto || 0,
+                    forma_pagamento: venda.forma_pagamento,
+                    usuario_nome: usuario.nome,
+                    itens: itensGravadosParaRelatorio
+                });
+                if (listaVendasDesc.length > 500) listaVendasDesc = listaVendasDesc.slice(0, 500);
+                localStorage.setItem(relKey, JSON.stringify(listaVendasDesc));
+            } catch (e) {
+                console.warn('Erro ao armazenar cache local de descontos:', e);
+            }
+
             mostrarNotificacao(`✅ Venda #${venda.id} finalizada com sucesso!`, 'success');
 
             // Feedback de status na página
@@ -1716,7 +2256,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // Gerar comprovante e limpar
             await gerarComprovante(venda.id);
             limparFormulario();
-            await carregarDados();
+            await carregarDados(venda.id);
+
+            // Garantir que a seção de Vendas Recentes esteja aberta e visível
+            const toggleBody = document.getElementById('vendasRecentesBody');
+            if (toggleBody && !toggleBody.classList.contains('open')) {
+                toggleBody.classList.add('open');
+            }
+            const toggleIcon = document.getElementById('iconToggle');
+            if (toggleIcon) {
+                toggleIcon.classList.add('open');
+                toggleIcon.textContent = '▲';
+            }
+            const toggleBtn = document.getElementById('toggleVendasRecentes');
+            if (toggleBtn) toggleBtn.classList.add('open');
 
         } catch (error) {
             console.error('Erro ao finalizar venda:', error);
@@ -1941,7 +2494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 ${descItem > 0 ? `
                                 <div style="font-size:13px;color:#dc2626;margin-top:2px;">
-                                    Desconto no produto: - ${formatarMoeda(descItem)}
+                                    Desconto no produto: - ${formatarMoeda(descItem)}${item.origem_desconto ? ` (${item.origem_desconto})` : ''}
                                 </div>` : ''}
                                 ${(item.numero_serie || item.imei) ? `
                                 <div style="font-size:13px;margin-top:2px;">
@@ -2245,7 +2798,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     toggleBtn?.addEventListener('click', () => {
         const open = toggleBody.classList.toggle('open');
-        if (toggleIcon) toggleIcon.classList.toggle('open', open);
+        if (toggleIcon) {
+            toggleIcon.classList.toggle('open', open);
+            toggleIcon.textContent = open ? '▲' : '▼';
+        }
         toggleBtn.classList.toggle('open', open);
     });
 
@@ -2287,8 +2843,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const categoriaOption = catSelect.options[catSelect.selectedIndex];
         const categoriaId = categoriaOption ? parseInt(categoriaOption.getAttribute('data-id')) : null;
 
-        if (!codigo || !nome || !valorVenda) {
-            mostrarNotificacao('Código, Nome e Valor de Venda são obrigatórios!', 'error');
+        if (!codigo || !nome) {
+            mostrarNotificacao('Código e Nome são obrigatórios!', 'error');
+            return;
+        }
+
+        if (isNaN(valorVenda) || valorVenda < 0.01) {
+            mostrarNotificacao('O preço de venda do item nunca pode ser zero. O preço mínimo permitido é R$ 0,01.', 'error');
             return;
         }
 

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -142,6 +142,7 @@
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">💳 PDV / Vendas</a></li>
+                <li><a href="promocoes.html">🎯 Ações Promocionais</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 <li><a href="#">🔧 OS (Sob Pedido)</a></li>
@@ -231,6 +232,44 @@
         </main>
     </div>
 
+    <!-- Modal Busca de Produto para Ajuste -->
+    <div id="modalBuscaProdutoAjuste" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 650px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding: 16px 20px;">
+                <h2 style="margin: 0; font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+                    <span>🔍</span> Selecionar Produto para Ajuste
+                </h2>
+                <span class="close-busca-ajuste" style="cursor: pointer; font-size: 24px; font-weight: bold; color: #64748B;">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-weight: 600; color: #334155; margin-bottom: 6px; display: block;">
+                        Pesquise pelo Nome, Código, Código de Barras, Serial ou IMEI:
+                    </label>
+                    <div style="position: relative;">
+                        <input type="text" id="inputBuscaProdutoAjuste" 
+                               placeholder="Digite ou bipe o código / IMEI / nome do produto..." 
+                               autocomplete="off"
+                               style="width: 100%; padding: 12px 14px 12px 40px; font-size: 14px; border: 2px solid #0066FF; border-radius: 8px; box-sizing: border-box;">
+                        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; color: #0066FF;">🔍</span>
+                    </div>
+                    <small style="color: #64748B; font-size: 12px; margin-top: 4px; display: block;">
+                        💡 <em>Dica: Você pode ler um código de barras ou colar o IMEI diretamente. Pressione <strong>Enter</strong> para selecionar o primeiro resultado.</em>
+                    </small>
+                </div>
+                
+                <div id="statusBuscaAjuste" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 10px; background: #e0f2fe; color: #0369a1;"></div>
+
+                <div id="listaResultadosBuscaAjuste" style="max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px; background: #f8fafc;">
+                    <!-- Preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 12px 20px; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn-warning" id="btnFecharBuscaAjuste" style="padding: 8px 16px;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Ajuste -->
     <div id="modal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
@@ -243,25 +282,104 @@
                 
                 <div class="form-group">
                     <label>Produto</label>
-                    <input type="text" id="produtoNome" readonly style="background:#f5f5f5;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="produtoNome" readonly style="background:#f5f5f5; flex: 1;">
+                        <button type="button" id="btnTrocarProdutoAjuste" class="btn-secondary" style="padding: 8px 14px; font-size: 12px; white-space: nowrap; cursor: pointer; border-radius: 6px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #334155; font-weight: 600;" title="Pesquisar outro produto">🔍 Trocar</button>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label>Estoque Atual</label>
-                    <input type="text" id="estoqueAtual" readonly style="background:#f5f5f5;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600; color: #475569;">Estoque Atual</label>
+                        <input type="number" id="estoqueAtual" readonly style="background:#f1f5f9; font-weight: bold; font-size: 15px; border-color: #cbd5e1; height: 42px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 700; color: #0066FF;">🎯 Novo Saldo Desejado</label>
+                        <input type="number" id="novoSaldo" min="0" placeholder="Ex: 10" style="font-weight: bold; font-size: 15px; border: 2px solid #0066FF; background: #f0f7ff; height: 42px;">
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>Tipo de Movimentação</label>
-                    <select id="tipo">
-                        <option value="entrada">📥 + Adicionar (Entrada)</option>
-                        <option value="saida">📤 - Remover (Saída)</option>
-                    </select>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600; color: #475569;">Tipo de Movimentação</label>
+                        <select id="tipo" style="height: 42px; width: 100%;">
+                            <option value="entrada">📥 + Adicionar (Entrada)</option>
+                            <option value="saida">📤 - Remover (Saída)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600; color: #475569;">Quantidade a Movimentar</label>
+                        <input type="number" id="quantidade" min="1" value="1" required style="font-weight: bold; height: 42px;">
+                    </div>
                 </div>
+                <small style="color: #64748B; font-size: 11px; margin-bottom: 12px; display: block;">
+                    💡 <em>Você pode informar diretamente o <strong>Novo Saldo Desejado</strong> ou ajustar pela <strong>Quantidade a Movimentar</strong>.</em>
+                </small>
                 
-                <div class="form-group">
-                    <label>Quantidade</label>
-                    <input type="number" id="quantidade" min="1" value="1" required>
+                <!-- Container para Lote e Validade (quando o produto controla lote) -->
+                <div id="containerLoteValidade" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-weight: 700; color: #92400e; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                            <span>📦</span> Controle de Lotes e Validades
+                        </div>
+                        <span id="badgeQtdLotes" style="font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; border: 1px solid #fde68a;">0 lotes</span>
+                    </div>
+
+                    <!-- Lista de Lotes Atuais Cadastrados -->
+                    <div id="listaLotesAtuais" style="margin-bottom: 12px;"></div>
+
+                    <!-- Seção Entrada: Opção de Adicionar Novo Lote ou Somar a Existente -->
+                    <div id="secaoLoteEntrada">
+                        <div style="display: flex; gap: 15px; margin-bottom: 10px; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #fde68a; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 700; color: #92400e; margin: 0;">
+                                <input type="radio" name="modoLote" id="radioNovoLote" value="novo" checked style="cursor: pointer;">
+                                ➕ Adicionar Novo Lote (Manter os dois)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: #78350f; margin: 0;">
+                                <input type="radio" name="modoLote" id="radioLoteExistente" value="existente" style="cursor: pointer;">
+                                ✏️ Somar a Lote Existente
+                            </label>
+                        </div>
+
+                        <!-- Campos para Novo Lote -->
+                        <div id="containerCamposNovoLote">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 600; color: #78350f; display: block; margin-bottom: 4px;">Novo Lote *</label>
+                                    <input type="text" id="ajusteLote" placeholder="Ex: LOTE-02" style="width: 100%; padding: 8px; border: 1px solid #d97706; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 600; color: #78350f; display: block; margin-bottom: 4px;">Nova Data de Validade *</label>
+                                    <input type="date" id="ajusteDataValidade" style="width: 100%; padding: 8px; border: 1px solid #d97706; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 600; color: #78350f; display: block; margin-bottom: 4px;">Alerta Venc. (dias)</label>
+                                    <input type="number" id="ajusteAlertaDias" value="30" min="1" style="width: 100%; padding: 8px; border: 1px solid #d97706; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                                </div>
+                            </div>
+                            <small style="color: #92400e; font-size: 11px; margin-top: 6px; display: block;">
+                                💡 <em>Este novo lote será adicionado ao produto com sua respectiva data de validade, mantendo os lotes anteriores ativos.</em>
+                            </small>
+                        </div>
+
+                        <!-- Campos para Lote Existente -->
+                        <div id="containerCamposLoteExistente" style="display: none;">
+                            <label style="font-size: 12px; font-weight: 600; color: #78350f; display: block; margin-bottom: 4px;">Selecione o Lote Existente para adicionar a quantidade:</label>
+                            <select id="selectLoteExistente" style="width: 100%; padding: 8px; border: 1px solid #d97706; border-radius: 4px; font-size: 13px; box-sizing: border-box; background: white;"></select>
+                            <small style="color: #78350f; font-size: 11px; margin-top: 4px; display: block;">
+                                💡 <em>A quantidade informada será somada ao saldo deste lote específico.</em>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Seção Saída: Selecionar de qual lote retirar -->
+                    <div id="secaoLoteSaida" style="display: none;">
+                        <label style="font-size: 12px; font-weight: 600; color: #991b1b; display: block; margin-bottom: 4px;">De qual lote deseja retirar as unidades?</label>
+                        <select id="selectLoteSaida" style="width: 100%; padding: 8px; border: 1px solid #dc2626; border-radius: 4px; font-size: 13px; box-sizing: border-box; background: white;"></select>
+                        <small style="color: #991b1b; font-size: 11px; margin-top: 4px; display: block;">
+                            ⚠️ <em>Recomendação: Baixar primeiro o lote mais próximo do vencimento (FEFO).</em>
+                        </small>
+                    </div>
                 </div>
                 
                 <!-- Container para seriais dinâmicos -->
@@ -283,10 +401,10 @@
     </div>
 
     <script src="js/security.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/auth-check.js"></script>
-    <script src="js/export-helper.js"></script>
-    <script src="js/estoque.js"></script>
+    <script src="js/config.js?v=2.1.0"></script>
+    <script src="js/auth-check.js?v=2.1.0"></script>
+    <script src="js/export-helper.js?v=2.1.0"></script>
+    <script src="js/estoque.js?v=2.1.3"></script>
 <script src="js/active-nav.js"></script>
 </body>
 </html>

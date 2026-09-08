@@ -12,7 +12,8 @@ let dadosCarregados = {
     movimento: false,
     faturamento: false,
     vendas: false,
-    lucro: false
+    lucro: false,
+    descontos: false
 };
 
 // Variáveis para armazenar dados brutos para exportação
@@ -20,7 +21,8 @@ let dadosExportacao = {
     movimento: null,
     faturamento: null,
     vendas: null,
-    lucro: null
+    lucro: null,
+    descontos: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -76,6 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('faturamentoDataFim')) document.getElementById('faturamentoDataFim').value = hoje;
     if (document.getElementById('lucroDataInicio')) document.getElementById('lucroDataInicio').value = trintaDiasAtrasStr;
     if (document.getElementById('lucroDataFim')) document.getElementById('lucroDataFim').value = hoje;
+    if (document.getElementById('descontosDataInicio')) document.getElementById('descontosDataInicio').value = trintaDiasAtrasStr;
+    if (document.getElementById('descontosDataFim')) document.getElementById('descontosDataFim').value = hoje;
     
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
@@ -85,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarVendasProduto();
         carregarComissoesColaborador();
         carregarRelatorioLucro();
+        carregarRelatorioDescontos();
     });
 });
 
@@ -1185,6 +1190,490 @@ function renderizarGraficoLucro(resumoDatas) {
 window.carregarRelatorioLucro = carregarRelatorioLucro;
 
 // =====================================================
+// RELATÓRIO DE PRODUTOS COM DESCONTO & AÇÕES PROMOCIONAIS
+// =====================================================
+
+function alternarVisaoDesconto(visao) {
+    const btnVendas = document.getElementById('btnVerVendasDesconto');
+    const btnProdutos = document.getElementById('btnVerProdutosAcoes');
+    const boxVendas = document.getElementById('descontosVendasContainer');
+    const boxProdutos = document.getElementById('descontosProdutosCampanhasContainer');
+
+    if (visao === 'produtos') {
+        if (boxVendas) boxVendas.style.display = 'none';
+        if (boxProdutos) boxProdutos.style.display = 'block';
+        if (btnVendas) {
+            btnVendas.className = 'btn-secondary';
+        }
+        if (btnProdutos) {
+            btnProdutos.className = 'btn-primary';
+        }
+        renderizarProdutosEmCampanhas();
+    } else {
+        if (boxProdutos) boxProdutos.style.display = 'none';
+        if (boxVendas) boxVendas.style.display = 'block';
+        if (btnProdutos) {
+            btnProdutos.className = 'btn-secondary';
+        }
+        if (btnVendas) {
+            btnVendas.className = 'btn-primary';
+        }
+    }
+}
+
+async function renderizarProdutosEmCampanhas() {
+    const container = document.getElementById('descontosProdutosCampanhasContainer');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align:center; padding: 25px; color: var(--gray);">Carregando campanhas promocionais...</div>';
+    
+    try {
+        if (!window.PromocoesAPI) {
+            container.innerHTML = '<div style="text-align:center; padding: 20px; color: red;">Módulo de promoções indisponível.</div>';
+            return;
+        }
+
+        const promocoes = await window.PromocoesAPI.listarPromocoes();
+
+        if (!promocoes || promocoes.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 50px 20px; background: white; border-radius: 8px; border: 1px dashed var(--border);">
+                    <div style="font-size: 44px; margin-bottom: 12px;">🎯</div>
+                    <h3 style="margin-bottom: 8px; color: #1F2937;">Nenhuma Ação Promocional Cadastrada</h3>
+                    <p style="color: #6B7280; font-size: 14px; margin-bottom: 20px;">Crie ações promocionais para aplicar descontos automáticos em produtos no PDV.</p>
+                    <a href="promocoes.html" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; font-weight: 600;">
+                        ➕ Criar Nova Ação Promocional
+                    </a>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; color: #4B5563;">Exibindo <strong>${promocoes.length}</strong> campanha(s) promocional(is)</span>
+                <a href="promocoes.html" class="btn-primary" style="text-decoration: none; font-size: 12px; padding: 6px 14px; border-radius: 6px;">
+                    🎯 Gerenciar Promoções
+                </a>
+            </div>
+        `;
+
+        for (const promo of promocoes) {
+            const statusBadge = promo.status_vigencia === 'ativa'
+                ? '<span style="background: #DEF7EC; color: #03543F; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🟢 Ativa</span>'
+                : promo.status_vigencia === 'agendada'
+                ? '<span style="background: #FEF08A; color: #854D0E; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🟡 Agendada</span>'
+                : '<span style="background: #FDE8E8; color: #9B1C1C; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🔴 Inativa / Expirada</span>';
+
+            const tipoDescFormatado = promo.tipo_desconto === 'porcentagem'
+                ? `${parseFloat(promo.valor_desconto || 0)}% OFF`
+                : promo.tipo_desconto === 'valor_fixo'
+                ? `R$ ${parseFloat(promo.valor_desconto || 0).toFixed(2)} OFF`
+                : `Preço Fixo: R$ ${parseFloat(promo.valor_desconto || 0).toFixed(2)}`;
+
+            const produtosPromo = await window.PromocoesAPI.listarProdutosPromocao(promo.id);
+
+            html += `
+                <div style="background: white; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden;">
+                    <div style="background: #f9fafb; padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h3 style="margin: 0; font-size: 17px; color: #111827;">🏷️ ${promo.nome}</h3>
+                                ${statusBadge}
+                                <span style="background: #EEF2FF; color: #3730A3; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 4px;">
+                                    ${tipoDescFormatado}
+                                </span>
+                            </div>
+                            <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">
+                                📅 Vigência: ${formatarDataISO(promo.data_inicio) || '—'} até ${formatarDataISO(promo.data_fim) || 'Indeterminada'}
+                                ${promo.descricao ? ` &bull; ${promo.descricao}` : ''}
+                            </div>
+                        </div>
+                        <a href="promocoes.html" style="font-size: 12px; color: #eb5e28; text-decoration: none; font-weight: 600;">
+                            Editar Ação &rarr;
+                        </a>
+                    </div>
+
+                    <div style="padding: 15px 20px;">
+                        ${produtosPromo.length === 0 ? `
+                            <div style="text-align: center; padding: 20px; color: #9CA3AF; font-size: 13px;">
+                                Nenhum produto vinculado a esta promoção. <a href="promocoes.html" style="color: #eb5e28;">Vincular produtos agora</a>
+                            </div>
+                        ` : `
+                            <table class="table-relatorio" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Produto</th>
+                                        <th>Categoria</th>
+                                        <th style="text-align: right;">Preço Normal</th>
+                                        <th style="text-align: right;">Preço Promocional</th>
+                                        <th style="text-align: right;">Desconto Unit.</th>
+                                        <th style="text-align: center;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${produtosPromo.map(pp => {
+                                        const prod = pp.produtos || pp;
+                                        const vVenda = parseFloat(prod.valor_venda || 0);
+                                        const tipoDesc = pp.tipo_desconto || promo.tipo_desconto || 'porcentagem';
+                                        const valDesc = (pp.valor_desconto !== undefined && pp.valor_desconto !== null) ? pp.valor_desconto : promo.valor_desconto;
+                                        let vPromo = vVenda;
+                                        let desc = 0;
+                                        if (window.PromocoesAPI && typeof window.PromocoesAPI.calcularDescontoItem === 'function') {
+                                            const calc = window.PromocoesAPI.calcularDescontoItem(vVenda, tipoDesc, valDesc);
+                                            vPromo = calc.precoFinalUnitario;
+                                            desc = calc.descontoUnitario;
+                                        } else {
+                                            desc = tipoDesc === 'porcentagem' ? (vVenda * (parseFloat(valDesc) || 0)) / 100 : (parseFloat(valDesc) || 0);
+                                            vPromo = Math.max(0.01, vVenda - desc);
+                                        }
+                                        const pct = vVenda > 0 ? ((desc / vVenda) * 100).toFixed(0) : 0;
+                                        return `
+                                            <tr>
+                                                <td><span style="font-family: monospace; font-size: 12px;">${prod.codigo || '-'}</span></td>
+                                                <td><strong>${prod.nome}</strong></td>
+                                                <td>${prod.categoria || '-'}</td>
+                                                <td style="text-align: right; text-decoration: line-through; color: #9CA3AF;">R$ ${vVenda.toFixed(2)}</td>
+                                                <td style="text-align: right; font-weight: 800; color: #059669; font-size: 14px;">R$ ${vPromo.toFixed(2)}</td>
+                                                <td style="text-align: right; color: #DC2626; font-weight: 600;">
+                                                    - R$ ${desc.toFixed(2)} <span style="font-size: 11px; background: #FEE2E2; color: #991B1B; padding: 2px 5px; border-radius: 4px;">-${pct}%</span>
+                                                </td>
+                                                <td style="text-align: center;">
+                                                    ${pp.ativo !== false ? '<span style="color: #16A34A; font-size: 12px;">✅ Ativo</span>' : '<span style="color: #DC2626; font-size: 12px;">⏸️ Pausado</span>'}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('Erro ao renderizar produtos em campanhas:', err);
+        container.innerHTML = `<div style="text-align: center; padding: 20px; color: red;">Erro ao carregar campanhas: ${err.message}</div>`;
+    }
+}
+
+async function carregarRelatorioDescontos() {
+    const container = document.getElementById('descontosVendasContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align: center; padding: 25px; color: var(--gray);">Carregando relatório de descontos...</div>';
+    dadosCarregados.descontos = false;
+
+    const usuarioLogado = JSON.parse(sessionStorage.getItem('usuario')) || {};
+    const lojaId = usuarioLogado.loja_id || 1;
+    const dataInicio = document.getElementById('descontosDataInicio')?.value;
+    const dataFim = document.getElementById('descontosDataFim')?.value;
+    const filtroOrigem = document.getElementById('filtroOrigemDesconto')?.value || 'todas';
+
+    // Atualizar opções do dropdown com as campanhas promocionais cadastradas
+    if (window.PromocoesAPI) {
+        try {
+            const promocoes = await window.PromocoesAPI.listarPromocoes();
+            const selOrigem = document.getElementById('filtroOrigemDesconto');
+            if (selOrigem && promocoes) {
+                const optAtual = selOrigem.value;
+                selOrigem.innerHTML = `
+                    <option value="todas">Todas as Origens</option>
+                    <option value="promocao">Todas as Ações Promocionais</option>
+                    <option value="manual">Descontos Manuais</option>
+                `;
+                promocoes.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.nome;
+                    opt.textContent = `🏷️ Promoção: ${p.nome}`;
+                    selOrigem.appendChild(opt);
+                });
+                if (optAtual) selOrigem.value = optAtual;
+            }
+        } catch(e) {
+            console.warn('Erro ao atualizar dropdown de origens promocionais:', e);
+        }
+    }
+
+    try {
+        // 1. Buscar saídas no período
+        let qSaidas = supabaseClient
+            .from('saidas')
+            .select('id, data, data_finalizacao, total, desconto, forma_pagamento, observacao, clientes(nome), usuarios!usuario_id(nome)')
+            .eq('cancelado', false)
+            .order('data', { ascending: false });
+
+        if (dataInicio) qSaidas = qSaidas.gte('data', dataInicio);
+        if (dataFim) qSaidas = qSaidas.lte('data', dataFim);
+
+        const { data: saidas, error: errSaidas } = await qSaidas;
+        if (errSaidas) throw errSaidas;
+
+        const saidasIds = saidas ? saidas.map(s => s.id) : [];
+        const saidasMap = {};
+        (saidas || []).forEach(s => { saidasMap[s.id] = s; });
+
+        // 2. Buscar itens de saída (tentando com colunas de desconto)
+        let itensBD = [];
+        if (saidasIds.length > 0) {
+            let resItens = await supabaseClient
+                .from('saida_itens')
+                .select('id, saida_id, produto_id, quantidade, valor_unitario, subtotal, desconto, origem_desconto, promocao_id, produtos(id, nome, codigo, categoria)')
+                .in('saida_id', saidasIds);
+
+            if (resItens.error) {
+                console.warn('Fallback para consulta básica de saida_itens:', resItens.error.message);
+                const resBasico = await supabaseClient
+                    .from('saida_itens')
+                    .select('id, saida_id, produto_id, quantidade, valor_unitario, subtotal, produtos(id, nome, codigo, categoria)')
+                    .in('saida_id', saidasIds);
+                itensBD = resBasico.data || [];
+            } else {
+                itensBD = resItens.data || [];
+            }
+        }
+
+        // 3. Obter cache local de vendas detalhadas para complementar / fallback
+        const localCacheKey = `erp_vendas_descontos_loja_${lojaId}`;
+        const localCache = JSON.parse(localStorage.getItem(localCacheKey) || '[]');
+        const localCacheMap = {};
+        localCache.forEach(v => {
+            localCacheMap[v.venda_id] = v;
+        });
+
+        // 4. Consolidar linhas de itens com desconto
+        const itensComDesconto = [];
+        const vendasComDescontoSet = new Set();
+        let totalDescontosConcedidos = 0;
+        let totalFaturadoDosItens = 0;
+
+        // Processar itens do BD enriquecendo com cache local se necessário
+        itensBD.forEach(it => {
+            const venda = saidasMap[it.saida_id];
+            const cachedVenda = localCacheMap[it.saida_id];
+            const cachedItem = cachedVenda?.itens?.find(ci => ci.produto_id === it.produto_id);
+
+            const qtd = parseFloat(it.quantidade || 1);
+            const vUnitOriginal = parseFloat(it.valor_unitario || cachedItem?.valor_unitario || 0);
+            const subtotalGravado = parseFloat(it.subtotal || ((vUnitOriginal * qtd) - (cachedItem?.desconto || 0) * qtd));
+
+            let descontoUnit = parseFloat(it.desconto || cachedItem?.desconto || 0);
+            let origemDesc = it.origem_desconto || cachedItem?.origem_desconto || null;
+
+            // Se o desconto não estava explícito na coluna da tabela, deduz da diferença entre valor esperado e subtotal cobrado
+            if (descontoUnit <= 0 && vUnitOriginal > 0 && qtd > 0) {
+                const diferenca = (vUnitOriginal * qtd) - subtotalGravado;
+                if (diferenca > 0.009) {
+                    descontoUnit = diferenca / qtd;
+                }
+            }
+
+            // Se o item tem desconto registrado ou calculado
+            if (descontoUnit > 0.009) {
+                const descTotal = descontoUnit * qtd;
+                const subtotalFinal = subtotalGravado;
+
+                // Filtrar por origem se solicitado
+                let atendeFiltro = false;
+                if (filtroOrigem === 'todas') {
+                    atendeFiltro = true;
+                } else if (filtroOrigem === 'promocao') {
+                    atendeFiltro = Boolean(origemDesc && origemDesc !== 'Manual');
+                } else if (filtroOrigem === 'manual') {
+                    atendeFiltro = Boolean(!origemDesc || origemDesc === 'Manual');
+                } else {
+                    atendeFiltro = Boolean(origemDesc && origemDesc.toLowerCase() === filtroOrigem.toLowerCase());
+                }
+
+                if (atendeFiltro) {
+                    let nomeCli = venda?.clientes?.nome || cachedVenda?.cliente_nome;
+                    if (!nomeCli && venda?.observacao && venda.observacao.includes('Cliente:')) {
+                        const m = venda.observacao.match(/Cliente:\s*([^|(\n]+)/);
+                        if (m) nomeCli = m[1].trim();
+                    }
+
+                    itensComDesconto.push({
+                        venda_id: it.saida_id,
+                        data: venda?.data || cachedVenda?.data || '-',
+                        hora: venda?.data_finalizacao ? new Date(venda.data_finalizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                        produto_id: it.produto_id,
+                        codigo: it.produtos?.codigo || cachedItem?.produto_codigo || '-',
+                        nome: it.produtos?.nome || cachedItem?.produto_nome || 'Produto',
+                        quantidade: qtd,
+                        valor_unitario: vUnitOriginal,
+                        desconto_unitario: descontoUnit,
+                        desconto_total: descTotal,
+                        origem_desconto: origemDesc || 'Manual / Promoção',
+                        subtotal: subtotalFinal,
+                        cliente: nomeCli || 'Consumidor',
+                        vendedor: venda?.usuarios?.nome || cachedVenda?.usuario_nome || '-'
+                    });
+
+                    vendasComDescontoSet.add(it.saida_id);
+                    totalDescontosConcedidos += descTotal;
+                    totalFaturadoDosItens += subtotalFinal;
+                }
+            }
+        });
+
+        // Também verificar se há vendas com desconto geral no carrinho que não foi rateado nos itens
+        (saidas || []).forEach(v => {
+            const descGeral = parseFloat(v.desconto || 0);
+            if (descGeral > 0) {
+                // Verificar se já somamos descontos de itens dessa venda
+                const somaItens = itensComDesconto.filter(i => i.venda_id === v.id).reduce((s, i) => s + i.desconto_total, 0);
+                const saldoDesc = descGeral - somaItens;
+                if (saldoDesc > 0.009) {
+                    let atendeFiltro = (filtroOrigem === 'todas' || filtroOrigem === 'manual');
+                    if (atendeFiltro) {
+                        let nomeCli = v.clientes?.nome;
+                        if (!nomeCli && v.observacao && v.observacao.includes('Cliente:')) {
+                            const m = v.observacao.match(/Cliente:\s*([^|(\n]+)/);
+                            if (m) nomeCli = m[1].trim();
+                        }
+
+                        itensComDesconto.push({
+                            venda_id: v.id,
+                            data: v.data || '-',
+                            hora: v.data_finalizacao ? new Date(v.data_finalizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                            produto_id: null,
+                            codigo: 'GERAL',
+                            nome: '🏷️ Desconto Geral no Fechamento da Venda',
+                            quantidade: 1,
+                            valor_unitario: saldoDesc,
+                            desconto_unitario: saldoDesc,
+                            desconto_total: saldoDesc,
+                            origem_desconto: 'Desconto Geral',
+                            subtotal: 0,
+                            cliente: nomeCli || 'Consumidor',
+                            vendedor: v.usuarios?.nome || '-'
+                        });
+                        vendasComDescontoSet.add(v.id);
+                        totalDescontosConcedidos += saldoDesc;
+                    }
+                }
+            }
+        });
+
+        // 5. Atualizar KPIs no DOM
+        const kpiTotalDesc = document.getElementById('kpiTotalDescontosConcedidos');
+        const kpiItensDesc = document.getElementById('kpiItensComDesconto');
+        const kpiVendasDesc = document.getElementById('kpiVendasComDesconto');
+        const kpiMediaDesc = document.getElementById('kpiDescontoMedioPercent');
+
+        if (kpiTotalDesc) kpiTotalDesc.textContent = `R$ ${totalDescontosConcedidos.toFixed(2)}`;
+        if (kpiItensDesc) kpiItensDesc.textContent = itensComDesconto.length;
+        if (kpiVendasDesc) kpiVendasDesc.textContent = vendasComDescontoSet.size;
+
+        const totalSemDesconto = totalFaturadoDosItens + totalDescontosConcedidos;
+        const pctMedia = totalSemDesconto > 0 ? ((totalDescontosConcedidos / totalSemDesconto) * 100).toFixed(1) : '0.0';
+        if (kpiMediaDesc) kpiMediaDesc.textContent = `${pctMedia}%`;
+
+        // 6. Armazenar dados prontos para exportação
+        dadosExportacao.descontos = {
+            itens: itensComDesconto,
+            totalDescontos: totalDescontosConcedidos,
+            totalItens: itensComDesconto.length,
+            totalVendas: vendasComDescontoSet.size,
+            totalQtd: itensComDesconto.reduce((s, i) => s + i.quantidade, 0),
+            totalSubtotal: totalFaturadoDosItens,
+            dataInicio: dataInicio,
+            dataFim: dataFim,
+            origemFiltro: filtroOrigem
+        };
+        dadosCarregados.descontos = true;
+
+        // 7. Renderizar tabela detalhada
+        if (itensComDesconto.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="font-size: 38px; margin-bottom: 10px;">🏷️</div>
+                    <h3 style="color: #374151; margin-bottom: 6px;">Nenhum produto vendido com desconto</h3>
+                    <p style="color: #6B7280; font-size: 13px;">No período e filtros selecionados, nenhuma venda registrou desconto concedido.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; color: #4B5563;">Exibindo <strong>${itensComDesconto.length}</strong> registro(s) de itens com desconto</span>
+            </div>
+            <table class="table-relatorio">
+                <thead>
+                    <tr>
+                        <th>Data / Hora</th>
+                        <th>Venda</th>
+                        <th>Código</th>
+                        <th>Produto</th>
+                        <th style="text-align: center;">Qtd</th>
+                        <th style="text-align: right;">Preço Normal</th>
+                        <th style="text-align: right;">Desconto Total</th>
+                        <th style="text-align: center;">Origem do Desconto</th>
+                        <th style="text-align: right;">Subtotal Pago</th>
+                        <th>Cliente</th>
+                        <th>Vendedor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itensComDesconto.map(item => {
+                        const isPromo = item.origem_desconto && item.origem_desconto !== 'Manual' && item.origem_desconto !== 'Desconto Geral';
+                        const badgeOrigem = isPromo
+                            ? `<span style="display:inline-flex; align-items:center; gap:4px; background:#FEF3C7; color:#92400E; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:700; border: 1px solid #FDE68A;">🏷️ ${item.origem_desconto}</span>`
+                            : item.origem_desconto === 'Desconto Geral'
+                            ? `<span style="background:#EDE9FE; color:#5B21B6; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:700;">💳 Venda Geral</span>`
+                            : `<span style="background:#F3F4F6; color:#4B5563; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:700;">👤 Manual</span>`;
+
+                        return `
+                            <tr>
+                                <td>${formatarDataISO(item.data)} <small style="color:#6B7280;">${item.hora}</small></td>
+                                <td><strong>#${item.venda_id}</strong></td>
+                                <td><span style="font-family: monospace; font-size: 12px;">${item.codigo}</span></td>
+                                <td><strong>${item.nome}</strong></td>
+                                <td style="text-align: center;">${item.quantidade}</td>
+                                <td style="text-align: right; color: #6B7280;">R$ ${item.valor_unitario.toFixed(2)}</td>
+                                <td style="text-align: right; color: #DC2626; font-weight: 700;">
+                                    - R$ ${item.desconto_total.toFixed(2)}
+                                </td>
+                                <td style="text-align: center;">${badgeOrigem}</td>
+                                <td style="text-align: right; font-weight: 700; color: #059669;">R$ ${item.subtotal.toFixed(2)}</td>
+                                <td>${item.cliente}</td>
+                                <td>${item.vendedor}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                    <tr class="total-row" style="background: #F9FAFB; font-weight: bold;">
+                        <td colspan="4"><strong>TOTAL CONCEDIDO</strong></td>
+                        <td style="text-align: center;"><strong>${itensComDesconto.reduce((s, i) => s + i.quantidade, 0)}</strong></td>
+                        <td></td>
+                        <td style="text-align: right; color: #DC2626; font-size: 15px;"><strong>- R$ ${totalDescontosConcedidos.toFixed(2)}</strong></td>
+                        <td></td>
+                        <td style="text-align: right; color: #059669; font-size: 15px;"><strong>R$ ${totalFaturadoDosItens.toFixed(2)}</strong></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = html;
+
+        if (!temPermissao('relatorios', 'exportar')) {
+            document.querySelectorAll('.btn-excel, .btn-pdf').forEach(btn => {
+                btn.style.display = 'none';
+            });
+        }
+
+    } catch (error) {
+        console.error('Erro ao carregar relatório de descontos:', error);
+        container.innerHTML = `<div style="text-align: center; padding: 20px; color: red;">Erro ao carregar relatório: ${error.message}</div>`;
+        dadosCarregados.descontos = false;
+    }
+}
+
+// =====================================================
 // EXPORTAÇÕES
 // =====================================================
 
@@ -1323,6 +1812,42 @@ function exportarExcel(tipo) {
             });
             nomeArquivo = `relatorio_ganho_custo_lucro_${new Date().toISOString().split('T')[0]}`;
             break;
+
+        case 'descontos':
+            if (!dadosCarregados.descontos || !dadosExportacao.descontos) {
+                mostrarNotificacao('Carregue o relatório de produtos com desconto primeiro!', 'warning');
+                return;
+            }
+            const descData = dadosExportacao.descontos;
+            dados = [
+                ['RELATÓRIO DE PRODUTOS COM DESCONTO & AÇÕES PROMOCIONAIS'],
+                [`Período: ${formatarDataISO(descData.dataInicio) || 'Início'} a ${formatarDataISO(descData.dataFim) || 'Fim'}`],
+                [`Filtro Origem: ${descData.origemFiltro || 'Todas'}`],
+                [`Total em Descontos Concedidos: R$ ${descData.totalDescontos.toFixed(2)}`],
+                [`Total de Itens com Desconto: ${descData.totalItens}`],
+                [`Total de Vendas com Desconto: ${descData.totalVendas}`],
+                [''],
+                ['Data', 'Venda', 'Código', 'Produto', 'Qtd', 'Preço Unit. Normal (R$)', 'Desconto Unit. (R$)', 'Desconto Total (R$)', 'Origem do Desconto', 'Subtotal Final (R$)', 'Cliente', 'Vendedor']
+            ];
+            descData.itens.forEach(it => {
+                dados.push([
+                    formatarDataISO(it.data),
+                    `#${it.venda_id}`,
+                    it.codigo || '-',
+                    it.nome,
+                    it.quantidade,
+                    `R$ ${it.valor_unitario.toFixed(2)}`,
+                    `R$ ${it.desconto_unitario.toFixed(2)}`,
+                    `R$ ${it.desconto_total.toFixed(2)}`,
+                    it.origem_desconto || 'Manual',
+                    `R$ ${it.subtotal.toFixed(2)}`,
+                    it.cliente || '-',
+                    it.vendedor || '-'
+                ]);
+            });
+            dados.push(['TOTAL', '', '', '', descData.totalQtd, '', '', `R$ ${descData.totalDescontos.toFixed(2)}`, '', `R$ ${descData.totalSubtotal.toFixed(2)}`, '', '']);
+            nomeArquivo = `relatorio_descontos_promocoes_${new Date().toISOString().split('T')[0]}`;
+            break;
             
         default:
             mostrarNotificacao('Tipo de exportação inválido', 'error');
@@ -1421,6 +1946,24 @@ function exportarPDF(tipo) {
             titulo = 'Relatório de Ganho X Custo (Lucro Real)';
             const lData = dadosExportacao.lucro;
             subtitulo = `Período: ${formatarDataISO(lData?.dataInicio) || 'Início'} a ${formatarDataISO(lData?.dataFim) || 'Fim'}`;
+            break;
+
+        case 'descontos':
+            if (!dadosCarregados.descontos) {
+                mostrarNotificacao('Carregue o relatório de descontos primeiro!', 'warning');
+                return;
+            }
+            const visaoCampanhas = document.getElementById('descontosProdutosCampanhasContainer')?.style.display !== 'none';
+            if (visaoCampanhas) {
+                container = document.getElementById('descontosProdutosCampanhasContainer');
+                titulo = 'Relatório de Produtos em Campanhas Promocionais';
+                subtitulo = `Gerado em: ${new Date().toLocaleDateString('pt-BR')}`;
+            } else {
+                container = document.getElementById('descontosVendasContainer');
+                titulo = 'Relatório de Produtos com Desconto & Ações Promocionais';
+                const dData = dadosExportacao.descontos;
+                subtitulo = `Período: ${formatarDataISO(dData?.dataInicio) || 'Início'} a ${formatarDataISO(dData?.dataFim) || 'Fim'} | Origem: ${dData?.origemFiltro || 'Todas'}`;
+            }
             break;
 
         default:
@@ -1700,5 +2243,7 @@ window.carregarMovimentoDiario = carregarMovimentoDiario;
 window.carregarFaturamento = carregarFaturamento;
 window.carregarVendasProduto = carregarVendasProduto;
 window.carregarRelatorioLucro = carregarRelatorioLucro;
+window.carregarRelatorioDescontos = carregarRelatorioDescontos;
+window.alternarVisaoDesconto = alternarVisaoDesconto;
 window.exportarExcel = exportarExcel;
 window.exportarPDF = exportarPDF;

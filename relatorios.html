@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -252,10 +252,11 @@
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">💳 PDV / Vendas</a></li>
+                <li><a href="promocoes.html">🎯 Ações Promocionais</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
                 <li><a href="#">🔧 OS (Sob Pedido)</a></li>
-                <li><a href="relatorios.html">📈 Relatórios</a></li>
+                <li><a href="relatorios.html" class="active">📈 Relatórios</a></li>
                 <li><a href="usuarios.html">👤 Usuários</a></li>
             </ul>
         </aside>
@@ -305,6 +306,11 @@
                         <h3>Ganho X Custo</h3>
                         <p>Análise de custos e lucro real</p>
                     </div>
+                    <div class="card-relatorio" onclick="abrirAba('descontos')">
+                        <div class="icon">🏷️</div>
+                        <h3>Produtos com Desconto</h3>
+                        <p>Descontos concedidos e ações promocionais</p>
+                    </div>
                 </div>
                 
                 <!-- Abas de Relatórios -->
@@ -315,6 +321,7 @@
                     <button class="tab-btn" data-tab="vendas" onclick="abrirAba('vendas')">📦 Vendas por Produto</button>
                     <button class="tab-btn" data-tab="colaborador" onclick="abrirAba('colaborador')">👥 Comissões</button>
                     <button class="tab-btn" data-tab="lucro" onclick="abrirAba('lucro')">📈 Ganho X Custo</button>
+                    <button class="tab-btn" data-tab="descontos" onclick="abrirAba('descontos')">🏷️ Produtos com Desconto</button>
                 </div>
                 
                 <!-- Tab: Dashboard -->
@@ -520,16 +527,83 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Tab: Produtos com Desconto & Promoções -->
+                <div id="tab-descontos" class="tab-content">
+                    <div class="relatorio-container">
+                        <div class="relatorio-header">
+                            <h2>🏷️ Produtos com Desconto & Ações Promocionais</h2>
+                            <div class="filtros-relatorio">
+                                <input type="date" id="descontosDataInicio">
+                                <input type="date" id="descontosDataFim">
+                                <select id="filtroOrigemDesconto">
+                                    <option value="todas">Todas as Origens</option>
+                                    <option value="promocao">Todas as Ações Promocionais</option>
+                                    <option value="manual">Descontos Manuais</option>
+                                </select>
+                                <button class="btn-primary" onclick="carregarRelatorioDescontos()">Filtrar</button>
+                                <button class="btn-excel" onclick="exportarExcel('descontos')">📊 Excel</button>
+                                <button class="btn-pdf" onclick="exportarPDF('descontos')">📄 PDF</button>
+                            </div>
+                        </div>
+
+                        <!-- KPIs de Descontos -->
+                        <div class="dashboard-kpi" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            <div class="kpi-card danger" style="border-top: 4px solid #DC2626;">
+                                <div class="kpi-icon">🏷️</div>
+                                <div class="kpi-value" id="kpiTotalDescontosConcedidos">R$ 0,00</div>
+                                <div class="kpi-label">Total em Descontos</div>
+                            </div>
+                            <div class="kpi-card warning" style="border-top: 4px solid #D97706;">
+                                <div class="kpi-icon">📦</div>
+                                <div class="kpi-value" id="kpiItensComDesconto">0</div>
+                                <div class="kpi-label">Itens com Desconto</div>
+                            </div>
+                            <div class="kpi-card primary" style="border-top: 4px solid #2563EB;">
+                                <div class="kpi-icon">💳</div>
+                                <div class="kpi-value" id="kpiVendasComDesconto">0</div>
+                                <div class="kpi-label">Vendas com Desconto</div>
+                            </div>
+                            <div class="kpi-card success" style="border-top: 4px solid #16A34A;">
+                                <div class="kpi-icon">🎯</div>
+                                <div class="kpi-value" id="kpiDescontoMedioPercent">0%</div>
+                                <div class="kpi-label">Desconto Médio</div>
+                            </div>
+                        </div>
+
+                        <!-- Seletor de Visão -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <button class="btn-primary" id="btnVerVendasDesconto" onclick="alternarVisaoDesconto('vendas')" style="font-size: 12px; padding: 7px 14px; border-radius: 6px;">
+                                🛒 Vendas com Desconto Concedido
+                            </button>
+                            <button class="btn-secondary" id="btnVerProdutosAcoes" onclick="alternarVisaoDesconto('produtos')" style="font-size: 12px; padding: 7px 14px; border-radius: 6px;">
+                                🎯 Produtos em Campanhas Promocionais
+                            </button>
+                        </div>
+
+                        <!-- Container Tabela 1: Vendas com Desconto -->
+                        <div id="descontosVendasContainer">
+                            <div style="text-align: center; padding: 20px;">Selecione um período e clique em Filtrar</div>
+                        </div>
+
+                        <!-- Container Tabela 2: Produtos em Campanhas -->
+                        <div id="descontosProdutosCampanhasContainer" style="display: none;">
+                            <div style="text-align: center; padding: 20px;">Carregando produtos em campanhas...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
 
-    <script src="js/security.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/auth-check.js"></script>
-    <script src="js/relatorios.js"></script>
-    <script src="js/ajuda.js"></script>
-<script src="js/active-nav.js"></script>`n</body>
+    <script src="js/security.js?v=2.0.5"></script>
+    <script src="js/config.js?v=2.0.5"></script>
+    <script src="js/auth-check.js?v=2.0.5"></script>
+    <script src="js/promocoes.js?v=2.0.5"></script>
+    <script src="js/relatorios.js?v=2.0.5"></script>
+    <script src="js/ajuda.js?v=2.0.5"></script>
+    <script src="js/active-nav.js?v=2.0.5"></script>
+</body>
 </html>
 
 

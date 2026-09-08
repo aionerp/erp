@@ -603,3 +603,31 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- 25. TABELA DE AÇÕES PROMOCIONAIS
+CREATE TABLE IF NOT EXISTS public.promocoes (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    nome VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    tipo_desconto VARCHAR(50) DEFAULT 'porcentagem' CHECK (tipo_desconto IN ('porcentagem', 'valor_fixo')),
+    valor_desconto NUMERIC(10, 2) DEFAULT 0.00,
+    data_inicio DATE NOT NULL DEFAULT CURRENT_DATE,
+    data_fim DATE,
+    ativo BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 26. TABELA DE PRODUTOS EM PROMOÇÕES
+CREATE TABLE IF NOT EXISTS public.promocao_produtos (
+    id SERIAL PRIMARY KEY,
+    promocao_id INTEGER NOT NULL REFERENCES public.promocoes(id) ON DELETE CASCADE,
+    produto_id INTEGER NOT NULL REFERENCES public.produtos(id) ON DELETE CASCADE,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    tipo_desconto VARCHAR(50) DEFAULT 'porcentagem' CHECK (tipo_desconto IN ('porcentagem', 'valor_fixo', 'preco_fixo')),
+    valor_desconto NUMERIC(10, 2) NOT NULL,
+    ativo BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT unique_promocao_produto UNIQUE (promocao_id, produto_id)
+);

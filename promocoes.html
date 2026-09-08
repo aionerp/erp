@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ações Promocionais - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .promo-kpis-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .promo-kpis-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .promo-kpis-grid { grid-template-columns: 1fr; }
+        }
+
+        .promo-kpi-card {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .promo-kpi-info h4 {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .promo-kpi-info .kpi-num {
+            font-size: 26px;
+            font-weight: 800;
+            color: #0F172A;
+            margin-top: 4px;
+        }
+
+        .promo-kpi-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .icon-orange { background: #FFEDD5; color: #C2410C; }
+        .icon-green  { background: #DCFCE7; color: #15803D; }
+        .icon-blue   { background: #DBEAFE; color: #1D4ED8; }
+        .icon-purple { background: #F3E8FF; color: #7E22CE; }
+
+        .filters-panel {
+            background: #FFFFFF;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filters-panel input, .filters-panel select {
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            font-size: 13px;
+        }
+
+        .filters-panel input[type="text"] {
+            flex: 1;
+            min-width: 240px;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-vigente   { background: #DEF7EC; color: #03543F; }
+        .badge-agendada  { background: #FEF08A; color: #854D0E; }
+        .badge-expirada  { background: #F3F4F6; color: #4B5563; }
+        .badge-inativa   { background: #FDE8E8; color: #9B1C1C; }
+
+        .badge-tag-desconto {
+            display: inline-block;
+            background: #FEF3C7;
+            color: #92400E;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            border: 1px solid #FDE68A;
+        }
+
+        .badge-prod-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #EFF6FF;
+            color: #1E40AF;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .btn-produtos {
+            background: #4F46E5;
+            color: #FFFFFF;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .btn-produtos:hover {
+            background: #4338CA;
+            transform: translateY(-1px);
+        }
+
+        /* Modal Gerenciar Produtos */
+        .promo-add-box {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .promo-preview-price {
+            background: #FFFFFF;
+            border: 1px dashed #CBD5E1;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .price-original {
+            text-decoration: line-through;
+            color: #64748B;
+            font-weight: 600;
+        }
+
+        .price-final {
+            color: #15803D;
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .price-warning {
+            color: #B91C1C;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 6px;
+            display: none;
+        }
+    </style>
+</head>
+<body class="hold-transition">
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Aion ERP</h2>
+                <div class="subtitle">by AionLabs</div>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html"><span class="icon">📊</span> Dashboard</a></li>
+                <li class="nav-section">GERAL</li>
+                <li><a href="produtos.html"><span class="icon">📦</span> Serviços & Produtos</a></li>
+                <li><a href="categorias.html"><span class="icon">🏷️</span> Categorias</a></li>
+                <li><a href="estoque.html"><span class="icon">💾</span> Estoque</a></li>
+                <li><a href="entradas.html"><span class="icon">📥</span> Entradas</a></li>
+                <li><a href="saidas.html"><span class="icon">💳</span> PDV / Vendas</a></li>
+                <li><a href="promocoes.html" class="active"><span class="icon">🎯</span> Ações Promocionais</a></li>
+                <li><a href="devolucoes.html"><span class="icon">🔄</span> Devoluções</a></li>
+                <li class="nav-section">CRM</li>
+                <li><a href="clientes.html"><span class="icon">👥</span> Clientes</a></li>
+                <li><a href="fornecedores.html"><span class="icon">🏭</span> Fornecedores</a></li>
+                <li class="nav-section">SISTEMA</li>
+                <li><a href="relatorios.html"><span class="icon">📈</span> Relatórios</a></li>
+                <li><a href="usuarios.html"><span class="icon">👤</span> Usuários</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="user-info">
+                    <span class="user-name" id="userName">Carregando...</span>
+                    <span class="user-perfil" id="userPerfil"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="page-header">
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #0F172A;">🎯 Ações Promocionais</h1>
+                        <p style="margin: 4px 0 0; color: var(--gray); font-size: 13px;">
+                            Crie campanhas sazonais (ex: Ação Verão), gerencie descontos e vincule produtos para o PDV.
+                        </p>
+                    </div>
+                    <button class="btn-primary" id="btnNovaPromocao" style="font-weight: 700; padding: 10px 18px;">
+                        + Nova Ação Promocional
+                    </button>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="promo-kpis-grid">
+                    <div class="promo-kpi-card">
+                        <div class="promo-kpi-info">
+                            <h4>Total de Ações</h4>
+                            <div class="kpi-num" id="kpiTotalAcoes">0</div>
+                        </div>
+                        <div class="promo-kpi-icon icon-orange">🎯</div>
+                    </div>
+                    <div class="promo-kpi-card">
+                        <div class="promo-kpi-info">
+                            <h4>Ações Vigentes</h4>
+                            <div class="kpi-num" id="kpiAcoesVigentes" style="color: #15803D;">0</div>
+                        </div>
+                        <div class="promo-kpi-icon icon-green">⚡</div>
+                    </div>
+                    <div class="promo-kpi-card">
+                        <div class="promo-kpi-info">
+                            <h4>Produtos em Promoção</h4>
+                            <div class="kpi-num" id="kpiProdutosPromo" style="color: #1D4ED8;">0</div>
+                        </div>
+                        <div class="promo-kpi-icon icon-blue">📦</div>
+                    </div>
+                    <div class="promo-kpi-card">
+                        <div class="promo-kpi-info">
+                            <h4>Desconto Médio</h4>
+                            <div class="kpi-num" id="kpiDescontoMedio" style="color: #7E22CE;">0%</div>
+                        </div>
+                        <div class="promo-kpi-icon icon-purple">🏷️</div>
+                    </div>
+                </div>
+
+                <!-- Painel de Filtros -->
+                <div class="filters-panel">
+                    <input type="text" id="filtroTexto" placeholder="🔍 Buscar por nome da ação (ex: Ação Verão)...">
+                    <select id="filtroStatus">
+                        <option value="todos">Todos os Status</option>
+                        <option value="vigentes" selected>Vigentes Agora</option>
+                        <option value="agendadas">Agendadas (Futuras)</option>
+                        <option value="expiradas">Encerradas / Expiradas</option>
+                        <option value="inativas">Desativadas</option>
+                    </select>
+                    <button class="btn-primary" id="btnFiltrar" style="padding: 9px 16px;">Filtrar</button>
+                    <button class="btn-secondary" id="btnLimparFiltros" style="padding: 9px 16px;">Limpar</button>
+                </div>
+
+                <!-- Tabela de Ações Promocionais -->
+                <div class="table-container" style="background: #FFFFFF; border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+                    <table class="data-table" id="tabelaPromocoes" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #F8FAFC; border-bottom: 2px solid var(--border);">
+                                <th style="padding: 12px 14px; text-align: left;">Ação Promocional</th>
+                                <th style="padding: 12px 14px; text-align: left;">Vigência</th>
+                                <th style="padding: 12px 14px; text-align: left;">Desconto Padrão</th>
+                                <th style="padding: 12px 14px; text-align: center;">Produtos</th>
+                                <th style="padding: 12px 14px; text-align: center;">Status</th>
+                                <th style="padding: 12px 14px; text-align: right;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaPromocoesCorpo">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 40px; color: var(--gray);">
+                                    Carregando ações promocionais...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ══ MODAL CRIAR / EDITAR AÇÃO PROMOCIONAL ══ -->
+    <div id="modalPromocao" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 540px;">
+            <div class="modal-header">
+                <h2 id="modalPromocaoTitulo">Nova Ação Promocional</h2>
+                <span class="close" id="fecharModalPromocao">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="formPromocao">
+                    <input type="hidden" id="promocaoId">
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="required-label">Nome da Ação Promocional</label>
+                        <input type="text" id="promoNome" placeholder="Ex: Ação Verão, Black Friday, Saldão..." required>
+                        <small style="color: var(--gray); font-size: 11px;">Este nome será exibido no carrinho do PDV e no comprovante do cliente.</small>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label>Descrição / Observações</label>
+                        <textarea id="promoDescricao" rows="2" placeholder="Notas sobre a campanha ou motivo do desconto..."></textarea>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group">
+                            <label class="required-label">Tipo de Desconto Padrão</label>
+                            <select id="promoTipoDesconto" required>
+                                <option value="porcentagem">Porcentagem (%)</option>
+                                <option value="valor_fixo">Valor Fixo (R$)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="required-label">Valor do Desconto</label>
+                            <input type="number" id="promoValorDesconto" step="0.01" min="0.01" placeholder="Ex: 15 para 15% ou 10.00 para R$ 10" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                        <div class="form-group">
+                            <label class="required-label">Data de Início</label>
+                            <input type="date" id="promoDataInicio" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Data de Fim (Opcional)</label>
+                            <input type="date" id="promoDataFim">
+                            <small style="color: var(--gray); font-size: 11px;">Deixe em branco para promoção contínua.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group-checkbox" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+                        <input type="checkbox" id="promoAtivo" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="promoAtivo" style="font-weight: 600; cursor: pointer;">Ação Promocional Ativa</label>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" class="btn-secondary" id="btnCancelarPromocao">Cancelar</button>
+                        <button type="submit" class="btn-primary" id="btnSalvarPromocao">Salvar Ação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL GERENCIAR PRODUTOS DA AÇÃO ══ -->
+    <div id="modalProdutosPromocao" class="modal" style="display: none;">
+        <div class="modal-content modal-large" style="max-width: 820px;">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modalProdutosTitulo" style="margin: 0;">Produtos da Ação Promocional</h2>
+                    <span id="modalProdutosSubtitulo" style="font-size: 13px; color: var(--gray);"></span>
+                </div>
+                <span class="close" id="fecharModalProdutos">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Seção Adicionar Produto -->
+                <div class="promo-add-box">
+                    <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #1E293B;">
+                        ➕ Vincular Produto à Ação
+                    </h4>
+                    <form id="formAdicionarProdutoPromo">
+                        <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: flex-end;">
+                            <div class="form-group" style="margin: 0;">
+                                <label class="required-label">Selecionar Produto</label>
+                                <select id="selectProdutoPromo" required style="width: 100%;">
+                                    <option value="">Carregando produtos...</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label class="required-label">Tipo de Desconto</label>
+                                <select id="prodPromoTipo" required style="width: 100%;">
+                                    <option value="porcentagem">Porcentagem (%)</option>
+                                    <option value="valor_fixo">Desconto em R$</option>
+                                    <option value="preco_fixo">Preço Promocional (R$)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label class="required-label">Valor / Preço</label>
+                                <input type="number" id="prodPromoValor" step="0.01" min="0.01" placeholder="Ex: 15.00" required style="width: 100%;">
+                            </div>
+                            <button type="submit" class="btn-primary" id="btnAdicionarProdutoPromo" style="height: 38px; padding: 0 16px; font-weight: 700;">
+                                Vincular
+                            </button>
+                        </div>
+
+                        <!-- Prévia do Preço e Trava de Segurança -->
+                        <div id="promoPrecoPreview" class="promo-preview-price" style="display: none;">
+                            <div>
+                                <span style="color: #64748B;">Preço Original:</span>
+                                <span class="price-original" id="previewPrecoOriginal">R$ 0,00</span>
+                            </div>
+                            <div>
+                                <span style="color: #64748B;">Desconto:</span>
+                                <strong id="previewValorDesconto" style="color: #DC2626;">- R$ 0,00</strong>
+                            </div>
+                            <div>
+                                <span style="color: #64748B;">Preço na Venda:</span>
+                                <span class="price-final" id="previewPrecoFinal">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div id="avisoPrecoMinimo" class="price-warning">
+                            ⚠️ REGRA DE NEGÓCIO: O preço de venda nunca pode ser menor que R$ 0,01. Ajuste o desconto!
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tabela de Produtos Vinculados -->
+                <h4 style="margin: 16px 0 8px; font-size: 14px; font-weight: 700; color: #1E293B;">
+                    📋 Produtos Participantes desta Ação (<span id="contadorProdutosPromo">0</span>)
+                </h4>
+                <div class="table-container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+                    <table class="data-table" id="tabelaProdutosVinculados" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                            <tr style="background: #F1F5F9;">
+                                <th style="padding: 10px;">Código</th>
+                                <th style="padding: 10px;">Produto</th>
+                                <th style="padding: 10px; text-align: right;">Preço Original</th>
+                                <th style="padding: 10px; text-align: center;">Regra de Desconto</th>
+                                <th style="padding: 10px; text-align: right;">Preço Promocional</th>
+                                <th style="padding: 10px; text-align: center;">Status</th>
+                                <th style="padding: 10px; text-align: center;">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaProdutosVinculadosCorpo">
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 25px; color: var(--gray);">
+                                    Nenhum produto vinculado a esta ação promocional.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
+                    <button type="button" class="btn-secondary" id="btnFecharProdutosPromo">Concluir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts essenciais do sistema -->
+    <script src="js/security.js?v=2.0.6"></script>
+    <script src="js/config.js?v=2.0.6"></script>
+    <script src="js/auth-check.js?v=2.0.6"></script>
+    <script src="js/promocoes.js?v=2.0.6"></script>
+    <script src="js/ajuda.js?v=2.0.6"></script>
+    <script src="js/active-nav.js?v=2.0.6"></script>
+</body>
+</html>
