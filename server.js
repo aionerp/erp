@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { handleApiRequest } = require('./server-api');
 
 const PORT = process.env.PORT || 3000;
 const serveDir = process.argv[2] || '.';
@@ -19,12 +20,19 @@ const MIME_TYPES = {
     '.sql': 'text/plain; charset=utf-8'
 };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // Interceptar requisições de API para o Neon/Data Layer
+    if (req.url.startsWith('/api/')) {
+        const handled = await handleApiRequest(req, res);
+        if (handled) return;
+    }
+
     // Decodificar URL para suportar caracteres especiais e acentos
     let decodedUrl = decodeURIComponent(req.url);
     
     // Remover query strings da URL (ex: ?t=123)
     const qIndex = decodedUrl.indexOf('?');
+
     if (qIndex !== -1) {
         decodedUrl = decodedUrl.substring(0, qIndex);
     }

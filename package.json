@@ -10,9 +10,22 @@
     "init-db": "node scripts/init_database.js",
     "build:cliente01": "node build.js cliente01",
     "build:cliente02": "node build.js cliente02",
-    "build:cliente03": "node build.js cliente03"
+    "build:cliente03": "node build.js cliente03",
+    "migrate:backup": "node scripts/migration/01_backup_supabase.js",
+    "migrate:setup": "node scripts/migration/02_setup_neon_schema.js",
+    "migrate:compare": "node scripts/migration/03_compare_schemas.js",
+    "migrate:copy": "node scripts/migration/04_initial_data_copy.js",
+    "migrate:sync": "node scripts/migration/05_sync_deltas.js",
+    "migrate:validate": "node scripts/migration/06_validate_data.js",
+    "migrate:cutover": "node scripts/migration/cutover.js",
+    "migrate:rollback": "node scripts/migration/rollback.js",
+    "test:neon": "node scripts/test_neon_environment.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0"
+  }
 }

@@ -15,7 +15,7 @@
 // 1. Tentar carregar env.js de forma síncrona se disponível para preencher window.ENV
 try {
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'env.js', false); // Síncrono
+    xhr.open('GET', 'env.js?t=' + Date.now(), false); // Síncrono sem cache
     xhr.send();
     if (xhr.status === 200) {
         eval(xhr.responseText);
@@ -24,12 +24,34 @@ try {
     console.log('Arquivo env.js não encontrado localmente.');
 }
 
+// Carregar data-layer.js de forma síncrona se disponível para a camada de abstração
+if (typeof window.AionDataLayer === 'undefined') {
+    try {
+        const xhrDl = new XMLHttpRequest();
+        xhrDl.open('GET', 'js/data-layer.js?t=' + Date.now(), false);
+        xhrDl.send();
+        if (xhrDl.status === 200) {
+            eval(xhrDl.responseText);
+        }
+    } catch (e) {
+        console.warn('Aviso: data-layer.js não encontrado.');
+    }
+}
+
+
 // 2. Se houver um cliente ativo na sessão (definido no login ou primeiro acesso), usar suas credenciais
 const activeClientStr = sessionStorage.getItem('active_client');
 if (activeClientStr) {
     try {
         const activeClient = JSON.parse(activeClientStr);
-        if (activeClient && activeClient.supabase?.url && activeClient.supabase?.anonKey) {
+        // Se for cliente01, desativar Supabase obsoleto/pausado
+        if (activeClient && activeClient.clientId === 'cliente01') {
+            activeClient.database = { provider: 'neon', connectionId: 'cliente01' };
+            delete activeClient.supabase;
+            try { sessionStorage.setItem('active_client', JSON.stringify(activeClient)); } catch(e){}
+        }
+
+        if (activeClient) {
             // Atualizar cor legada #0A4D68 para o novo padrão Modern SaaS #0A1628
             if (activeClient.branding?.primaryColor === '#0A4D68') {
                 activeClient.branding.primaryColor = '#0A1628';
@@ -44,8 +66,9 @@ if (activeClientStr) {
                 COMPANY_SUBTITLE: activeClient.companySubtitle,
                 PREFIX: activeClient.prefix,
                 CNPJ: activeClient.cnpjFormatted || activeClient.cnpj,
-                SUPABASE_URL: activeClient.supabase.url,
-                SUPABASE_ANON_KEY: activeClient.supabase.anonKey,
+                DATABASE: activeClient.database || (activeClient.supabase?.url ? { provider: 'supabase', connectionId: activeClient.clientId } : { provider: 'neon', connectionId: activeClient.clientId }),
+                SUPABASE_URL: activeClient.supabase?.url,
+                SUPABASE_ANON_KEY: activeClient.supabase?.anonKey,
                 BRANDING: activeClient.branding || {},
                 FEATURES: activeClient.features || {}
             };
@@ -72,12 +95,8 @@ if (window.ENV?.BRANDING?.primaryColor && window.ENV.BRANDING.primaryColor !== '
     `;
 }
 
-const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://madaoptvsbnhelamwyzp.supabase.co';
-const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZGFvcHR2c2JuaGVsYW13eXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzIxMTQsImV4cCI6MjA5OTg0ODExNH0.I3QKcld6haTURNf9f3VfxduHjx9-9-mjiEdg0HmlqD4';
-
-if (!SUPABASE_ANON_KEY) {
-    console.warn('⚠️ AVISO DE SEGURANÇA: SUPABASE_ANON_KEY não configurada!');
-}
+const SUPABASE_URL = window.ENV?.DATABASE?.provider === 'neon' ? null : (window.ENV?.SUPABASE_URL || null);
+const SUPABASE_ANON_KEY = window.ENV?.DATABASE?.provider === 'neon' ? null : (window.ENV?.SUPABASE_ANON_KEY || null);
 
 // Função para instanciar cliente Supabase com interceptador de multi-tenancy
 function criarClienteSupabase(url, anonKey) {
@@ -162,12 +181,21 @@ function criarClienteSupabase(url, anonKey) {
         return queryBuilder;
     };
     client._isIntercepted = true;
+    window.criarClienteSupabaseOriginal = criarClienteSupabase;
     return client;
 }
 
-// Inicializar cliente Supabase padrão
-if (typeof supabaseClient === 'undefined') {
-    var supabaseClient = criarClienteSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.criarClienteSupabaseOriginal = criarClienteSupabase;
+
+// Inicializar cliente padrão (via Data Layer para suporte transparente a Neon/Supabase)
+if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+    if (window.AionDataLayer) {
+        var supabaseClient = window.AionDataLayer.createClient(window.ENV || { clientId: 'cliente01', database: { provider: 'neon', connectionId: 'cliente01' } });
+    } else if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        var supabaseClient = criarClienteSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+    window.supabaseClient = supabaseClient;
+    window.dbClient = supabaseClient;
 }
 
 // =====================================================
@@ -209,8 +237,8 @@ window.buscarClientePorPrefixo = async function(prefixo) {
 };
 
 window.conectarClienteSupabase = function(clienteConfig) {
-    if (!clienteConfig || !clienteConfig.supabase?.url || !clienteConfig.supabase?.anonKey) {
-        console.error('Configuração de Supabase inválida para o cliente:', clienteConfig);
+    if (!clienteConfig) {
+        console.error('Configuração inválida para o cliente:', clienteConfig);
         return null;
     }
     
@@ -222,8 +250,9 @@ window.conectarClienteSupabase = function(clienteConfig) {
         COMPANY_SUBTITLE: clienteConfig.companySubtitle,
         PREFIX: clienteConfig.prefix,
         CNPJ: clienteConfig.cnpjFormatted || clienteConfig.cnpj,
-        SUPABASE_URL: clienteConfig.supabase.url,
-        SUPABASE_ANON_KEY: clienteConfig.supabase.anonKey,
+        DATABASE: clienteConfig.database || { provider: clienteConfig.supabase?.url ? 'supabase' : 'neon', connectionId: clienteConfig.clientId },
+        SUPABASE_URL: clienteConfig.supabase?.url,
+        SUPABASE_ANON_KEY: clienteConfig.supabase?.anonKey,
         BRANDING: clienteConfig.branding || {},
         FEATURES: clienteConfig.features || {}
     };
@@ -250,9 +279,14 @@ window.conectarClienteSupabase = function(clienteConfig) {
         `;
     }
     
-    // Recriar o cliente Supabase apontando para o banco do cliente
-    supabaseClient = criarClienteSupabase(clienteConfig.supabase.url, clienteConfig.supabase.anonKey);
+    // Instanciar via Data Layer (suporta Supabase e Neon)
+    if (window.AionDataLayer) {
+        supabaseClient = window.AionDataLayer.createClient(clienteConfig);
+    } else {
+        supabaseClient = criarClienteSupabase(clienteConfig.supabase?.url, clienteConfig.supabase?.anonKey);
+    }
     window.supabaseClient = supabaseClient;
+    window.dbClient = supabaseClient;
     return supabaseClient;
 };
 

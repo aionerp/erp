@@ -44,8 +44,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             try {
+                // Obter cliente ativo de forma segura (evita erro se supabaseClient for null)
+                let client = (typeof supabaseClient !== 'undefined' && supabaseClient) 
+                    ? supabaseClient 
+                    : (window.supabaseClient || window.dbClient);
+
+                if (!client && window.AionDataLayer) {
+                    client = window.AionDataLayer.createClient(window.ENV || { clientId: 'cliente01', database: { provider: 'neon', connectionId: 'cliente01' } });
+                    window.supabaseClient = client;
+                }
+
+                if (!client) {
+                    throw new Error('Banco de dados não inicializado. Por favor, recarregue a página (Ctrl + F5).');
+                }
+
                 // Autenticar chamando a RPC segura (bypassa RLS)
-                let response = await supabaseClient
+                let response = await client
                     .rpc('autenticar_usuario', {
                         p_email: inputIdentificador,
                         p_senha: senha
@@ -57,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Se a função autenticar_usuario não for encontrada, tenta login_usuario ou query direta
                 if (error && (error.code === 'PGRST202' || error.status === 404 || error.message?.includes('autenticar_usuario'))) {
                     console.log('RPC autenticar_usuario não encontrada. Tentando login_usuario (fallback)...');
-                    const fallbackRes = await supabaseClient
+                    const fallbackRes = await client
                         .rpc('login_usuario', {
                             p_email: inputIdentificador,
                             p_senha: senha
@@ -69,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Fallback direto na tabela usuarios se RPCs não estiverem presentes
                 if ((!data || data.length === 0) && (error || !response.data)) {
                     try {
-                        const { data: directUsers } = await supabaseClient
+                        const { data: directUsers } = await client
                             .from('usuarios')
                             .select('*, lojas(nome, segmento), config_loja(*)')
                             .eq('email', inputIdentificador)
@@ -138,10 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('usuario', JSON.stringify(usuarioLogado));
                 
                 // Atualizar último acesso
-                await supabaseClient
-                    .from('usuarios')
-                    .update({ ultimo_acesso: new Date().toISOString() })
-                    .eq('id', userData.id);
+                try {
+                    await client
+                        .from('usuarios')
+                        .update({ ultimo_acesso: new Date().toISOString() })
+                        .eq('id', userData.id);
+                } catch (e) {
+                    console.warn('Não foi possível atualizar ultimo_acesso:', e);
+                }
                 
                 mostrarNotificacao(`Bem-vindo, ${userData.nome}!`, 'success');
                 

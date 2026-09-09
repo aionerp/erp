@@ -1259,9 +1259,30 @@ async function renderizarProdutosEmCampanhas() {
         `;
 
         for (const promo of promocoes) {
-            const statusBadge = promo.status_vigencia === 'ativa'
+            // Calcular status de vigência de forma dinâmica e resiliente
+            let statusVigencia = promo.status_vigencia;
+            if (!statusVigencia) {
+                if (window.PromocoesAPI && typeof window.PromocoesAPI.obterEstadoVigencia === 'function') {
+                    statusVigencia = window.PromocoesAPI.obterEstadoVigencia(promo).status;
+                } else {
+                    const hojeStr = new Date().toISOString().split('T')[0];
+                    const dInicio = promo.data_inicio ? String(promo.data_inicio).split('T')[0] : null;
+                    const dFim = promo.data_fim ? String(promo.data_fim).split('T')[0] : null;
+                    if (promo.ativo === false || promo.ativo === 'false') {
+                        statusVigencia = 'inativa';
+                    } else if (dInicio && dInicio > hojeStr) {
+                        statusVigencia = 'agendada';
+                    } else if (dFim && dFim < hojeStr) {
+                        statusVigencia = 'expirada';
+                    } else {
+                        statusVigencia = 'ativa';
+                    }
+                }
+            }
+
+            const statusBadge = statusVigencia === 'ativa'
                 ? '<span style="background: #DEF7EC; color: #03543F; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🟢 Ativa</span>'
-                : promo.status_vigencia === 'agendada'
+                : statusVigencia === 'agendada'
                 ? '<span style="background: #FEF08A; color: #854D0E; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🟡 Agendada</span>'
                 : '<span style="background: #FDE8E8; color: #9B1C1C; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">🔴 Inativa / Expirada</span>';
 
@@ -1679,7 +1700,8 @@ async function carregarRelatorioDescontos() {
 
 function formatarDataISO(dataStr) {
     if (!dataStr) return '';
-    const partes = dataStr.split('-');
+    const soData = String(dataStr).split('T')[0].trim();
+    const partes = soData.split('-');
     if (partes.length !== 3) return dataStr;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }

@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "clientId": "cliente01",
+    "companyName": "AionERP Oficial",
+    "sourceUrl": "https://madaoptvsbnhelamwyzp.supabase.co",
+    "timestamp": "2026-09-09T12:25:59.407Z",
+    "version": "1.0.0"
+  },
+  "tables": {
+    "lojas": [],
+    "usuarios": [],
+    "categorias": [],
+    "clientes": [],
+    "produtos": [],
+    "produtos_seriais": [],
+    "entradas": [],
+    "entrada_itens": [],
+    "saidas": [],
+    "saida_itens": [],
+    "movimentos_estoque": [],
+    "caixas": [],
+    "despesas": [],
+    "boletos_pagar": [],
+    "colaboradores": [],
+    "agendamentos": [],
+    "mesas_comandas": [],
+    "config_loja": []
+  }
+}

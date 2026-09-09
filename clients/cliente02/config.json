@@ -1,19 +1,19 @@
 {
   "clientId": "cliente02",
-  "companyName": "Cliente 02 Verde",
-  "companySubtitle": "by AionLabs (Cliente 02)",
-  "prefix": "cliente02",
-  "cnpj": "98.765.432/0001-10",
+  "companyName": "E-commerce Original Eletronico",
+  "companySubtitle": "Unidade Centro",
+  "prefix": "originaleletronico",
+  "cnpj": "47.391.014/0001-47",
   "active": true,
   "configured": true,
-  "supabase": {
-    "url": "https://jlpxureozcpgfliukztn.supabase.co",
-    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpscHh1cmVvemNwZ2ZsaXVrenRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTAxNTYsImV4cCI6MjEwMzc2NjE1Nn0.TDYRAbDaeRwQ0i3Uq6RxZUyZu1WMuugNO5nejq2og0s"
+  "database": {
+    "provider": "neon",
+    "connectionId": "cliente02"
   },
   "branding": {
-    "primaryColor": "#00A86B",
-    "primaryDarkColor": "#007F51",
-    "primaryLightColor": "#10C17E"
+    "primaryColor": "#EB5E28",
+    "primaryDarkColor": "#B83E15",
+    "primaryLightColor": "#FF8C61"
   },
   "features": {
     "habilitar_seriais": true,
@@ -23,3 +23,4 @@
     "habilitar_variacoes": true
   }
 }
+

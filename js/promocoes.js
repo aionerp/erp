@@ -7,10 +7,27 @@ let promocaoSelecionadaId = null;
 let produtosVinculados = [];
 
 // =====================================================
-// CAMADA DE DADOS E API COMPARTILHADA (SUPABASE + FALLBACK)
-// =====================================================
-
 window.PromocoesAPI = {
+    // Obter estado de vigência da promoção de forma padronizada
+    obterEstadoVigencia(promo) {
+        if (!promo) return { label: 'Inativa', classe: 'badge-inativa', status: 'inativa' };
+        if (promo.ativo === false || promo.ativo === 'false' || String(promo.ativo) === '0') {
+            return { label: 'Inativa', classe: 'badge-inativa', status: 'inativa' };
+        }
+
+        const hojeStr = new Date().toISOString().split('T')[0];
+        const dataInicio = promo.data_inicio ? String(promo.data_inicio).split('T')[0] : null;
+        const dataFim = promo.data_fim ? String(promo.data_fim).split('T')[0] : null;
+
+        if (dataInicio && dataInicio > hojeStr) {
+            return { label: 'Agendada', classe: 'badge-agendada', status: 'agendada' };
+        }
+        if (dataFim && dataFim < hojeStr) {
+            return { label: 'Expirada', classe: 'badge-expirada', status: 'expirada' };
+        }
+        return { label: 'Vigente', classe: 'badge-vigente', status: 'ativa' };
+    },
+
     // Obter todas as ações promocionais da loja
     async listarPromocoes() {
         const usuario = JSON.parse(sessionStorage.getItem('usuario'));
@@ -23,12 +40,24 @@ window.PromocoesAPI = {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            return data || [];
+            const lista = data || [];
+            return lista.map(p => ({
+                ...p,
+                data_inicio: p.data_inicio ? String(p.data_inicio).split('T')[0] : null,
+                data_fim: p.data_fim ? String(p.data_fim).split('T')[0] : null,
+                status_vigencia: this.obterEstadoVigencia(p).status
+            }));
         } catch (err) {
             console.warn('Supabase promocoes indisponível, utilizando persistência local:', err.message);
             const storageKey = `erp_promocoes_loja_${lojaId}`;
             const localData = localStorage.getItem(storageKey);
-            return localData ? JSON.parse(localData) : [];
+            const lista = localData ? JSON.parse(localData) : [];
+            return lista.map(p => ({
+                ...p,
+                data_inicio: p.data_inicio ? String(p.data_inicio).split('T')[0] : null,
+                data_fim: p.data_fim ? String(p.data_fim).split('T')[0] : null,
+                status_vigencia: this.obterEstadoVigencia(p).status
+            }));
         }
     },
 
@@ -38,6 +67,10 @@ window.PromocoesAPI = {
         const lojaId = usuario?.loja_id || 1;
         dados.loja_id = lojaId;
         dados.updated_at = new Date().toISOString();
+
+        if (dados.id === null || dados.id === undefined || dados.id === '') {
+            delete dados.id;
+        }
 
         try {
             if (dados.id) {
@@ -78,6 +111,11 @@ window.PromocoesAPI = {
             localStorage.setItem(storageKey, JSON.stringify(list));
             return novaPromo;
         }
+    },
+
+    // Alternar status ativo/inativo
+    async alternarStatus(id, novoStatus) {
+        return this.salvarPromocao({ id, ativo: novoStatus });
     },
 
     // Verificar se uma promoção já foi utilizada em vendas registradas
@@ -319,9 +357,11 @@ window.PromocoesAPI = {
         const hojeStr = new Date().toISOString().split('T')[0];
 
         return todas.filter(p => {
-            if (!p.ativo) return false;
-            if (p.data_inicio && p.data_inicio > hojeStr) return false;
-            if (p.data_fim && p.data_fim < hojeStr) return false;
+            if (!p.ativo || p.ativo === 'false') return false;
+            const dInicio = p.data_inicio ? String(p.data_inicio).split('T')[0] : null;
+            const dFim = p.data_fim ? String(p.data_fim).split('T')[0] : null;
+            if (dInicio && dInicio > hojeStr) return false;
+            if (dFim && dFim < hojeStr) return false;
             return true;
         });
     },
@@ -537,16 +577,24 @@ async function atualizarKPIs() {
 
 // Obter estado de vigência da promoção
 function obterEstadoVigencia(promo) {
-    if (!promo.ativo) return { label: 'Inativa', classe: 'badge-inativa' };
+    if (window.PromocoesAPI && typeof window.PromocoesAPI.obterEstadoVigencia === 'function') {
+        return window.PromocoesAPI.obterEstadoVigencia(promo);
+    }
+    if (!promo || promo.ativo === false || promo.ativo === 'false' || String(promo.ativo) === '0') {
+        return { label: 'Inativa', classe: 'badge-inativa', status: 'inativa' };
+    }
 
     const hojeStr = new Date().toISOString().split('T')[0];
-    if (promo.data_inicio && promo.data_inicio > hojeStr) {
-        return { label: 'Agendada', classe: 'badge-agendada' };
+    const dataInicio = promo.data_inicio ? String(promo.data_inicio).split('T')[0] : null;
+    const dataFim = promo.data_fim ? String(promo.data_fim).split('T')[0] : null;
+
+    if (dataInicio && dataInicio > hojeStr) {
+        return { label: 'Agendada', classe: 'badge-agendada', status: 'agendada' };
     }
-    if (promo.data_fim && promo.data_fim < hojeStr) {
-        return { label: 'Expirada', classe: 'badge-expirada' };
+    if (dataFim && dataFim < hojeStr) {
+        return { label: 'Expirada', classe: 'badge-expirada', status: 'expirada' };
     }
-    return { label: 'Vigente', classe: 'badge-vigente' };
+    return { label: 'Vigente', classe: 'badge-vigente', status: 'ativa' };
 }
 
 // Renderizar listagem de ações
@@ -649,7 +697,8 @@ async function renderizarTabelaPromocoes() {
 
 function formatarDataBrasil(dataIso) {
     if (!dataIso) return '-';
-    const partes = dataIso.split('-');
+    const soData = String(dataIso).split('T')[0].trim();
+    const partes = soData.split('-');
     if (partes.length !== 3) return dataIso;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
@@ -708,7 +757,6 @@ function configurarEventosUI() {
         }
 
         const dados = {
-            id: id ? parseInt(id) : null,
             nome,
             descricao,
             tipo_desconto: tipoDesconto,
@@ -717,6 +765,9 @@ function configurarEventosUI() {
             data_fim: dataFim,
             ativo
         };
+        if (id) {
+            dados.id = parseInt(id);
+        }
 
         const btn = document.getElementById('btnSalvarPromocao');
         btn.disabled = true;
@@ -867,9 +918,8 @@ window.editarPromocao = (id) => {
     document.getElementById('promoNome').value = promo.nome;
     document.getElementById('promoDescricao').value = promo.descricao || '';
     document.getElementById('promoTipoDesconto').value = promo.tipo_desconto || 'porcentagem';
-    document.getElementById('promoValorDesconto').value = promo.valor_desconto || 0;
-    document.getElementById('promoDataInicio').value = promo.data_inicio || '';
-    document.getElementById('promoDataFim').value = promo.data_fim || '';
+    document.getElementById('promoDataInicio').value = promo.data_inicio ? String(promo.data_inicio).split('T')[0] : '';
+    document.getElementById('promoDataFim').value = promo.data_fim ? String(promo.data_fim).split('T')[0] : '';
     document.getElementById('promoAtivo').checked = promo.ativo !== false;
 
     document.getElementById('modalPromocao').style.display = 'flex';

@@ -49,6 +49,7 @@ function generateClientsManifest() {
                         active: clientData.active !== undefined ? clientData.active : true,
                         configured: clientData.configured !== undefined ? clientData.configured : true,
                         status: clientData.status || (clientData.active !== false ? 'ativo' : 'inativo'),
+                        database: clientData.database || { provider: clientData.supabase ? 'supabase' : 'neon', connectionId: clientData.clientId || folder },
                         supabase: clientData.supabase || {},
                         branding: clientData.branding || {},
                         features: clientData.features || {}
@@ -85,7 +86,7 @@ if (fs.existsSync(envPath)) {
 }
 
 // 3. Identify target client
-const client = process.env.CLIENTE || env.CLIENTE || env.VITE_CLIENT_ID || env.CLIENT_ID || process.argv[2];
+const client = process.argv[2] || process.env.CLIENTE || env.CLIENTE || env.VITE_CLIENT_ID || env.CLIENT_ID;
 
 if (!client) {
     console.log('Nenhum cliente específico passado para build único. Manifesto clients.json atualizado.');
@@ -147,6 +148,7 @@ window.ENV = {
     COMPANY_SUBTITLE: ${JSON.stringify(config.companySubtitle || "by AionLabs")},
     PREFIX: ${JSON.stringify(config.prefix || config.clientId)},
     CNPJ: ${JSON.stringify(config.cnpj)},
+    DATABASE: ${JSON.stringify(config.database || { provider: config.supabase ? 'supabase' : 'neon', connectionId: config.clientId })},
     SUPABASE_URL: ${JSON.stringify(config.supabase?.url)},
     SUPABASE_ANON_KEY: ${JSON.stringify(config.supabase?.anonKey)},
     BRANDING: {

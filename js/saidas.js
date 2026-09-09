@@ -2407,25 +2407,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function gerarComprovante(vendaId) {
         try {
-            const { data: venda } = await supabaseClient
-                .from('saidas')
-                .select('*, clientes(nome,telefone,email,endereco,numero,cidade,estado,cpf_cnpj), usuarios!usuario_id(nome)')
-                .eq('id', vendaId)
-                .single();
+            let venda = null;
+            // Tentar com relações aninhadas
+            try {
+                const res = await supabaseClient
+                    .from('saidas')
+                    .select('*, clientes(nome,telefone,email,endereco,numero,cidade,estado,cpf_cnpj), usuarios!usuario_id(nome)')
+                    .eq('id', vendaId)
+                    .single();
+                venda = res?.data;
+            } catch (e) {
+                console.warn('Busca de venda com relações falhou, tentando fallback simples...', e);
+            }
 
-            const { data: itens } = await supabaseClient
-                .from('saida_itens')
-                .select('*, produtos(id,nome,codigo,categoria,marca,modelo)')
-                .eq('saida_id', vendaId);
+            // Fallback simples se a busca aninhada não retornar
+            if (!venda) {
+                const res = await supabaseClient
+                    .from('saidas')
+                    .select('*')
+                    .eq('id', vendaId)
+                    .single();
+                venda = res?.data || {};
+            }
+
+            // Complementar dados do cliente se necessário
+            if (venda && venda.cliente_id && (!venda.clientes || !venda.clientes.nome)) {
+                try {
+                    const { data: c } = await supabaseClient
+                        .from('clientes')
+                        .select('nome,telefone,email,endereco,numero,cidade,estado,cpf_cnpj')
+                        .eq('id', venda.cliente_id)
+                        .single();
+                    if (c) venda.clientes = c;
+                } catch (e) {}
+            }
+
+            // Complementar dados do vendedor se necessário
+            if (venda && venda.usuario_id && (!venda.usuarios || !venda.usuarios.nome)) {
+                try {
+                    const { data: u } = await supabaseClient
+                        .from('usuarios')
+                        .select('nome')
+                        .eq('id', venda.usuario_id)
+                        .single();
+                    if (u) venda.usuarios = u;
+                } catch (e) {}
+            }
+
+            let itens = [];
+            try {
+                const resItens = await supabaseClient
+                    .from('saida_itens')
+                    .select('*, produtos(id,nome,codigo,categoria,marca,modelo)')
+                    .eq('saida_id', vendaId);
+                itens = resItens?.data || [];
+            } catch (e) {}
+
+            if (!itens || itens.length === 0) {
+                try {
+                    const resItensSimples = await supabaseClient
+                        .from('saida_itens')
+                        .select('*')
+                        .eq('saida_id', vendaId);
+                    itens = resItensSimples?.data || [];
+                } catch (e) {}
+            }
 
             for (const item of (itens || [])) {
+                if (item.produto_id && (!item.produtos || !item.produtos.nome)) {
+                    try {
+                        const { data: prod } = await supabaseClient
+                            .from('produtos')
+                            .select('id,nome,codigo,categoria,marca,modelo')
+                            .eq('id', item.produto_id)
+                            .single();
+                        if (prod) item.produtos = prod;
+                    } catch (e) {}
+                }
                 if (item.serial_id) {
-                    const { data: s } = await supabaseClient
-                        .from('produtos_seriais')
-                        .select('numero_serie, imei')
-                        .eq('id', item.serial_id)
-                        .single();
-                    if (s) { item.numero_serie = s.numero_serie; item.imei = s.imei; }
+                    try {
+                        const { data: s } = await supabaseClient
+                            .from('produtos_seriais')
+                            .select('numero_serie, imei')
+                            .eq('id', item.serial_id)
+                            .single();
+                        if (s) { item.numero_serie = s.numero_serie; item.imei = s.imei; }
+                    } catch (e) {}
                 }
             }
 
@@ -2452,9 +2519,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- DADOS DO PEDIDO -->
                     <div style="font-size:15px;line-height:1.4;margin-bottom:8px;">
-                        <p style="margin:2px 0;">Data venda: ${formatarData(venda.data)} - ${venda.hora || horaVenda}</p>
-                        <h3 style="margin:2px 0;font-size:17px;font-weight:bold;">PEDIDO NÚMERO: ${venda.id}</h3>
-                        <p style="margin:2px 0;">Vendedor: ${venda.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
+                        <p style="margin:2px 0;">Data venda: ${formatarData(venda?.data || new Date())} - ${venda?.hora || horaVenda}</p>
+                        <h3 style="margin:2px 0;font-size:17px;font-weight:bold;">PEDIDO NÚMERO: ${venda?.id || vendaId}</h3>
+                        <p style="margin:2px 0;">Vendedor: ${venda?.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
                         ${cancelada ? `
                             <p style="color:#dc2626;margin-top:6px;font-size:15px;font-weight:bold;">
                                 ⚠️ VENDA CANCELADA<br>
