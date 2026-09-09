@@ -51,6 +51,26 @@
         return (typeof configOrId === 'string' && configOrId) ? configOrId : 'cliente01';
     }
 
+    function getBackendBaseUrl() {
+        if (typeof window !== 'undefined') {
+            if (window.ENV?.API_URL) return window.ENV.API_URL.replace(/\/$/, '');
+            if (window.ENV?.BACKEND_URL) return window.ENV.BACKEND_URL.replace(/\/$/, '');
+            try {
+                const localApi = localStorage.getItem('aion_api_url');
+                if (localApi) return localApi.replace(/\/$/, '');
+            } catch(e) {}
+
+            if (window.location) {
+                const host = window.location.hostname;
+                const port = window.location.port;
+                if ((host === 'localhost' || host === '127.0.0.1') && port !== '3000' && port !== '') {
+                    return 'http://127.0.0.1:3000';
+                }
+            }
+        }
+        return '';
+    }
+
     class NeonQueryBuilder {
         constructor(clientId, tableName) {
             this.clientId = resolveClientId(clientId);
@@ -187,7 +207,7 @@
 
         async execute() {
             const finalClientId = resolveClientId(this.clientId);
-            const baseUrl = (typeof window !== 'undefined' && window.location && ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000' && window.location.port !== '')) ? 'http://127.0.0.1:3000' : '';
+            const baseUrl = getBackendBaseUrl();
             const endpoint = `${baseUrl}/api/data/${finalClientId}/${this.tableName}`;
             const headers = { 'Content-Type': 'application/json' };
 
@@ -237,7 +257,11 @@
                 };
             } catch (err) {
                 console.error(`[DataLayer] Erro ao conectar ao servidor backend em ${endpoint}:`, err);
-                return { data: null, error: { message: `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.` }, count: 0 };
+                const isGitHubPages = typeof window !== 'undefined' && window.location && window.location.hostname.includes('github.io');
+                const msg = isGitHubPages
+                    ? `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`
+                    : `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.`;
+                return { data: null, error: { message: msg }, count: 0 };
             }
         }
 
@@ -258,7 +282,7 @@
 
         async rpc(functionName, params = {}) {
             const finalClientId = resolveClientId(this.clientId);
-            const baseUrl = (typeof window !== 'undefined' && window.location && ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000' && window.location.port !== '')) ? 'http://127.0.0.1:3000' : '';
+            const baseUrl = getBackendBaseUrl();
             const endpoint = `${baseUrl}/api/rpc/${finalClientId}/${functionName}`;
             try {
                 const res = await fetch(endpoint, {
@@ -273,7 +297,11 @@
                 return { data: result.data, error: null };
             } catch (err) {
                 console.error(`[DataLayer] Erro ao executar RPC em ${endpoint}:`, err);
-                return { data: null, error: { message: `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.` } };
+                const isGitHubPages = typeof window !== 'undefined' && window.location && window.location.hostname.includes('github.io');
+                const msg = isGitHubPages
+                    ? `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`
+                    : `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.`;
+                return { data: null, error: { message: msg } };
             }
         }
     }
