@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = obterPrimeiraPaginaPermitida(usuario);
         return;
     }
+
+    // Limpar resquício de active_client de sessão anterior para evitar contaminação entre tenants
+    try {
+        sessionStorage.removeItem('active_client');
+    } catch (e) {}
     
     // Login
     const loginForm = document.getElementById('loginForm');
@@ -29,15 +34,24 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Entrando...';
             
             const inputIdentificador = email.trim();
+            let matchedClient = null;
 
-            // Identificar prefixo no usuário (ex: adm.aionerp) e rotear para o cliente correto
+            // Identificar prefixo no usuário (ex: adm.originaleletronico ou adm.aionerp) e rotear para o cliente correto
             if (inputIdentificador.includes('.') && !inputIdentificador.includes('@')) {
                 const parts = inputIdentificador.split('.');
                 const prefix = parts[parts.length - 1].toLowerCase();
                 if (typeof window.buscarClientePorPrefixo === 'function') {
-                    const matchedClient = await window.buscarClientePorPrefixo(prefix);
+                    matchedClient = await window.buscarClientePorPrefixo(prefix);
                     if (matchedClient) {
                         console.log(`Prefixo identificado (${prefix}). Conectando à loja: ${matchedClient.companyName}`);
+                        window.conectarClienteSupabase(matchedClient);
+                    }
+                }
+            } else {
+                // Se for email sem prefixo (ex: arc48388528@gmail.com), rotear para o cliente01 padrão
+                if (typeof window.buscarClientePorPrefixo === 'function') {
+                    matchedClient = await window.buscarClientePorPrefixo('aionerp');
+                    if (matchedClient) {
                         window.conectarClienteSupabase(matchedClient);
                     }
                 }
@@ -48,6 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 let client = (typeof supabaseClient !== 'undefined' && supabaseClient) 
                     ? supabaseClient 
                     : (window.supabaseClient || window.dbClient);
+
+                if (matchedClient && window.conectarClienteSupabase) {
+                    client = window.conectarClienteSupabase(matchedClient);
+                }
 
                 if (!client && window.AionDataLayer) {
                     client = window.AionDataLayer.createClient(window.ENV || { clientId: 'cliente01', database: { provider: 'neon', connectionId: 'cliente01' } });
@@ -128,6 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Usuário inativo! Contate o administrador.');
                 }
                 
+                const targetClientId = matchedClient?.clientId || window.ENV?.clientId || window.ENV?.CLIENT_ID || 'cliente01';
+
                 // Salvar sessão com todas as informações (incluindo dados do tenant/loja e configurações)
                 const usuarioLogado = {
                     id: userData.id,
@@ -140,6 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     loja_id: userData.loja_id,
                     loja_nome: userData.loja_nome || 'Aion ERP',
                     loja_segmento: userData.loja_segmento || 'eletronico',
+                    clientId: targetClientId,
+                    cliente_id: targetClientId,
                     config_loja: userData.config_loja || {
                         habilitar_seriais: true,
                         habilitar_agendamentos: false,

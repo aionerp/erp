@@ -41,36 +41,50 @@ if (typeof window.AionDataLayer === 'undefined') {
 
 // 2. Se houver um cliente ativo na sessão (definido no login ou primeiro acesso), usar suas credenciais
 const activeClientStr = sessionStorage.getItem('active_client');
+let activeClientObj = null;
 if (activeClientStr) {
     try {
-        const activeClient = JSON.parse(activeClientStr);
+        activeClientObj = JSON.parse(activeClientStr);
         // Se for cliente01, desativar Supabase obsoleto/pausado
-        if (activeClient && activeClient.clientId === 'cliente01') {
-            activeClient.database = { provider: 'neon', connectionId: 'cliente01' };
-            delete activeClient.supabase;
-            try { sessionStorage.setItem('active_client', JSON.stringify(activeClient)); } catch(e){}
+        if (activeClientObj && activeClientObj.clientId === 'cliente01') {
+            activeClientObj.database = { provider: 'neon', connectionId: 'cliente01' };
+            delete activeClientObj.supabase;
+            try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}
         }
 
-        if (activeClient) {
-            // Atualizar cor legada #0A4D68 para o novo padrão Modern SaaS #0A1628
-            if (activeClient.branding?.primaryColor === '#0A4D68') {
-                activeClient.branding.primaryColor = '#0A1628';
-                activeClient.branding.primaryDarkColor = '#060D18';
-                activeClient.branding.primaryLightColor = '#1E293B';
-                try { sessionStorage.setItem('active_client', JSON.stringify(activeClient)); } catch(e){}
+        if (activeClientObj) {
+            // Padronizar todas as lojas na cor original do sistema (Modern SaaS Gold & Deep Navy #111824)
+            if (activeClientObj.branding) {
+                activeClientObj.branding.primaryColor = '#111824';
+                activeClientObj.branding.primaryDarkColor = '#0a1525';
+                activeClientObj.branding.primaryLightColor = '#152031';
+                try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}
             }
+            const activeCid = activeClientObj.clientId || activeClientObj.CLIENT_ID;
+            const activeDb = activeClientObj.database || (activeClientObj.supabase?.url ? { provider: 'supabase', connectionId: activeCid } : { provider: 'neon', connectionId: activeCid });
+            const activeBrand = activeClientObj.branding || {};
+            const activeFeat = activeClientObj.features || {};
+
             window.ENV = {
                 ...window.ENV,
-                CLIENT_ID: activeClient.clientId,
-                COMPANY_NAME: activeClient.companyName,
-                COMPANY_SUBTITLE: activeClient.companySubtitle,
-                PREFIX: activeClient.prefix,
-                CNPJ: activeClient.cnpjFormatted || activeClient.cnpj,
-                DATABASE: activeClient.database || (activeClient.supabase?.url ? { provider: 'supabase', connectionId: activeClient.clientId } : { provider: 'neon', connectionId: activeClient.clientId }),
-                SUPABASE_URL: activeClient.supabase?.url,
-                SUPABASE_ANON_KEY: activeClient.supabase?.anonKey,
-                BRANDING: activeClient.branding || {},
-                FEATURES: activeClient.features || {}
+                CLIENT_ID: activeCid,
+                clientId: activeCid,
+                COMPANY_NAME: activeClientObj.companyName,
+                companyName: activeClientObj.companyName,
+                COMPANY_SUBTITLE: activeClientObj.companySubtitle,
+                companySubtitle: activeClientObj.companySubtitle,
+                PREFIX: activeClientObj.prefix,
+                prefix: activeClientObj.prefix,
+                CNPJ: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
+                cnpj: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
+                DATABASE: activeDb,
+                database: activeDb,
+                SUPABASE_URL: activeClientObj.supabase?.url,
+                SUPABASE_ANON_KEY: activeClientObj.supabase?.anonKey,
+                BRANDING: activeBrand,
+                branding: activeBrand,
+                FEATURES: activeFeat,
+                features: activeFeat
             };
         }
     } catch (e) {
@@ -78,22 +92,9 @@ if (activeClientStr) {
     }
 }
 
-// Injeção dinâmica de branding/cores se configuradas
-if (window.ENV?.BRANDING?.primaryColor && window.ENV.BRANDING.primaryColor !== '#0A1628') {
-    let style = document.getElementById('dynamic-branding-styles');
-    if (!style) {
-        style = document.createElement('style');
-        style.id = 'dynamic-branding-styles';
-        document.head.appendChild(style);
-    }
-    style.textContent = `
-        :root {
-            --primary: ${window.ENV.BRANDING.primaryColor} !important;
-            ${window.ENV.BRANDING.primaryDarkColor ? `--primary-dark: ${window.ENV.BRANDING.primaryDarkColor} !important;` : ''}
-            ${window.ENV.BRANDING.primaryLightColor ? `--primary-light: ${window.ENV.BRANDING.primaryLightColor} !important;` : ''}
-        }
-    `;
-}
+// Garantir a paleta original do sistema para todos os clientes (Modern SaaS: Sidebar Azul Profundo / Dourado)
+const existingBrandStyle = document.getElementById('dynamic-branding-styles');
+if (existingBrandStyle) existingBrandStyle.remove();
 
 const SUPABASE_URL = window.ENV?.DATABASE?.provider === 'neon' ? null : (window.ENV?.SUPABASE_URL || null);
 const SUPABASE_ANON_KEY = window.ENV?.DATABASE?.provider === 'neon' ? null : (window.ENV?.SUPABASE_ANON_KEY || null);
@@ -189,8 +190,9 @@ window.criarClienteSupabaseOriginal = criarClienteSupabase;
 
 // Inicializar cliente padrão (via Data Layer para suporte transparente a Neon/Supabase)
 if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+    const targetConfig = activeClientObj || window.ENV || { clientId: 'cliente01', database: { provider: 'neon', connectionId: 'cliente01' } };
     if (window.AionDataLayer) {
-        var supabaseClient = window.AionDataLayer.createClient(window.ENV || { clientId: 'cliente01', database: { provider: 'neon', connectionId: 'cliente01' } });
+        var supabaseClient = window.AionDataLayer.createClient(targetConfig);
     } else if (SUPABASE_URL && SUPABASE_ANON_KEY) {
         var supabaseClient = criarClienteSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
@@ -242,19 +244,32 @@ window.conectarClienteSupabase = function(clienteConfig) {
         return null;
     }
     
+    const activeCid = clienteConfig.clientId || clienteConfig.CLIENT_ID;
+    const activeDb = clienteConfig.database || clienteConfig.DATABASE || { provider: clienteConfig.supabase?.url ? 'supabase' : 'neon', connectionId: activeCid };
+    const activeBrand = clienteConfig.branding || {};
+    const activeFeat = clienteConfig.features || {};
+
     // Atualizar window.ENV em tempo de execução
     window.ENV = {
         ...window.ENV,
-        CLIENT_ID: clienteConfig.clientId,
+        CLIENT_ID: activeCid,
+        clientId: activeCid,
         COMPANY_NAME: clienteConfig.companyName,
+        companyName: clienteConfig.companyName,
         COMPANY_SUBTITLE: clienteConfig.companySubtitle,
+        companySubtitle: clienteConfig.companySubtitle,
         PREFIX: clienteConfig.prefix,
+        prefix: clienteConfig.prefix,
         CNPJ: clienteConfig.cnpjFormatted || clienteConfig.cnpj,
-        DATABASE: clienteConfig.database || { provider: clienteConfig.supabase?.url ? 'supabase' : 'neon', connectionId: clienteConfig.clientId },
+        cnpj: clienteConfig.cnpjFormatted || clienteConfig.cnpj,
+        DATABASE: activeDb,
+        database: activeDb,
         SUPABASE_URL: clienteConfig.supabase?.url,
         SUPABASE_ANON_KEY: clienteConfig.supabase?.anonKey,
-        BRANDING: clienteConfig.branding || {},
-        FEATURES: clienteConfig.features || {}
+        BRANDING: activeBrand,
+        branding: activeBrand,
+        FEATURES: activeFeat,
+        features: activeFeat
     };
 
     // Salvar cliente ativo na sessão para persistir em todas as telas
@@ -262,22 +277,9 @@ window.conectarClienteSupabase = function(clienteConfig) {
         sessionStorage.setItem('active_client', JSON.stringify(clienteConfig));
     } catch(e) {}
     
-    // Aplicar branding dinâmico
-    if (clienteConfig.branding?.primaryColor) {
-        let style = document.getElementById('dynamic-branding-styles');
-        if (!style) {
-            style = document.createElement('style');
-            style.id = 'dynamic-branding-styles';
-            document.head.appendChild(style);
-        }
-        style.textContent = `
-            :root {
-                --primary: ${clienteConfig.branding.primaryColor} !important;
-                ${clienteConfig.branding.primaryDarkColor ? `--primary-dark: ${clienteConfig.branding.primaryDarkColor} !important;` : ''}
-                ${clienteConfig.branding.primaryLightColor ? `--primary-light: ${clienteConfig.branding.primaryLightColor} !important;` : ''}
-            }
-        `;
-    }
+    // Garantir a paleta original do sistema para todos os clientes (Modern SaaS: Sidebar Azul Profundo / Dourado)
+    const existingBrandStyle = document.getElementById('dynamic-branding-styles');
+    if (existingBrandStyle) existingBrandStyle.remove();
     
     // Instanciar via Data Layer (suporta Supabase e Neon)
     if (window.AionDataLayer) {

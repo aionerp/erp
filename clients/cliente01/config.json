@@ -11,9 +11,9 @@
     "connectionId": "cliente01"
   },
   "branding": {
-    "primaryColor": "#0A4D68",
-    "primaryDarkColor": "#083F55",
-    "primaryLightColor": "#1D789B"
+    "primaryColor": "#111824",
+    "primaryDarkColor": "#0a1525",
+    "primaryLightColor": "#152031"
   },
   "features": {
     "habilitar_seriais": true,

@@ -144,11 +144,17 @@ const logoUrl = (config.branding?.logo || fs.existsSync(path.join(__dirname, 'cl
 const envJsContent = `// Arquivo gerado automaticamente pelo script de build - NÃO MODIFIQUE DIRETAMENTE
 window.ENV = {
     CLIENT_ID: ${JSON.stringify(config.clientId)},
+    clientId: ${JSON.stringify(config.clientId)},
     COMPANY_NAME: ${JSON.stringify(config.companyName)},
+    companyName: ${JSON.stringify(config.companyName)},
     COMPANY_SUBTITLE: ${JSON.stringify(config.companySubtitle || "by AionLabs")},
+    companySubtitle: ${JSON.stringify(config.companySubtitle || "by AionLabs")},
     PREFIX: ${JSON.stringify(config.prefix || config.clientId)},
+    prefix: ${JSON.stringify(config.prefix || config.clientId)},
     CNPJ: ${JSON.stringify(config.cnpj)},
+    cnpj: ${JSON.stringify(config.cnpj)},
     DATABASE: ${JSON.stringify(config.database || { provider: config.supabase ? 'supabase' : 'neon', connectionId: config.clientId })},
+    database: ${JSON.stringify(config.database || { provider: config.supabase ? 'supabase' : 'neon', connectionId: config.clientId })},
     SUPABASE_URL: ${JSON.stringify(config.supabase?.url)},
     SUPABASE_ANON_KEY: ${JSON.stringify(config.supabase?.anonKey)},
     BRANDING: {
@@ -157,12 +163,20 @@ window.ENV = {
         primaryDarkColor: ${JSON.stringify(config.branding?.primaryDarkColor)},
         primaryLightColor: ${JSON.stringify(config.branding?.primaryLightColor)}
     },
-    FEATURES: ${JSON.stringify(config.features || {})}
+    branding: {
+        logoUrl: ${JSON.stringify(logoUrl)},
+        primaryColor: ${JSON.stringify(config.branding?.primaryColor)},
+        primaryDarkColor: ${JSON.stringify(config.branding?.primaryDarkColor)},
+        primaryLightColor: ${JSON.stringify(config.branding?.primaryLightColor)}
+    },
+    FEATURES: ${JSON.stringify(config.features || {})},
+    features: ${JSON.stringify(config.features || {})}
 };
 `;
 
 fs.writeFileSync(path.join(distPath, 'env.js'), envJsContent, 'utf8');
-console.log(`Arquivo env.js gerado com sucesso em: ${path.join(distPath, 'env.js')}`);
+fs.writeFileSync(path.join(__dirname, 'env.js'), envJsContent, 'utf8');
+console.log(`Arquivo env.js gerado com sucesso em: ${path.join(distPath, 'env.js')} e no diretório raiz.`);
 
 // 8. Copy client custom logo if exists
 const clientLogoPath = path.join(__dirname, 'clients', client, 'logo.png');

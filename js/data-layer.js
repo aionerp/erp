@@ -3,9 +3,57 @@
 // Permite alternar transparentemente entre Supabase e Neon PostgreSQL sem alterar as telas
 
 (function() {
+    // Helper de resolução determinística do ID do cliente com isolamento rigoroso de tenancy
+    function resolveClientId(configOrId) {
+        // 1. Se já for uma string válida e explícita diferente de default 'cliente01'
+        if (typeof configOrId === 'string' && configOrId.trim()) {
+            const trimmed = configOrId.trim();
+            if (trimmed !== 'cliente01') return trimmed;
+        }
+
+        // 2. Se for um objeto de configuração
+        if (configOrId && typeof configOrId === 'object') {
+            const id = configOrId.clientId || configOrId.CLIENT_ID || configOrId.database?.connectionId || configOrId.DATABASE?.connectionId;
+            if (id && id !== 'cliente01') return id;
+        }
+
+        // 3. Tentar da sessão ativa (sessionStorage.active_client)
+        try {
+            if (typeof sessionStorage !== 'undefined') {
+                const activeStr = sessionStorage.getItem('active_client');
+                if (activeStr) {
+                    const active = JSON.parse(activeStr);
+                    const sId = active?.clientId || active?.CLIENT_ID || active?.database?.connectionId || active?.DATABASE?.connectionId;
+                    if (sId) return sId;
+                }
+
+                // 4. Do usuário logado na sessão (sessionStorage.usuario)
+                const uStr = sessionStorage.getItem('usuario');
+                if (uStr) {
+                    const u = JSON.parse(uStr);
+                    const uId = u?.clientId || u?.cliente_id;
+                    if (uId) return uId;
+                }
+            }
+        } catch(e) {}
+
+        // 5. De window.ENV global
+        if (typeof window !== 'undefined' && window.ENV) {
+            const envId = window.ENV.clientId || window.ENV.CLIENT_ID || window.ENV.DATABASE?.connectionId || window.ENV.database?.connectionId;
+            if (envId) return envId;
+        }
+
+        if (configOrId && typeof configOrId === 'object') {
+            const fallbackId = configOrId.clientId || configOrId.CLIENT_ID;
+            if (fallbackId) return fallbackId;
+        }
+
+        return (typeof configOrId === 'string' && configOrId) ? configOrId : 'cliente01';
+    }
+
     class NeonQueryBuilder {
         constructor(clientId, tableName) {
-            this.clientId = clientId || 'cliente01';
+            this.clientId = resolveClientId(clientId);
             this.tableName = tableName;
             this.action = 'select';
             this.selectCols = '*';
@@ -138,8 +186,9 @@
         }
 
         async execute() {
+            const finalClientId = resolveClientId(this.clientId);
             const baseUrl = (typeof window !== 'undefined' && window.location && ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000' && window.location.port !== '')) ? 'http://127.0.0.1:3000' : '';
-            const endpoint = `${baseUrl}/api/data/${this.clientId}/${this.tableName}`;
+            const endpoint = `${baseUrl}/api/data/${finalClientId}/${this.tableName}`;
             const headers = { 'Content-Type': 'application/json' };
 
             // Injetar tenant-id da sessão se disponível
@@ -199,17 +248,18 @@
 
     class NeonClient {
         constructor(clientConfig) {
-            this.clientId = clientConfig?.clientId || 'cliente01';
+            this.clientId = resolveClientId(clientConfig);
             this.config = clientConfig;
         }
 
         from(tableName) {
-            return new NeonQueryBuilder(this.clientId, tableName);
+            return new NeonQueryBuilder(resolveClientId(this.clientId), tableName);
         }
 
         async rpc(functionName, params = {}) {
+            const finalClientId = resolveClientId(this.clientId);
             const baseUrl = (typeof window !== 'undefined' && window.location && ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000' && window.location.port !== '')) ? 'http://127.0.0.1:3000' : '';
-            const endpoint = `${baseUrl}/api/rpc/${this.clientId}/${functionName}`;
+            const endpoint = `${baseUrl}/api/rpc/${finalClientId}/${functionName}`;
             try {
                 const res = await fetch(endpoint, {
                     method: 'POST',
@@ -230,21 +280,24 @@
 
     window.AionDataLayer = {
         createClient: function(clientConfig) {
+            const resolvedId = resolveClientId(clientConfig);
             const hasSupabaseCreds = !!(clientConfig?.supabase?.url && clientConfig?.supabase?.anonKey);
-            const provider = clientConfig?.database?.provider || (hasSupabaseCreds ? 'supabase' : 'neon');
+            const provider = clientConfig?.database?.provider || clientConfig?.DATABASE?.provider || (hasSupabaseCreds ? 'supabase' : 'neon');
             
+            const normalizedConfig = Object.assign({}, clientConfig, { clientId: resolvedId, CLIENT_ID: resolvedId });
+
             if (provider === 'neon' || !hasSupabaseCreds) {
-                console.log(`[DataLayer] Conectando ao provedor NEON para o cliente: ${clientConfig?.clientId || 'cliente01'}`);
-                return new NeonClient(clientConfig || { clientId: 'cliente01' });
+                console.log(`[DataLayer] Conectando ao provedor NEON para o cliente: ${resolvedId}`);
+                return new NeonClient(normalizedConfig);
             }
 
             // Provedor: Supabase (apenas quando credenciais existirem)
-            console.log(`[DataLayer] Conectando ao provedor SUPABASE para o cliente: ${clientConfig?.clientId || 'cliente01'}`);
+            console.log(`[DataLayer] Conectando ao provedor SUPABASE para o cliente: ${resolvedId}`);
             if (typeof window.criarClienteSupabaseOriginal === 'function') {
                 const client = window.criarClienteSupabaseOriginal(clientConfig?.supabase?.url, clientConfig?.supabase?.anonKey);
                 if (client) return client;
             }
-            return new NeonClient(clientConfig || { clientId: 'cliente01' });
+            return new NeonClient(normalizedConfig);
         }
     };
 })();
