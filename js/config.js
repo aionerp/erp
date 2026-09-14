@@ -661,6 +661,35 @@ window.reativarSerial = reativarSerial;
 // =====================================================
 // FUNÇÕES DE CONTROLE DE CAIXA
 // =====================================================
+
+function getDataHojeBrasil() {
+    const hoje = new Date();
+    const dataStr = hoje.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const partes = dataStr.split('/');
+    return `${partes[2]}-${partes[1]}-${partes[0]}`; // YYYY-MM-DD
+}
+
+function obterDataCaixaBrasil(dataISO) {
+    if (!dataISO) return '';
+    const d = new Date(dataISO);
+    const dataStr = d.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const partes = dataStr.split('/');
+    return `${partes[2]}-${partes[1]}-${partes[0]}`; // YYYY-MM-DD
+}
+
+function isCaixaDiaAnterior(caixa) {
+    if (!caixa || !caixa.data_abertura) return false;
+    const dataCaixa = obterDataCaixaBrasil(caixa.data_abertura);
+    const dataHoje = getDataHojeBrasil();
+    return dataCaixa < dataHoje;
+}
+
 async function obterCaixaAtivo() {
     try {
         const { data, error } = await supabaseClient
@@ -701,9 +730,31 @@ async function obterUltimoCaixaFechado() {
     }
 }
 
+async function obterStatusCaixa() {
+    const caixa = await obterCaixaAtivo();
+    if (!caixa) {
+        return { tipo: 'fechado', caixa: null };
+    }
+    if (isCaixaDiaAnterior(caixa)) {
+        return { tipo: 'pendente_fechamento_anterior', caixa: caixa };
+    }
+    return { tipo: 'aberto_hoje', caixa: caixa };
+}
+
+function formatarDataHora(dataISO) {
+    if (!dataISO) return '-';
+    const date = new Date(dataISO);
+    return date.toLocaleString('pt-BR');
+}
+
 // Exportar funções de caixa
+window.formatarDataHora = formatarDataHora;
+window.getDataHojeBrasil = getDataHojeBrasil;
+window.obterDataCaixaBrasil = obterDataCaixaBrasil;
+window.isCaixaDiaAnterior = isCaixaDiaAnterior;
 window.obterCaixaAtivo = obterCaixaAtivo;
 window.obterUltimoCaixaFechado = obterUltimoCaixaFechado;
+window.obterStatusCaixa = obterStatusCaixa;
 
 // =====================================================
 // FUNÇÕES DE CÓDIGO ALFANUMÉRICO AUTOMÁTICO (A0001)

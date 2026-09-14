@@ -114,6 +114,9 @@ CREATE POLICY tenant_caixas_policy ON public.caixas
 }
 
 async function exibirCaixaFechado() {
+    const bannerExistente = document.getElementById('bannerCaixaPendente');
+    if (bannerExistente) bannerExistente.remove();
+
     const statusBadge = document.getElementById('statusCaixaBadge');
     if (statusBadge) statusBadge.innerHTML = '<span class="status-badge fechado">🔴 Caixa Fechado</span>';
     
@@ -160,14 +163,36 @@ async function abrirCaixa() {
     btn.textContent = '⏳ Abrindo caixa...';
     
     try {
+        // Validar se existe caixa pendente de fechamento de dia anterior
+        const statusAtual = await obterStatusCaixa();
+        if (statusAtual.tipo === 'pendente_fechamento_anterior') {
+            mostrarNotificacao('⚠️ Não é possível abrir um novo caixa: existe um caixa de ' + formatarDataHora(statusAtual.caixa.data_abertura) + ' que precisa ser fechado primeiro!', 'error');
+            btn.disabled = false;
+            btn.textContent = '🔓 Abrir Caixa do Dia';
+            setTimeout(() => window.location.reload(), 1500);
+            return;
+        }
+        if (statusAtual.tipo === 'aberto_hoje') {
+            mostrarNotificacao('⚠️ O caixa de hoje já está aberto!', 'warning');
+            btn.disabled = false;
+            btn.textContent = '🔓 Abrir Caixa do Dia';
+            setTimeout(() => window.location.reload(), 1500);
+            return;
+        }
+
+        const payloadCaixa = {
+            saldo_inicial: saldoInicial,
+            usuario_abertura_id: usuario.id,
+            status: 'aberto',
+            data_abertura: new Date().toISOString()
+        };
+        if (usuario.loja_id) {
+            payloadCaixa.loja_id = usuario.loja_id;
+        }
+
         const { error } = await supabaseClient
             .from('caixas')
-            .insert([{
-                saldo_inicial: saldoInicial,
-                usuario_abertura_id: usuario.id,
-                status: 'aberto',
-                data_abertura: new Date().toISOString()
-            }]);
+            .insert([payloadCaixa]);
             
         if (error) throw error;
         
@@ -188,16 +213,54 @@ async function abrirCaixa() {
 }
 
 async function exibirCaixaAberto(caixa) {
+    const isPendente = isCaixaDiaAnterior(caixa);
     const statusBadge = document.getElementById('statusCaixaBadge');
-    if (statusBadge) statusBadge.innerHTML = '<span class="status-badge aberto">🟢 Caixa Aberto</span>';
+    
+    // Remover banner existente se houver
+    const bannerExistente = document.getElementById('bannerCaixaPendente');
+    if (bannerExistente) bannerExistente.remove();
+
+    if (isPendente) {
+        if (statusBadge) statusBadge.innerHTML = '<span class="status-badge pendente">⚠️ Caixa Anterior Pendente</span>';
+        
+        // Criar e exibir banner de advertência
+        const fechamentoSeccion = document.getElementById('fechamentoSeccion');
+        const banner = document.createElement('div');
+        banner.id = 'bannerCaixaPendente';
+        banner.className = 'banner-aviso-pendente';
+        banner.innerHTML = `
+            <h4 style="margin: 0 0 8px 0; color: #b45309; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                ⚠️ Caixa do Dia Anterior Pendente de Fechamento
+            </h4>
+            <p style="margin: 0; font-size: 13.5px; color: #78350f; line-height: 1.5;">
+                Este caixa foi aberto em <strong>${formatarDataHora(caixa.data_abertura)}</strong> e não foi encerrado no mesmo dia.<br>
+                Pelas regras do sistema, <strong>você precisa concluir o fechamento deste caixa anterior</strong> para poder abrir o caixa de hoje e iniciar as operações do novo dia.
+            </p>
+        `;
+        if (fechamentoSeccion && fechamentoSeccion.parentNode) {
+            fechamentoSeccion.parentNode.insertBefore(banner, fechamentoSeccion);
+        }
+    } else {
+        if (statusBadge) statusBadge.innerHTML = '<span class="status-badge aberto">🟢 Caixa Aberto (Hoje)</span>';
+    }
     
     document.getElementById('aberturaSeccion').style.display = 'none';
     document.getElementById('fechamentoSeccion').style.display = 'block';
     
-    document.getElementById('btnFecharCaixa').onclick = fecharCaixa;
+    const btnFechar = document.getElementById('btnFecharCaixa');
+    if (btnFechar) {
+        if (isPendente) {
+            btnFechar.innerHTML = '🔒 Fechar Caixa Anterior e Liberar Novo Dia';
+            btnFechar.className = 'btn-acao-caixa btn-aviso';
+        } else {
+            btnFechar.innerHTML = '🔒 Fechar Caixa Diário';
+            btnFechar.className = 'btn-acao-caixa btn-fechar';
+        }
+        btnFechar.onclick = fecharCaixa;
+    }
     
     // Dados básicos do caixa
-    document.getElementById('cDataAbertura').textContent = formatarDataHora(caixa.data_abertura);
+    document.getElementById('cDataAbertura').textContent = formatarDataHora(caixa.data_abertura) + (isPendente ? ' (Pendente do Dia Anterior)' : '');
     document.getElementById('cSaldoInicial').textContent = formatarMoeda(caixa.saldo_inicial);
     
     // Buscar operador da abertura
@@ -474,8 +537,13 @@ async function fecharCaixa() {
         mostrarNotificacao('O saldo final não pode ser menor que zero!', 'error');
         return;
     }
+
+    const isPendente = isCaixaDiaAnterior(caixaAtivo);
+    const msgConfirm = isPendente
+        ? 'Deseja realmente fechar o caixa do dia anterior? Após o fechamento, você poderá abrir o caixa de hoje para iniciar as operações do novo dia.'
+        : 'Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.';
     
-    if (!confirm('Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.')) {
+    if (!confirm(msgConfirm)) {
         return;
     }
     
@@ -497,7 +565,9 @@ async function fecharCaixa() {
             
         if (error) throw error;
         
-        mostrarNotificacao('🔒 Caixa fechado com sucesso!', 'success');
+        mostrarNotificacao(isPendente 
+            ? '🔒 Caixa anterior fechado com sucesso! Agora você pode abrir o caixa de hoje.' 
+            : '🔒 Caixa fechado com sucesso!', 'success');
         
         // Perguntar sobre a impressão
         const imprimir = confirm('Deseja imprimir o Relatório de Fechamento de Caixa?');
@@ -516,7 +586,7 @@ async function fecharCaixa() {
         console.error('Erro ao fechar caixa:', e);
         mostrarNotificacao('Erro ao fechar caixa: ' + e.message, 'error');
         btn.disabled = false;
-        btn.textContent = '🔒 Fechar Caixa Diário';
+        btn.textContent = isPendente ? '🔒 Fechar Caixa Anterior e Liberar Novo Dia' : '🔒 Fechar Caixa Diário';
     }
 }
 

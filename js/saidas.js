@@ -360,11 +360,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const btnFinalizar = document.getElementById('btnFinalizarVenda');
                 const btnCaixa = document.getElementById('btnCaixaPDV');
 
+                const isPendente = isCaixaDiaAnterior(caixaAtivo);
+
                 if (btnCaixa) {
                     btnCaixa.style.display = 'inline-flex';
                     if (!caixaAtivo) {
                         btnCaixa.innerHTML = '🔑 Abrir Caixa';
                         btnCaixa.style.backgroundColor = '#10b981';
+                        btnCaixa.style.color = '#fff';
+                    } else if (isPendente) {
+                        btnCaixa.innerHTML = '🔒 Fechar Caixa Anterior';
+                        btnCaixa.style.backgroundColor = '#d97706';
                         btnCaixa.style.color = '#fff';
                     } else {
                         btnCaixa.innerHTML = '🔒 Fechar Caixa';
@@ -373,20 +379,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                if (!caixaAtivo) {
-                    // Se caixa estiver fechado, criar ou exibir o banner
+                if (!caixaAtivo || isPendente) {
+                    // Se caixa estiver fechado OU se houver caixa de dia anterior pendente de fechamento
+                    const htmlBanner = isPendente
+                        ? `⚠️ <strong>ATENÇÃO: CAIXA DO DIA ANTERIOR NÃO FOI FECHADO!</strong><br><span style="font-weight: 500; font-size: 13px;">O caixa aberto em <strong>${formatarDataHora(caixaAtivo.data_abertura)}</strong> precisa ser encerrado antes de iniciar as atividades de hoje. Por favor, clique em <strong>🔒 Fechar Caixa Anterior</strong> acima para concluir o fechamento e liberar a abertura do caixa de hoje.</span>`
+                        : '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+
+                    const bgBanner = isPendente ? '#fff3cd' : '#f8d7da';
+                    const colorBanner = isPendente ? '#856404' : '#721c24';
+                    const borderBanner = isPendente ? '1px solid #ffeeba' : '1px solid #f5c6cb';
+
                     if (!bannerCaixa) {
                         const banner = document.createElement('div');
                         banner.id = 'bannerCaixaFechado';
-                        banner.style.backgroundColor = '#f8d7da';
-                        banner.style.color = '#721c24';
-                        banner.style.border = '1px solid #f5c6cb';
+                        banner.style.backgroundColor = bgBanner;
+                        banner.style.color = colorBanner;
+                        banner.style.border = borderBanner;
                         banner.style.padding = '12px 20px';
                         banner.style.borderRadius = '8px';
                         banner.style.marginBottom = '15px';
                         banner.style.fontWeight = '700';
                         banner.style.fontSize = '14px';
-                        banner.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+                        banner.innerHTML = htmlBanner;
                         
                         const containerPDV = document.querySelector('.pdv-busca-top');
                         if (containerPDV && containerPDV.parentNode) {
@@ -394,7 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else {
                         bannerCaixa.style.display = 'block';
-                        bannerCaixa.innerHTML = '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+                        bannerCaixa.style.backgroundColor = bgBanner;
+                        bannerCaixa.style.color = colorBanner;
+                        bannerCaixa.style.border = borderBanner;
+                        bannerCaixa.innerHTML = htmlBanner;
                     }
 
                     // Desabilitar controles
@@ -404,10 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         btnFinalizar.disabled = true;
                         btnFinalizar.style.backgroundColor = '#ccc';
                         btnFinalizar.style.cursor = 'not-allowed';
-                        btnFinalizar.textContent = '🔒 Caixa Fechado';
+                        btnFinalizar.textContent = isPendente ? '🔒 Feche o Caixa Anterior' : '🔒 Caixa Fechado';
                     }
                 } else {
-                    // Caixa aberto, esconder banner se existir
+                    // Caixa aberto hoje, esconder banner se existir
                     if (bannerCaixa) {
                         bannerCaixa.style.display = 'none';
                     }
@@ -435,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     modalTitle.textContent = '🔑 Abertura de Caixa';
                     modalBody.innerHTML = `
                         <div style="padding: 5px 0;">
-                            <p style="font-size: 13px; color: #4b5563; margin-bottom: 15px; line-height: 1.5;">Informe o valor inicial em dinheiro disponível na gaveta para troco.</p>
+                            <p style="font-size: 13px; color: #4b5563; margin-bottom: 15px; line-height: 1.5;">Informe o valor inicial em dinheiro disponível na gaveta para troco no novo dia.</p>
                             <div style="margin-bottom: 12px;">
                                 <label style="display:block; font-size: 13px; font-weight:600; margin-bottom:6px; color:#374151;">Saldo Inicial em Dinheiro (R$):</label>
                                 <input type="number" id="pdvSaldoInicial" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px; font-weight:600; box-sizing:border-box;" value="0.00" step="0.01" min="0">
@@ -450,6 +467,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             mostrarNotificacao('Informe um valor inicial válido!', 'error');
                             return;
                         }
+
+                        // Validar se há caixa de dia anterior que ainda precisa ser fechado
+                        const statusAtual = await obterStatusCaixa();
+                        if (statusAtual.tipo === 'pendente_fechamento_anterior') {
+                            mostrarNotificacao('⚠️ Não é possível abrir novo caixa: existe um caixa de ' + formatarDataHora(statusAtual.caixa.data_abertura) + ' que precisa ser fechado primeiro!', 'error');
+                            fecharModalCaixaPDV();
+                            await atualizarBotoesEStatusCaixa();
+                            return;
+                        }
+
                         btnConfirm.disabled = true;
                         btnConfirm.textContent = 'Abrindo...';
                         try {
@@ -475,12 +502,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     };
                 } else {
+                    const isPendente = isCaixaDiaAnterior(caixaAtivo);
+
                     // Modo Fechamento - Carregar dados
-                    modalTitle.textContent = '🔒 Fechamento de Caixa';
+                    modalTitle.textContent = isPendente 
+                        ? `🔒 Fechamento de Caixa Anterior (${formatarDataHora(caixaAtivo.data_abertura)})`
+                        : '🔒 Fechamento de Caixa';
+
                     modalBody.innerHTML = `
                         <div style="text-align: center; padding: 20px 0;">
                             <div style="border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
-                            <p style="font-size: 13px; color: #6b7280;">Carregando resumo do caixa ativo...</p>
+                            <p style="font-size: 13px; color: #6b7280;">Carregando resumo do caixa ${isPendente ? 'do dia anterior' : 'ativo'}...</p>
                         </div>
                     `;
                     btnConfirm.style.display = 'none';
@@ -564,8 +596,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const saldoInicial = parseFloat(caixaAtivo.saldo_inicial || 0);
                     const saldoEsperadoGaveta = saldoInicial + dinheiroVendas - totalDespesas;
 
+                    const avisoPendenteHtml = isPendente ? `
+                        <div style="background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:12.5px; color:#92400e; line-height:1.4;">
+                            ⚠️ <strong>Atenção:</strong> Este caixa pertence ao dia <strong>${formatarDataHora(caixaAtivo.data_abertura)}</strong> e não foi encerrado no mesmo dia. Ao confirmar o fechamento, o caixa anterior será finalizado e o PDV ficará pronto para você abrir o caixa de hoje.
+                        </div>
+                    ` : '';
+
                     modalBody.innerHTML = `
                         <div style="font-size: 13px; color: #374151;">
+                            ${avisoPendenteHtml}
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
                                 <div style="background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                                     <div style="font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase;">Saldo Inicial</div>
@@ -600,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
 
                     btnConfirm.style.display = 'block';
-                    btnConfirm.textContent = 'Confirmar Fechamento';
+                    btnConfirm.textContent = isPendente ? 'Confirmar Fechamento do Caixa Anterior' : 'Confirmar Fechamento';
                     btnConfirm.onclick = async () => {
                         const valFinal = parseFloat(document.getElementById('pdvSaldoFinal').value || 0);
                         if (isNaN(valFinal) || valFinal < 0) {
@@ -608,7 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             return;
                         }
 
-                        if (!confirm('Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.')) {
+                        const msgConfirm = isPendente
+                            ? 'Deseja confirmar o fechamento do caixa anterior? Após fechar, você poderá abrir o caixa de hoje para iniciar as vendas.'
+                            : 'Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.';
+
+                        if (!confirm(msgConfirm)) {
                             return;
                         }
 
@@ -631,7 +674,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             const dataAberturaLocal = caixaAtivo.data_abertura;
                             
-                            mostrarNotificacao('🔒 Caixa fechado com sucesso!', 'success');
+                            mostrarNotificacao(isPendente 
+                                ? '🔒 Caixa anterior fechado com sucesso! Agora realize a abertura do caixa de hoje.' 
+                                : '🔒 Caixa fechado com sucesso!', 'success');
                             fecharModalCaixaPDV();
                             await atualizarBotoesEStatusCaixa();
 
@@ -659,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             mostrarNotificacao('Erro ao fechar caixa: ' + e.message, 'error');
                         } finally {
                             btnConfirm.disabled = false;
-                            btnConfirm.textContent = 'Confirmar Fechamento';
+                            btnConfirm.textContent = isPendente ? 'Confirmar Fechamento do Caixa Anterior' : 'Confirmar Fechamento';
                         }
                     };
                 }
@@ -1971,6 +2016,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!caixaAtivo) {
                 mostrarNotificacao('❌ Venda não permitida: O caixa está fechado!', 'error');
                 if (btnFinalizar) { btnFinalizar.disabled = false; btnFinalizar.textContent = '✅ Finalizar Venda'; }
+                return;
+            }
+            if (isCaixaDiaAnterior(caixaAtivo)) {
+                mostrarNotificacao('❌ Venda não permitida: O caixa aberto pertence ao dia anterior (' + formatarDataHora(caixaAtivo.data_abertura) + ') e precisa ser fechado para iniciar o novo dia!', 'error');
+                if (btnFinalizar) { btnFinalizar.disabled = false; btnFinalizar.textContent = '🔒 Feche o Caixa Anterior'; }
                 return;
             }
 
