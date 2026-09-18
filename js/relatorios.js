@@ -189,17 +189,21 @@ async function carregarDashboard() {
 
         const [vendasRes, entradasRes, despesasRes, saidasRes, clientesRes, produtosRes] = await Promise.all([
             qVendas,
-            supabaseClient.from('entradas').select('total'),
+            supabaseClient.from('entradas').select('total, observacao'),
             supabaseClient.from('despesas').select('valor'),
             qSaidasRes,
             supabaseClient.from('clientes').select('id', { count: 'exact' }).eq('ativo', true),
             supabaseClient.from('produtos').select('id', { count: 'exact' }).eq('ativo', true)
         ]);
         
-        const totalVendas = vendasRes.data?.reduce((sum, v) => sum + (v.total || 0), 0) || 0;
-        const totalEntradas = entradasRes.data?.reduce((sum, e) => sum + (e.total || 0), 0) || 0;
-        const totalDespesas = despesasRes.data?.reduce((sum, d) => sum + (d.valor || 0), 0) || 0;
-        const totalSaidas = saidasRes.data?.length || 0;
+        const totalVendas = vendasRes.data?.reduce((sum, v) => sum + (Number(v.total) || 0), 0) || 0;
+        // Filtrar eventuais devoluções legadas inseridas em entradas para não distorcer compras
+        const totalEntradas = entradasRes.data
+            ?.filter(e => !e.observacao?.includes('Série: Dev') && !e.observacao?.includes('Devolu'))
+            .reduce((sum, e) => sum + (Number(e.total) || 0), 0) || 0;
+        const totalDespesas = despesasRes.data?.reduce((sum, d) => sum + (Number(d.valor) || 0), 0) || 0;
+        const vendasValidas = saidasRes.data?.filter(s => (Number(s.total) || 0) > 0) || [];
+        const totalSaidas = vendasValidas.length;
         const totalClientes = clientesRes.count || 0;
         const totalProdutos = produtosRes.count || 0;
         
@@ -342,7 +346,7 @@ async function carregarMovimentoDiario() {
         let qSaidas = supabaseClient.from('saidas').select(`
             *,
             clientes(nome)
-        `).eq('data', data);
+        `).eq('data', data).eq('cancelado', false);
 
         if (!verOutros) {
             qSaidas = qSaidas.eq('usuario_id', usuarioLogado.id);
@@ -361,24 +365,25 @@ async function carregarMovimentoDiario() {
             qSaidas
         ]);
         
-        const entradas = entradasRes.data || [];
+        // Excluir eventuais devoluções legadas de entradas para não poluir compras de fornecedores
+        const entradas = (entradasRes.data || []).filter(e => !e.observacao?.includes('Série: Dev') && !e.observacao?.includes('Devolu'));
         const saidas = saidasRes.data || [];
         
         // Armazenar para exportação
         dadosExportacao.movimento = { entradas, saidas, data };
         
-        const totalEntradas = entradas.reduce((sum, e) => sum + (e.total || 0), 0);
-        const totalSaidas = saidas.reduce((sum, s) => sum + (s.total || 0), 0);
+        const totalEntradas = entradas.reduce((sum, e) => sum + (Number(e.total) || 0), 0);
+        const totalSaidas = saidas.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
         const saldo = totalSaidas - totalEntradas;
         
         let html = `
             <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                 <div style="flex:1; min-width:150px; background: #d4edda; padding: 15px; border-radius: 8px; text-align: center;">
-                    <strong>Total Entradas</strong>
+                    <strong>Total Entradas (Compras)</strong>
                     <div style="font-size: 20px; color: #155724;">R$ ${totalEntradas.toFixed(2)}</div>
                 </div>
                 <div style="flex:1; min-width:150px; background: #f8d7da; padding: 15px; border-radius: 8px; text-align: center;">
-                    <strong>Total Saidas</strong>
+                    <strong>Total Saidas (Líquido)</strong>
                     <div style="font-size: 20px; color: #721c24;">R$ ${totalSaidas.toFixed(2)}</div>
                 </div>
                 <div style="flex:1; min-width:150px; background: ${saldo >= 0 ? '#cce5ff' : '#f8d7da'}; padding: 15px; border-radius: 8px; text-align: center;">
@@ -387,7 +392,7 @@ async function carregarMovimentoDiario() {
                 </div>
             </div>
             
-            <h4>Entradas do Dia</h4>
+            <h4>Entradas do Dia (Fornecedores)</h4>
             <table class="table-relatorio">
                 <thead>
                     <tr><th>N°</th><th>Fornecedor</th><th>Total</th><th>Observação</th></tr>
@@ -397,7 +402,7 @@ async function carregarMovimentoDiario() {
                         <tr>
                             <td>#${e.id}</td>
                             <td>${e.clientes?.nome || '-'}</td>
-                            <td>R$ ${(e.total || 0).toFixed(2)}</td>
+                            <td>R$ ${(Number(e.total) || 0).toFixed(2)}</td>
                             <td>${e.observacao || '-'}</td>
                         </tr>
                     `).join('') : '<tr><td colspan="4">Nenhuma entrada no dia</td></tr>'}
@@ -415,16 +420,21 @@ async function carregarMovimentoDiario() {
                     <tr><th>N°</th><th>Cliente</th><th>Total</th><th>Forma Pagamento</th></tr>
                 </thead>
                 <tbody>
-                    ${saidas.length > 0 ? saidas.map(s => `
+                    ${saidas.length > 0 ? saidas.map(s => {
+                        const isDevolucao = Number(s.total) < 0;
+                        const valorFmt = isDevolucao 
+                            ? `<span style="color: #dc2626; font-weight: 700;">- R$ ${Math.abs(Number(s.total)).toFixed(2)}</span> <span style="background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; font-weight: 600;">🔄 Devolução</span>`
+                            : `R$ ${(Number(s.total) || 0).toFixed(2)}`;
+                        return `
                         <tr>
                             <td>#${s.id}</td>
-                            <td>${s.clientes?.nome || '-'}</td>
-                            <td>R$ ${(s.total || 0).toFixed(2)}</td>
+                            <td>${s.clientes?.nome || (isDevolucao ? 'Devolução de Venda' : '-')}</td>
+                            <td>${valorFmt}</td>
                             <td>${s.forma_pagamento || '-'}</td>
-                        </tr>
-                    `).join('') : '<tr><td colspan="4">Nenhuma saída no dia</td></tr>'}
+                        </tr>`;
+                    }).join('') : '<tr><td colspan="4">Nenhuma saída no dia</td></tr>'}
                     <tr class="total-row">
-                        <td colspan="2"><strong>Total</strong></td>
+                        <td colspan="2"><strong>Total Líquido</strong></td>
                         <td><strong>R$ ${totalSaidas.toFixed(2)}</strong></td>
                         <td></td>
                     </tr>
@@ -676,6 +686,7 @@ async function carregarVendasProduto() {
         });
         
         const sorted = Object.entries(produtosMap)
+            .filter(([_, d]) => d.quantidade > 0 || d.total > 0)
             .sort((a, b) => b[1].total - a[1].total);
         
         const totalGeral = sorted.reduce((sum, item) => sum + item[1].total, 0);
@@ -1058,7 +1069,7 @@ async function carregarRelatorioLucro() {
                 <tbody>
         `;
         
-        Object.entries(resumoProdutos).forEach(([nome, info]) => {
+        Object.entries(resumoProdutos).filter(([_, info]) => info.quantidade > 0 || info.receita > 0).forEach(([nome, info]) => {
             const vendaMedia = info.quantidade > 0 ? (info.receita / info.quantidade) : 0;
             const custoUnit = info.quantidade > 0 ? (info.custo / info.quantidade) : 0;
             const margem = info.receita > 0 ? (info.lucro / info.receita) * 100 : 0;

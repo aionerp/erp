@@ -1130,11 +1130,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = vendas.map(v => {
             const cancelado = v.cancelado || false;
-            const podeCanc  = podeCancelar && !cancelado && podeCancelarVenda(v.data_finalizacao);
+            const isDevolucao = Number(v.total) < 0;
+            const jaDevolvido = v.observacao && v.observacao.includes('[Devolvido');
+            const podeCanc  = podeCancelar && !cancelado && !isDevolucao && !jaDevolvido && podeCancelarVenda(v.data_finalizacao);
 
-            const statusHtml = cancelado
-                ? '<span class="status-estoque status-critico">❌ Cancelada</span>'
-                : '<span class="status-estoque status-normal">✅ Ativa</span>';
+            let statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span>';
+            if (cancelado) {
+                statusHtml = '<span class="status-estoque status-critico">❌ Cancelada</span>';
+            } else if (isDevolucao) {
+                statusHtml = '<span class="status-estoque" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;">🔄 Devolução</span>';
+            } else if (jaDevolvido) {
+                statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span> <span class="status-estoque" style="background:#fee2e2; color:#991b1b; font-size:10px; margin-left:2px;">🔄 Devolvida</span>';
+            }
 
             let nomeCli = v.cliente_nome || v.clientes?.nome;
             if (!nomeCli && v.observacao && v.observacao.includes('Cliente:')) {
@@ -1149,16 +1156,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<strong>#${v.id}</strong> <span style="background:#10b981; color:#fff; font-size:10px; padding:2px 6px; border-radius:10px; margin-left:4px; font-weight:700;">🆕 Nova</span>`
                 : `<strong>#${v.id}</strong>`;
 
+            const totalFormatado = isDevolucao
+                ? `<strong style="color:#dc2626;">- ${formatarMoeda(Math.abs(v.total))}</strong>`
+                : `<strong style="color:var(--primary)">${formatarMoeda(v.total)}</strong>`;
+
             return `
                 <tr ${rowClass}>
                     <td>${idCol}</td>
                     <td>${formatarData(v.data)}</td>
                     <td>${nomeCli}</td>
-                    <td><strong style="color:var(--primary)">${formatarMoeda(v.total)}</strong></td>
+                    <td>${totalFormatado}</td>
                     <td>${v.forma_pagamento || '—'}</td>
                     <td>${statusHtml}</td>
                     <td class="table-actions" style="white-space:nowrap;">
-                        <button class="btn-info" onclick="verComprovante(${v.id})" title="Ver Comprovante">📄</button>
+                        <button class="btn-info" onclick="verComprovante(${v.id})" title="${isDevolucao ? 'Ver Comprovante de Devolução' : 'Ver Comprovante'}">📄</button>
                         ${podeCanc ? `<button class="btn-danger" onclick="cancelarVenda(${v.id})" style="margin-left:4px;" title="Cancelar Venda">❌ Cancelar</button>` : ''}
                         ${cancelado && v.cancelado_em ? `<small style="color:#999;font-size:10px;display:block;margin-top:3px;">Cancelado: ${new Date(v.cancelado_em).toLocaleString('pt-BR')}</small>` : ''}
                     </td>
@@ -2392,6 +2403,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            if (Number(venda?.total) < 0) {
+                mostrarNotificacao('⚠️ Não é possível cancelar uma devolução pelo menu de vendas!', 'error');
+                return;
+            }
+
+            if (venda?.observacao && venda.observacao.includes('[Devolvido')) {
+                mostrarNotificacao('⛔ Esta venda já possui devolução registrada e não pode ser cancelada diretamente!', 'error');
+                return;
+            }
+
             if (!podeCancelarVenda(venda?.data_finalizacao)) {
                 mostrarNotificacao('⛔ Prazo de cancelamento (2h) expirado!', 'error');
                 return;
@@ -2546,9 +2567,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            const cliente  = venda?.clientes || {};
-            const originalSubtotal = (itens || []).reduce((s, i) => s + (i.quantidade * (i.valor_unitario || 0)), 0);
-            const descontoProdutos = (itens || []).reduce((s, i) => s + ((i.quantidade * (i.valor_unitario || 0)) - (i.subtotal || 0)), 0);
+            const cliente = venda?.clientes || {};
+            const loja = (typeof configLoja !== 'undefined' && configLoja) ? configLoja : (usuario?.config_loja || {});
+            const isDevolucao = Number(venda?.total) < 0;
+            const originalSubtotal = (itens || []).reduce((s, i) => s + (Math.abs(i.quantidade) * (i.valor_unitario || 0)), 0);
+            const descontoProdutos = (itens || []).reduce((s, i) => s + ((Math.abs(i.quantidade) * (i.valor_unitario || 0)) - Math.abs(i.subtotal || 0)), 0);
             const descontoVenda = venda?.desconto || 0;
             const total    = venda?.total    || 0;
             const cancelada = venda?.cancelado;
@@ -2559,19 +2582,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- CABEÇALHO -->
                     <div style="text-align:center;line-height:1.4;">
-                        <h2 style="margin:0;font-size:19px;font-weight:bold;text-transform:uppercase;">${configLoja.nome_fantasia || configLoja.nome || usuario.loja_nome || 'Aion ERP'}</h2>
+                        <h2 style="margin:0;font-size:19px;font-weight:bold;text-transform:uppercase;">${loja.nome_fantasia || loja.nome || usuario.loja_nome || 'Aion ERP'}</h2>
                         <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
-                        ${(configLoja.endereco) ? `<p style="margin:2px 0;font-size:15px;">${configLoja.endereco}${configLoja.numero ? ', ' + configLoja.numero : ''}</p>` : ''}
-                        ${(configLoja.telefone) ? `<p style="margin:2px 0;font-size:15px;">Telefone: ${configLoja.telefone}</p>` : ''}
-                        ${(configLoja.cnpj) ? `<p style="margin:2px 0;font-size:15px;">CNPJ: ${configLoja.cnpj}</p>` : ''}
+                        ${(loja.endereco) ? `<p style="margin:2px 0;font-size:15px;">${loja.endereco}${loja.numero ? ', ' + loja.numero : ''}</p>` : ''}
+                        ${(loja.telefone) ? `<p style="margin:2px 0;font-size:15px;">Telefone: ${loja.telefone}</p>` : ''}
+                        ${(loja.cnpj) ? `<p style="margin:2px 0;font-size:15px;">CNPJ: ${loja.cnpj}</p>` : ''}
                         <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                     </div>
 
                     <!-- DADOS DO PEDIDO -->
                     <div style="font-size:15px;line-height:1.4;margin-bottom:8px;">
-                        <p style="margin:2px 0;">Data venda: ${formatarData(venda?.data || new Date())} - ${venda?.hora || horaVenda}</p>
-                        <h3 style="margin:2px 0;font-size:17px;font-weight:bold;">PEDIDO NÚMERO: ${venda?.id || vendaId}</h3>
-                        <p style="margin:2px 0;">Vendedor: ${venda?.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
+                        <p style="margin:2px 0;">Data: ${formatarData(venda?.data || new Date())} - ${venda?.hora || horaVenda}</p>
+                        <h3 style="margin:2px 0;font-size:17px;font-weight:bold;color:${isDevolucao ? '#b45309' : '#000'};">${isDevolucao ? `🔄 ESTORNO / DEVOLUÇÃO #${venda?.id || vendaId}` : `PEDIDO NÚMERO: ${venda?.id || vendaId}`}</h3>
+                        <p style="margin:2px 0;">Operador: ${venda?.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
+                        ${isDevolucao && venda.observacao ? `
+                            <p style="color:#b45309;margin-top:4px;font-size:14px;">
+                                ${venda.observacao}
+                            </p>` : ''}
                         ${cancelada ? `
                             <p style="color:#dc2626;margin-top:6px;font-size:15px;font-weight:bold;">
                                 ⚠️ VENDA CANCELADA<br>
@@ -2589,7 +2616,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- ITENS -->
                     <div style="margin-bottom:12px;">
-                        <div style="font-weight:bold;margin-bottom:6px;font-size:15px;">ITENS:</div>
+                        <div style="font-weight:bold;margin-bottom:6px;font-size:15px;">${isDevolucao ? 'ITENS DEVOLVIDOS:' : 'ITENS:'}</div>
                         <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-bottom:2px;">
                             <span style="width:30%;text-align:left;">Cod.</span>
                             <span style="width:40%;text-align:center;">Qtd.</span>
@@ -2598,13 +2625,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="margin:4px 0;font-size:15px;font-weight:bold;letter-spacing:-1px;">====================================</div>
                         
                         ${(itens || []).map(item => {
-                            const descItem = (item.quantidade * (item.valor_unitario || 0)) - (item.subtotal || 0);
+                            const descItem = (Math.abs(item.quantidade) * (item.valor_unitario || 0)) - Math.abs(item.subtotal || 0);
                             return `
                             <div style="margin-bottom:12px;font-size:15px;line-height:1.3;">
                                 <div style="display:flex;justify-content:space-between;">
                                     <span style="width:30%;text-align:left;">${item.produtos?.codigo || item.produto_id}</span>
-                                    <span style="width:40%;text-align:center;">${item.quantidade} x ${formatarMoeda(item.valor_unitario)}</span>
-                                    <span style="width:30%;text-align:right;">R$ ${parseFloat(item.subtotal || 0).toFixed(2)}</span>
+                                    <span style="width:40%;text-align:center;">${Math.abs(item.quantidade)} x ${formatarMoeda(item.valor_unitario)}</span>
+                                    <span style="width:30%;text-align:right;">${isDevolucao ? '-' : ''}R$ ${parseFloat(Math.abs(item.subtotal || 0)).toFixed(2)}</span>
                                 </div>
                                 <div style="text-transform:uppercase;font-weight:bold;margin-top:2px;">
                                     ${item.produtos?.nome || 'Produto'}
@@ -2624,7 +2651,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- PAGAMENTO / VALORES -->
                     <div style="font-size:15px;line-height:1.4;margin-bottom:12px;">
-                        <div style="text-align:center;font-weight:bold;margin-bottom:6px;">PAGAMENTO</div>
+                        <div style="text-align:center;font-weight:bold;margin-bottom:6px;">${isDevolucao ? 'VALORES DO ESTORNO' : 'PAGAMENTO'}</div>
                         
                         <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
                             <span>Subtotal</span>
@@ -2644,14 +2671,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         ` : ''}
                         
                         <div style="border-top:1px solid #000;margin:6px 0;"></div>
-                        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:17px;margin-bottom:6px;">
-                            <span>TOTAL:</span>
-                            <span>${formatarMoeda(total)}</span>
+                        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:17px;margin-bottom:6px;color:${isDevolucao ? '#dc2626' : '#000'};">
+                            <span>${isDevolucao ? 'VALOR ESTORNADO:' : 'TOTAL:'}</span>
+                            <span>${isDevolucao ? `- ${formatarMoeda(Math.abs(total))}` : formatarMoeda(total)}</span>
                         </div>
                         <div style="border-top:1px solid #000;margin:6px 0;"></div>
                         
-                        <p style="margin:2px 0;">Forma de pagamento: ${venda.forma_pagamento || '-'}</p>
-                        <p style="margin:2px 0;">Valor Pago: ${formatarMoeda(total)}</p>
+                        <p style="margin:2px 0;">${isDevolucao ? 'Forma de estorno' : 'Forma de pagamento'}: ${venda.forma_pagamento || '-'}</p>
+                        <p style="margin:2px 0;">Valor Líquido: ${isDevolucao ? `- ${formatarMoeda(Math.abs(total))}` : formatarMoeda(total)}</p>
                     </div>
 
                     <!-- TERMOS DE GARANTIA E TROCAS -->

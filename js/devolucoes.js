@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('saidas')
                 .select('*, clientes(nome, cpf_cnpj)')
                 .eq('cancelado', false)
+                .gt('total', 0)
                 .order('id', { ascending: false });
 
             const { data, error } = await query;
@@ -213,31 +214,68 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             itensVendaSelecionada = itens || [];
 
-            // Buscar devoluções anteriores
-            const { data: entradasAnteriores } = await supabaseClient
-                .from('entradas')
-                .select('id')
-                .ilike('observacao', `%Nota: ${vendaId}%`);
-
+            // Buscar devoluções anteriores em saidas (novo padrão) e entradas (legado)
             let devolvidosAgrupados = {}; // produto_id -> quantidade devolvida
 
-            if (entradasAnteriores && entradasAnteriores.length > 0) {
-                const entradaIds = entradasAnteriores.map(e => e.id);
-                const { data: itensDevolvidos } = await supabaseClient
-                    .from('entrada_itens')
-                    .select('produto_id, quantidade')
-                    .in('entrada_id', entradaIds);
+            // 1. Buscar devoluções em saidas
+            try {
+                const { data: saidasDevolucoes } = await supabaseClient
+                    .from('saidas')
+                    .select('id')
+                    .ilike('observacao', `%Devolução da Venda #${vendaId}%`)
+                    .eq('cancelado', false);
 
-                if (itensDevolvidos) {
-                    itensDevolvidos.forEach(it => {
-                        devolvidosAgrupados[it.produto_id] = (devolvidosAgrupados[it.produto_id] || 0) + it.quantidade;
-                    });
+                if (saidasDevolucoes && saidasDevolucoes.length > 0) {
+                    const devSaidaIds = saidasDevolucoes.map(s => s.id);
+                    const { data: itensDev } = await supabaseClient
+                        .from('saida_itens')
+                        .select('produto_id, quantidade')
+                        .in('saida_id', devSaidaIds);
+
+                    if (itensDev) {
+                        itensDev.forEach(it => {
+                            const qtd = Math.abs(Number(it.quantidade) || 0);
+                            devolvidosAgrupados[it.produto_id] = (devolvidosAgrupados[it.produto_id] || 0) + qtd;
+                        });
+                    }
                 }
+            } catch (errDevSaidas) {
+                console.warn('Aviso ao buscar devoluções anteriores em saídas:', errDevSaidas);
             }
 
-            // Buscar seriais correspondentes
+            // 2. Buscar devoluções em entradas (retrocompatibilidade legada)
+            try {
+                const { data: entradasAnteriores } = await supabaseClient
+                    .from('entradas')
+                    .select('id')
+                    .ilike('observacao', `%Nota: ${vendaId}%`);
+
+                if (entradasAnteriores && entradasAnteriores.length > 0) {
+                    const entradaIds = entradasAnteriores.map(e => e.id);
+                    const { data: itensDevolvidos } = await supabaseClient
+                        .from('entrada_itens')
+                        .select('produto_id, quantidade')
+                        .in('entrada_id', entradaIds);
+
+                    if (itensDevolvidos) {
+                        itensDevolvidos.forEach(it => {
+                            devolvidosAgrupados[it.produto_id] = (devolvidosAgrupados[it.produto_id] || 0) + it.quantidade;
+                        });
+                    }
+                }
+            } catch (errDevEntradas) {
+                console.warn('Aviso ao buscar devoluções anteriores em entradas:', errDevEntradas);
+            }
+
+            // Calcular valor efetivo e buscar seriais correspondentes
             for (const item of itensVendaSelecionada) {
+                const qtdVendida = Number(item.quantidade) || 1;
+                const subtotalItem = (item.subtotal !== undefined && item.subtotal !== null) 
+                    ? Number(item.subtotal) 
+                    : (qtdVendida * Number(item.valor_unitario));
+                item.valorUnitarioEfetivo = qtdVendida > 0 ? (subtotalItem / qtdVendida) : Number(item.valor_unitario);
                 item.qtd_ja_devolvida = devolvidosAgrupados[item.produto_id] || 0;
+
                 if (item.serial_id) {
                     const { data: s } = await supabaseClient
                         .from('produtos_seriais')
@@ -318,8 +356,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                onchange="atualizarQtdDevolucao(${index}, this.value)" 
                                ${(item.serial_id || jaDevolvido) ? 'disabled' : ''}>
                     </td>
-                    <td style="text-align: right;">${formatarMoeda(item.valor_unitario)}</td>
-                    <td style="text-align: right; font-weight: 600;" id="subtotal-${index}">${formatarMoeda(jaDevolvido ? 0 : (maxDevolver * item.valor_unitario))}</td>
+                    <td style="text-align: right;">${formatarMoeda(item.valorUnitarioEfetivo || item.valor_unitario)}</td>
+                    <td style="text-align: right; font-weight: 600;" id="subtotal-${index}">${formatarMoeda(jaDevolvido ? 0 : (maxDevolver * (item.valorUnitarioEfetivo || item.valor_unitario)))}</td>
                 </tr>
             `;
         }).join('');
@@ -353,8 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(qtd) || qtd < 1) qtd = 1;
         if (qtd > maxDevolver) qtd = maxDevolver;
 
-        // Atualizar no array local temporariamente
-        const subtotal = qtd * item.valor_unitario;
+        const unitPrice = item.valorUnitarioEfetivo || item.valor_unitario;
+        const subtotal = qtd * unitPrice;
         document.getElementById(`subtotal-${index}`).textContent = formatarMoeda(subtotal);
 
         atualizarResumoDevolucao();
@@ -371,9 +409,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = itensVendaSelecionada[idx];
                 const inputQtd = document.querySelectorAll('.input-qtd-devolver')[idx];
                 const qtd = parseInt(inputQtd.value);
+                const unitPrice = item.valorUnitarioEfetivo || item.valor_unitario;
 
                 totalItens += qtd;
-                totalValor += (qtd * item.valor_unitario);
+                totalValor += (qtd * unitPrice);
             }
         });
 
@@ -394,11 +433,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = itensVendaSelecionada[idx];
                 const inputQtd = document.querySelectorAll('.input-qtd-devolver')[idx];
                 const qtdADevolver = parseInt(inputQtd.value);
+                const unitPrice = item.valorUnitarioEfetivo || item.valor_unitario;
+                const valorTotalDevolvido = qtdADevolver * unitPrice;
 
                 itensSelecionados.push({
                     ...item,
                     qtdADevolver: qtdADevolver,
-                    valorTotalDevolvido: qtdADevolver * item.valor_unitario
+                    unitPrice: unitPrice,
+                    valorTotalDevolvido: valorTotalDevolvido
                 });
             }
         });
@@ -425,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!prosseguir) return;
         }
 
-        if (!confirm(`Confirma o registro de devolução de ${itensSelecionados.length} item(ns) da venda #${vendaSelecionada.id}?\nEsta ação irá estornar as quantidades ao estoque.`)) {
+        if (!confirm(`Confirma o registro de devolução de ${itensSelecionados.length} item(ns) da venda #${vendaSelecionada.id}?\nEsta ação irá estornar as quantidades ao estoque e abater o valor financeiro da saída.`)) {
             return;
         }
 
@@ -436,33 +478,46 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataHoje = getDataLocalBrasil();
             const totalDevolucaoVal = itensSelecionados.reduce((sum, item) => sum + item.valorTotalDevolvido, 0);
 
-            // 1. Criar cabeçalho em `entradas`
-            const observacaoEntrada = `Nota: ${vendaSelecionada.id} | Série: Dev | Data Lançamento: ${dataHoje} | Obs: Devoluçao de Venda - Nota (${vendaSelecionada.id})`;
-            const { data: entradaObj, error: errorEntrada } = await supabaseClient
-                .from('entradas')
+            // 1. Criar movimento negativo na tabela `saidas` para abater as saídas/relatórios
+            const observacaoDevolucao = `Devolução da Venda #${vendaSelecionada.id} — Obs: ${motivo}`;
+            const { data: saidaDevolucao, error: errorSaida } = await supabaseClient
+                .from('saidas')
                 .insert([{
-                    fornecedor_id: null,
+                    loja_id: vendaSelecionada.loja_id || 1,
+                    cliente_id: vendaSelecionada.cliente_id || null,
+                    cliente_nome: vendaSelecionada.cliente_nome || vendaSelecionada.clientes?.nome || null,
+                    cliente_cpf: vendaSelecionada.cliente_cpf || vendaSelecionada.clientes?.cpf_cnpj || null,
+                    usuario_id: usuario.id,
+                    caixa_id: vendaSelecionada.caixa_id || null,
+                    colaborador_id: vendaSelecionada.colaborador_id || null,
                     data: dataHoje,
-                    observacao: observacaoEntrada,
-                    total: totalDevolucaoVal,
-                    usuario_id: usuario.id
+                    data_finalizacao: new Date().toISOString(),
+                    total: -Math.abs(totalDevolucaoVal), // Garante valor estritamente negativo para abater as saídas
+                    desconto: 0,
+                    forma_pagamento: vendaSelecionada.forma_pagamento || 'Dinheiro',
+                    cancelado: false,
+                    observacao: observacaoDevolucao,
+                    comissao_calculada: 0
                 }])
                 .select()
                 .single();
 
-            if (errorEntrada) throw errorEntrada;
+            if (errorSaida) throw errorSaida;
 
-            // 2. Processar item por item
+            // 2. Inserir itens estornados em `saida_itens` (com quantidade e subtotal negativos) e estornar estoque
             for (const item of itensSelecionados) {
-                // Inserir item em `entrada_itens`
+                // Inserir item negativo na saída de estorno
                 await supabaseClient
-                    .from('entrada_itens')
+                    .from('saida_itens')
                     .insert([{
-                        entrada_id: entradaObj.id,
+                        saida_id: saidaDevolucao.id,
                         produto_id: item.produto_id,
-                        quantidade: item.qtdADevolver,
-                        valor_unitario: item.valor_unitario,
-                        subtotal: item.valorTotalDevolvido
+                        quantidade: -Math.abs(item.qtdADevolver),
+                        valor_unitario: item.unitPrice,
+                        subtotal: -Math.abs(item.valorTotalDevolvido),
+                        serial_id: item.serial_id || null,
+                        serial: item.numero_serie || item.serial || null,
+                        imei: item.imei || null
                     }]);
 
                 // Obter estoque atual e tipo do produto
@@ -508,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             quantidade: item.qtdADevolver,
                             quantidade_anterior: estoqueAtual,
                             quantidade_nova: novoEstoque,
-                            motivo: `Devolução de Venda - Nota (${vendaSelecionada.id}) — ${motivo}`,
+                            motivo: `Devolução de Venda #${vendaSelecionada.id} — ${motivo}`,
                             data: new Date().toISOString(),
                             usuario_id: usuario.id
                         }]);
@@ -521,15 +576,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `${obsAntiga} | [Devolvido em ${new Date().toLocaleString('pt-BR')}: ${itensSelecionados.length} item(ns) — Obs: ${motivo}]`
                 : `[Devolvido em ${new Date().toLocaleString('pt-BR')}: ${itensSelecionados.length} item(ns) — Obs: ${motivo}]`;
 
+            // Recalcular comissão proporcional da venda original
+            let novaComissao = 0;
+            const totalOriginal = Number(vendaSelecionada.total) || 0;
+            const comissaoOriginal = Number(vendaSelecionada.comissao_calculada) || 0;
+            if (totalOriginal > 0 && totalDevolucaoVal < totalOriginal && comissaoOriginal > 0) {
+                const percNaoDevolvido = (totalOriginal - totalDevolucaoVal) / totalOriginal;
+                novaComissao = Math.max(0, comissaoOriginal * percNaoDevolvido);
+            }
+
             await supabaseClient
                 .from('saidas')
                 .update({ 
                     observacao: novaObs,
-                    comissao_calculada: 0
+                    comissao_calculada: novaComissao
                 })
                 .eq('id', vendaSelecionada.id);
 
-            mostrarNotificacao(`✅ Devolução registrada com sucesso! Entrada #${entradaObj.id} gerada.`, 'success');
+            mostrarNotificacao(`✅ Devolução registrada com sucesso! Saída de estorno #${saidaDevolucao.id} gerada (-${formatarMoeda(totalDevolucaoVal)}). Estoque estornado.`, 'success');
             modalDevolucao.style.display = 'none';
 
             await carregarVendas();

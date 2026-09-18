@@ -209,8 +209,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // Ticket Médio = Faturamento Total / Quantidade de Vendas
-        const ticketMedio = vendas.length > 0 ? (somaFaturamentoTotal / vendas.length) : 0;
+        // Ticket Médio = Faturamento Total / Quantidade de Vendas Válidas
+        const vendasValidas = vendas.filter(v => Number(v.total) > 0);
+        const ticketMedio = vendasValidas.length > 0 ? (somaFaturamentoTotal / vendasValidas.length) : 0;
 
         const elHoje = document.getElementById('kpiVendasHoje');
         const elSemana = document.getElementById('kpiVendasSemana');
@@ -463,8 +464,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 rankingMap[prodId].faturamentoGerado += (Number(item.subtotal) || 0);
             });
 
-            // Ordenar por quantidade vendida desc e pegar os top 20
+            // Ordenar por quantidade vendida desc e pegar os top 20 (apenas com saldo positivo vendido)
             const rankingOrdenado = Object.values(rankingMap)
+                .filter(p => p.qtdVendida > 0)
                 .sort((a, b) => b.qtdVendida - a.qtdVendida)
                 .slice(0, 20);
 
@@ -541,6 +543,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (errE) {
                 console.warn('Erro na busca de entradas:', errE);
             }
+
+            // Excluir eventuais devoluções legadas inseridas em entradas
+            entradasData = entradasData.filter(e => !e.observacao?.includes('Série: Dev') && !e.observacao?.includes('Devolu'));
 
             if (!entradasData || entradasData.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray);">Nenhuma nota de entrada registrada.</td></tr>';

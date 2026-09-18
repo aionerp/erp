@@ -111,3 +111,9 @@ ALTER TABLE public.produtos
 ALTER TABLE public.config_loja 
     ADD COLUMN IF NOT EXISTS termo_garantia TEXT,
     ADD COLUMN IF NOT EXISTS termo_troca TEXT;
+
+
+-- 9. PERMITIR ITENS DE SAÍDA COM QUANTIDADE NEGATIVA (DEVOLUÇÕES/ESTORNOS)
+ALTER TABLE public.saida_itens DROP CONSTRAINT IF EXISTS saida_itens_quantidade_check;
+ALTER TABLE public.saida_itens ADD CONSTRAINT saida_itens_quantidade_check CHECK (quantidade != 0);
+

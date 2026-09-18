@@ -482,7 +482,7 @@ function renderizarVendasPorPlano(categorias) {
     const tbody = document.querySelector('#tabelaPlanos tbody');
     if (!tbody) return;
     
-    const keys = Object.keys(categorias);
+    const keys = Object.keys(categorias).filter(cat => categorias[cat].qtd > 0 || categorias[cat].total > 0);
     if (keys.length === 0) {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--gray);">Nenhum item vendido neste caixa</td></tr>`;
         return;

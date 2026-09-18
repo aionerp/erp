@@ -215,7 +215,7 @@ CREATE TABLE public.saida_itens (
     id SERIAL PRIMARY KEY,
     saida_id INTEGER NOT NULL REFERENCES public.saidas(id) ON DELETE CASCADE,
     produto_id INTEGER NOT NULL REFERENCES public.produtos(id) ON DELETE CASCADE,
-    quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+    quantidade INTEGER NOT NULL CHECK (quantidade != 0),
     valor_unitario NUMERIC(10, 2) NOT NULL,
     subtotal NUMERIC(10, 2) NOT NULL,
     serial_id INTEGER REFERENCES public.produtos_seriais(id) ON DELETE SET NULL,
