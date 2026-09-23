@@ -344,6 +344,43 @@
         .dashboard-simple-table tr:last-child td {
             border-bottom: none;
         }
+
+        /* ── Estilos do Painel de Serviços Recorrentes ── */
+        .painel-recorrentes-box {
+            background: #FFFFFF;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+            margin-bottom: 28px;
+            padding: 22px;
+            transition: all 0.3s ease;
+        }
+
+        .painel-recorrentes-box.expanded-mode {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 99999 !important;
+            background: #f8fafc !important;
+            padding: 30px !important;
+            box-sizing: border-box !important;
+            overflow-y: auto !important;
+            border-radius: 0 !important;
+        }
+
+        .badge-countdown-dash {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 700;
+            display: inline-block;
+        }
+        .dash-cd-ok { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .dash-cd-warn { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .dash-cd-urg { background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; }
+        .dash-cd-dang { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
     </style>
 </head>
 <body class="hold-transition">
@@ -363,6 +400,7 @@
             <li><a href="estoque.html"><span class="icon">💾</span> Estoque</a></li>
             <li><a href="entradas.html"><span class="icon">📥</span> Entradas</a></li>
             <li><a href="saidas.html"><span class="icon">💳</span> PDV / Vendas</a></li>
+            <li><a href="assinaturas.html"><span class="icon">🔄</span> Serviços Recorrentes</a></li>
             <li><a href="promocoes.html"><span class="icon">🎯</span> Ações Promocionais</a></li>
             <li><a href="devolucoes.html"><span class="icon">🔄</span> Devoluções</a></li>
             <li class="nav-section">CRM</li>
@@ -462,6 +500,84 @@
                 </div>
             </div>
 
+            <!-- ── Painel de Acompanhamento: Serviços Recorrentes & Assinaturas ── -->
+            <div class="painel-recorrentes-box" id="painelRecorrentes">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;">
+                            🔄 Monitor de Serviços Recorrentes & Assinaturas
+                        </h3>
+                        <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--gray);">
+                            Vencimentos, contagem de dias para mensalidades e clientes ativos
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 8px;">
+                            <button id="btnDashTabVencimentos" style="border: none; background: #FFFFFF; color: var(--primary); padding: 5px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                📅 Vencimentos & Prazos
+                            </button>
+                            <button id="btnDashTabClientes" style="border: none; background: transparent; color: var(--gray); padding: 5px 12px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                                👥 Clientes Ativos (<span id="dashTotalClientesAtivos">0</span>)
+                            </button>
+                        </div>
+                        <button id="btnExpandirPainelRecorrentes" style="background: #FFFFFF; border: 1px solid var(--border); color: var(--dark); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Exibir somente este painel na tela">
+                            ⛶ Expandir Painel
+                        </button>
+                        <a href="assinaturas.html" style="background: var(--primary); color: #FFFFFF; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 5px;">
+                            Abrir Monitor Completo ➔
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Resumo Rápido (Chips) -->
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: var(--gray);">MRR (Mensal):</span>
+                        <strong id="dashMRR" style="font-size: 13.5px; color: #10B981;">R$ 0,00</strong>
+                    </div>
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: var(--gray);">A Vencer (7 dias):</span>
+                        <strong id="dashAVencerQtd" style="font-size: 13.5px; color: #ea580c;">0</strong>
+                    </div>
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: var(--gray);">Vencidos:</span>
+                        <strong id="dashVencidosQtd" style="font-size: 13.5px; color: #dc2626;">0</strong>
+                    </div>
+                </div>
+
+                <!-- Sub-aba 1: Tabela de Vencimentos & Prazos -->
+                <div id="dashContainerVencimentos" style="overflow-x: auto; max-height: 420px;">
+                    <table class="dashboard-simple-table">
+                        <thead>
+                            <tr>
+                                <th>Data Vencimento</th>
+                                <th>Expira em</th>
+                                <th>Tipo de Plano</th>
+                                <th>Cliente</th>
+                                <th>Valor</th>
+                                <th style="text-align: right;">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashRecorrentesTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--gray); padding: 25px;">
+                                    Carregando serviços recorrentes...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sub-aba 2: Lista com os Clientes Ativos -->
+                <div id="dashContainerClientes" style="display: none; max-height: 420px; overflow-y: auto;">
+                    <div id="dashClientesAtivosGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 4px;">
+                        <div style="grid-column: 1 / -1; text-align: center; color: var(--gray); padding: 25px;">
+                            Carregando clientes ativos...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ── Seção Inferior (Tabelas / Listagens) ── -->
             <div class="dashboard-bottom-grid">
                 <!-- Coluna 1: Top 20 Produtos -->
@@ -500,6 +616,97 @@
 
         </div><!-- /content -->
     </main>
+</div>
+
+<!-- Modal Baixar Pagamento de Mensalidade no Dashboard -->
+<div id="modalPagamentoDash" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2 style="display: flex; align-items: center; gap: 8px;">
+                💳 Registrar Pagamento de Mensalidade
+            </h2>
+            <span class="close" id="closeModalPagamentoDash">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="pagamentoDashForm" onsubmit="return false;">
+                <input type="hidden" id="dashPag_assinaturaId">
+
+                <!-- Card Resumo do Contrato -->
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <span style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Cliente</span>
+                            <div id="dashPag_clienteNome" style="font-size: 15px; font-weight: 800; color: #0F172A;">-</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Plano / Serviço</span>
+                            <div id="dashPag_planoNome" style="font-size: 14px; font-weight: 700; color: #0284C7;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed #CBD5E1; padding-top: 8px; font-size: 12.5px;">
+                        <span>Vencimento do Ciclo: <strong id="dashPag_vencimentoAtual" style="color: #B91C1C;">-</strong></span>
+                        <span>Frequência: <strong id="dashPag_frequenciaTexto" style="color: #334155; text-transform: capitalize;">-</strong></span>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Valor Recebido (R$)</label>
+                        <input type="number" step="0.01" min="0.01" id="dashPag_valor" placeholder="0.00" required style="font-size: 16px; font-weight: 700; color: #0F172A;">
+                    </div>
+                    <div class="form-group">
+                        <label class="required-label">Data do Pagamento</label>
+                        <input type="date" id="dashPag_dataPagamento" required>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Forma de Pagamento</label>
+                        <select id="dashPag_formaPagamento" required style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px; font-weight: 600;">
+                            <option value="pix" selected>⚡ PIX</option>
+                            <option value="dinheiro">💵 Dinheiro</option>
+                            <option value="cartao_credito">💳 Cartão de Crédito</option>
+                            <option value="cartao_debito">💳 Cartão de Débito</option>
+                            <option value="boleto">📄 Boleto Bancário</option>
+                            <option value="transferencia">🏦 Transferência / TED</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Caixa / Turno do Dia</label>
+                        <div id="dashPag_caixaStatus" style="font-size: 12.5px; padding: 10px 12px; background: #f1f5f9; border-radius: 8px; border: 1px solid #cbd5e1; color: #334155;">
+                            Verificando caixa aberto...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Próximo Vencimento Calculado -->
+                <div class="form-group" style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 12px 14px; margin-bottom: 15px;">
+                    <label style="color: #065F46; font-weight: 700; margin-bottom: 6px; display: block;">
+                        📅 Próximo Vencimento da Assinatura (Renovação Automática)
+                    </label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="dashPag_proximoVencimento" required style="flex: 1; height: 38px; border-radius: 6px; border: 1px solid #10B981; font-weight: 600; padding: 0 10px;">
+                        <span id="dashPag_spanCicloDias" style="font-size: 12px; color: #047857; font-weight: 600;"></span>
+                    </div>
+                    <small style="color: #047857; font-size: 11.5px; margin-top: 4px; display: block;">
+                        Ao confirmar, o vencimento deste contrato será estendido para a data acima e uma venda oficial será gravada no sistema.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Observação da Venda / Comprovante</label>
+                    <textarea id="dashPag_observacao" rows="2" placeholder="Informações adicionais do acerto da mensalidade..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border);">
+            <button class="btn-warning" id="btnCancelarPagamentoDash">Cancelar</button>
+            <button class="btn-success" id="btnConfirmarPagamentoDash" style="background: #10B981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <span>✅</span> Confirmar Pagamento & Gerar Venda
+            </button>
+        </div>
+    </div>
 </div>
 
 <script src="js/security.js?v=2.2.0"></script>

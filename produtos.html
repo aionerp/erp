@@ -171,6 +171,7 @@
                 <li><a href="estoque.html">💾 Estoque</a></li>
                 <li><a href="entradas.html">📥 Entradas</a></li>
                 <li><a href="saidas.html">💳 PDV / Vendas</a></li>
+                <li><a href="assinaturas.html">🔄 Serviços Recorrentes</a></li>
                 <li><a href="promocoes.html">🎯 Ações Promocionais</a></li>
                 <li><a href="devolucoes.html">🔄 Devoluções</a></li>
                 <li><a href="fornecedores.html">🏭 Fornecedores</a></li>
@@ -282,6 +283,58 @@
                                 <div id="divComissaoValorCustom" style="display: none;" class="form-group">
                                     <label style="font-size: 12px; color: #004085; font-weight: 600; display: block; margin-bottom: 5px;">Porcentagem de Comissão do Colaborador (%)</label>
                                     <input type="number" step="0.1" id="comissao_valor" placeholder="Ex: 40" style="margin-bottom: 0; width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Campos de Planos e Assinaturas para Serviço Recorrente -->
+                    <div id="groupAssinaturaServico" style="display: none; background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #bbf7d0;">
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #166534; cursor: pointer;">
+                                    <input type="checkbox" id="is_recorrente" style="width: auto; margin-bottom: 0;"> 🔄 Habilitar Planos e Assinatura Recorrente?
+                                </label>
+                            </div>
+                            
+                            <div id="groupAssinaturaCampos" style="display: none; flex-direction: column; gap: 12px;">
+                                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="required-label" style="color: #166534; font-weight: 600;">Cliente (Obrigatório)</label>
+                                        <select id="plano_cliente_id" style="width: 100%; height: 40px; padding: 8px; border-radius: 8px; border: 1px solid var(--border);">
+                                            <option value="">Selecione o cliente da assinatura...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="required-label" style="color: #166534; font-weight: 600;">Nome do Plano</label>
+                                        <input type="text" id="plano_nome" placeholder="Ex: Mensalidade Pro, Plano Básico..." style="margin-bottom: 0;">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="required-label" style="color: #166534; font-weight: 600;">Frequência de Cobrança</label>
+                                        <select id="plano_frequencia" style="width: 100%; height: 40px; padding: 8px; border-radius: 8px; border: 1px solid var(--border);">
+                                            <option value="semanal">Semanal (7 dias)</option>
+                                            <option value="mensal" selected>Mensal (30 dias)</option>
+                                            <option value="trimestral">Trimestral (90 dias)</option>
+                                            <option value="semestral">Semestral (180 dias)</option>
+                                            <option value="anual">Anual (365 dias)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="required-label" style="color: #166534; font-weight: 600;">Valor Mensal / Cobrança (R$)</label>
+                                        <input type="number" step="0.01" min="0.01" id="plano_valor" placeholder="R$ 0,00" style="margin-bottom: 0;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="required-label" style="color: #166534; font-weight: 600;">Data de Vencimento</label>
+                                        <input type="date" id="plano_data_vencimento" style="margin-bottom: 0;">
+                                    </div>
+                                </div>
+                                
+                                <div id="assinaturaCicloInfo" style="font-size: 13px; color: #15803d; background: #dcfce7; padding: 10px 14px; border-radius: 6px; border-left: 4px solid #16a34a; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                                    <span>📅 <strong>Ciclo de Cobrança:</strong> Mensalidade a cada 30 dias.</span>
+                                    <span id="spanDiasRestantes" style="font-weight: 700; color: #166534;"></span>
                                 </div>
                             </div>
                         </div>

@@ -54,36 +54,5 @@
       "habilitar_lotes": true,
       "habilitar_variacoes": true
     }
-  },
-  {
-    "clientId": "cliente03",
-    "companyName": "E-commerce Original Eletronico",
-    "companySubtitle": "by AionLabs (Cliente 03)",
-    "prefix": "originaleletronico_legado",
-    "cnpj": "47391014000147",
-    "cnpjFormatted": "47.391.014/0001-47",
-    "active": false,
-    "configured": true,
-    "status": "inativo",
-    "database": {
-      "provider": "supabase",
-      "connectionId": "cliente03"
-    },
-    "supabase": {
-      "url": "https://jzbqyeyzgvvjqsohliee.supabase.co",
-      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6YnF5ZXl6Z3Z2anFzb2hsaWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTQ0OTQsImV4cCI6MjEwMzc3MDQ5NH0.sYSA8zU1EExsame51PKBAPQl0lP4vlK-LPgIYLEdvxQ"
-    },
-    "branding": {
-      "primaryColor": "#111824",
-      "primaryDarkColor": "#0a1525",
-      "primaryLightColor": "#152031"
-    },
-    "features": {
-      "habilitar_seriais": true,
-      "habilitar_agendamentos": true,
-      "habilitar_mesas": true,
-      "habilitar_lotes": true,
-      "habilitar_variacoes": true
-    }
   }
 ]

@@ -99,6 +99,86 @@ document.addEventListener('DOMContentLoaded', () => {
             mostrarNotificacao('Erro ao carregar seriais', 'error');
         }
     }
+
+    let clientesLista = [];
+
+    async function carregarClientesAssinatura() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('clientes')
+                .select('id, nome, cpf_cnpj, telefone')
+                .eq('tipo', 'cliente')
+                .eq('ativo', true)
+                .order('nome');
+            
+            if (error) throw error;
+            clientesLista = data || [];
+            
+            const selectCliente = document.getElementById('plano_cliente_id');
+            if (selectCliente) {
+                selectCliente.innerHTML = '<option value="">Selecione o cliente da assinatura...</option>' +
+                    clientesLista.map(c => `<option value="${c.id}">${c.nome} ${c.cpf_cnpj ? `(${c.cpf_cnpj})` : ''}</option>`).join('');
+            }
+        } catch (err) {
+            console.error('Erro ao carregar clientes para assinatura:', err);
+        }
+    }
+
+    function atualizarCicloAssinatura() {
+        const frequencia = document.getElementById('plano_frequencia')?.value || 'mensal';
+        const inputVenc = document.getElementById('plano_data_vencimento');
+        const infoContainer = document.getElementById('assinaturaCicloInfo');
+        
+        const freqNomes = {
+            semanal: 'Semanal (7 dias)',
+            mensal: 'Mensal (30 dias)',
+            trimestral: 'Trimestral (90 dias)',
+            semestral: 'Semestral (180 dias)',
+            anual: 'Anual (365 dias)'
+        };
+        
+        if (inputVenc && !inputVenc.value) {
+            const d = new Date();
+            if (frequencia === 'semanal') d.setDate(d.getDate() + 7);
+            else if (frequencia === 'mensal') d.setMonth(d.getMonth() + 1);
+            else if (frequencia === 'trimestral') d.setMonth(d.getMonth() + 3);
+            else if (frequencia === 'semestral') d.setMonth(d.getMonth() + 6);
+            else if (frequencia === 'anual') d.setFullYear(d.getFullYear() + 1);
+            
+            inputVenc.value = d.toISOString().split('T')[0];
+        }
+        
+        let textoDias = '';
+        if (inputVenc && inputVenc.value) {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const [ano, mes, dia] = inputVenc.value.split('-').map(Number);
+            const venc = new Date(ano, mes - 1, dia);
+            venc.setHours(0, 0, 0, 0);
+            
+            const diffMs = venc - hoje;
+            const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            
+            if (diffDias > 5) {
+                textoDias = `<span style="color: #16a34a; font-weight: 700;">🟢 Expira em ${diffDias} dias (${venc.toLocaleDateString('pt-BR')})</span>`;
+            } else if (diffDias > 1 && diffDias <= 5) {
+                textoDias = `<span style="color: #d97706; font-weight: 700;">🟡 Expira em ${diffDias} dias (Atenção)</span>`;
+            } else if (diffDias === 1) {
+                textoDias = `<span style="color: #ea580c; font-weight: 700;">🟠 Vence amanhã!</span>`;
+            } else if (diffDias === 0) {
+                textoDias = `<span style="color: #ea580c; font-weight: 700;">🟠 Vence hoje!</span>`;
+            } else {
+                textoDias = `<span style="color: #dc2626; font-weight: 700;">🔴 Vencido há ${Math.abs(diffDias)} dias!</span>`;
+            }
+        }
+        
+        if (infoContainer) {
+            infoContainer.innerHTML = `
+                <span>📅 <strong>Ciclo:</strong> Cobrança ${freqNomes[frequencia] || frequencia}.</span>
+                <span>${textoDias}</span>
+            `;
+        }
+    }
     
     async function carregarCategorias() {
         try {
@@ -406,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                     <td><strong>${p.codigo || '-'}</strong></td>
                     <td>
-                        <strong>${p.nome}</strong><br>
+                        <strong>${p.nome}</strong>${p.is_recorrente ? ` <span style="background: #10B981; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block; margin-left: 4px;" title="Plano / Assinatura Recorrente">🔄 Assinatura (${p.plano_frequencia || 'mensal'})</span>` : ''}<br>
                         <small class="serial-badge">${p.modelo || ''}</small>
                     </td>
                     <td>${p.categoria || '-'}</td>
@@ -565,6 +645,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputComissaoValor = document.getElementById('comissao_valor');
         if (inputComissaoValor) inputComissaoValor.value = produto.comissao_valor || '';
         
+        // Carregar campos de assinatura recorrente
+        const chkRecorrente = document.getElementById('is_recorrente');
+        if (chkRecorrente) {
+            chkRecorrente.checked = produto.is_recorrente === true;
+            chkRecorrente.dispatchEvent(new Event('change'));
+        }
+        if (produto.is_recorrente) {
+            const selCli = document.getElementById('plano_cliente_id');
+            if (selCli) selCli.value = produto.plano_cliente_id || '';
+            const inpNome = document.getElementById('plano_nome');
+            if (inpNome) inpNome.value = produto.plano_nome || '';
+            const selFreq = document.getElementById('plano_frequencia');
+            if (selFreq) selFreq.value = produto.plano_frequencia || 'mensal';
+            const inpVal = document.getElementById('plano_valor');
+            if (inpVal) inpVal.value = produto.plano_valor || produto.valor_venda || '';
+            const inpVenc = document.getElementById('plano_data_vencimento');
+            if (inpVenc) inpVenc.value = produto.plano_data_vencimento || '';
+            atualizarCicloAssinatura();
+        }
+        
         document.getElementById('quantidade_estoque').value = 0;
         document.getElementById('quantidade_estoque').disabled = true;
         document.getElementById('seriaisList').innerHTML = `
@@ -658,10 +758,64 @@ document.addEventListener('DOMContentLoaded', () => {
             dadosProduto.comissao_100_porcento = chk100 ? chk100.checked : false;
             
             dadosProduto.comissao_valor = parseFloat(document.getElementById('comissao_valor').value) || 0;
+
+            const chkRecorrente = document.getElementById('is_recorrente');
+            const isRecorrente = chkRecorrente ? chkRecorrente.checked : false;
+            dadosProduto.is_recorrente = isRecorrente;
+
+            if (isRecorrente) {
+                const clienteId = document.getElementById('plano_cliente_id')?.value;
+                const planoNome = document.getElementById('plano_nome')?.value.trim();
+                const planoFrequencia = document.getElementById('plano_frequencia')?.value || 'mensal';
+                const planoVenc = document.getElementById('plano_data_vencimento')?.value;
+                const planoValor = parseFloat(document.getElementById('plano_valor')?.value) || 0;
+
+                if (!clienteId) {
+                    mostrarNotificacao('Para serviços de assinatura recorrente, é obrigatório selecionar um cliente!', 'error');
+                    document.getElementById('plano_cliente_id')?.focus();
+                    return;
+                }
+
+                if (!planoNome) {
+                    mostrarNotificacao('Informe o nome do plano de assinatura!', 'error');
+                    document.getElementById('plano_nome')?.focus();
+                    return;
+                }
+
+                if (!planoVenc) {
+                    mostrarNotificacao('Informe a data de vencimento da assinatura!', 'error');
+                    document.getElementById('plano_data_vencimento')?.focus();
+                    return;
+                }
+
+                if (isNaN(planoValor) || planoValor < 0.01) {
+                    mostrarNotificacao('Informe um valor válido para a assinatura (mínimo R$ 0,01)!', 'error');
+                    document.getElementById('plano_valor')?.focus();
+                    return;
+                }
+
+                dadosProduto.plano_cliente_id = parseInt(clienteId);
+                dadosProduto.plano_nome = planoNome;
+                dadosProduto.plano_frequencia = planoFrequencia;
+                dadosProduto.plano_data_vencimento = planoVenc;
+                dadosProduto.plano_valor = planoValor;
+            } else {
+                dadosProduto.plano_cliente_id = null;
+                dadosProduto.plano_nome = null;
+                dadosProduto.plano_frequencia = null;
+                dadosProduto.plano_data_vencimento = null;
+                dadosProduto.plano_valor = null;
+            }
         } else {
             dadosProduto.comissao_habilitada = false;
             dadosProduto.comissao_100_porcento = false;
             dadosProduto.comissao_valor = 0;
+            dadosProduto.is_recorrente = false;
+            dadosProduto.plano_cliente_id = null;
+            dadosProduto.plano_nome = null;
+            dadosProduto.plano_frequencia = null;
+            dadosProduto.plano_data_vencimento = null;
+            dadosProduto.plano_valor = null;
         }
         
         if (!dadosProduto.codigo || !dadosProduto.nome) {
@@ -676,6 +830,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
+            let produtoIdSalvo = id ? parseInt(id) : null;
+
             if (id) {
                 const { error } = await supabaseClient
                     .from('produtos')
@@ -715,6 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (error) throw error;
                     
                     const produtoId = data[0].id;
+                    produtoIdSalvo = produtoId;
                     
                     for (const serial of seriaisList) {
                         const { error: serialError } = await supabaseClient
@@ -743,12 +900,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // Outros nichos / sem controle de serial/IMEI: salva direto com a quantidade informada
                     dadosProduto.estoque_total = dadosProduto.tipo === 'servico' ? 0 : quantidadeEstoque;
-                    const { error } = await supabaseClient
+                    const { data: insData, error } = await supabaseClient
                         .from('produtos')
-                        .insert([dadosProduto]);
+                        .insert([dadosProduto])
+                        .select();
                     
                     if (error) throw error;
+                    if (insData && insData[0]) {
+                        produtoIdSalvo = insData[0].id;
+                    }
                     mostrarNotificacao('Produto cadastrado com sucesso!', 'success');
+                }
+            }
+
+            // Sincronizar contrato na tabela servicos_recorrentes se for assinatura
+            if (produtoIdSalvo && dadosProduto.is_recorrente && dadosProduto.plano_cliente_id) {
+                try {
+                    const { data: existente } = await supabaseClient
+                        .from('servicos_recorrentes')
+                        .select('id')
+                        .eq('produto_id', produtoIdSalvo)
+                        .eq('cliente_id', dadosProduto.plano_cliente_id)
+                        .maybeSingle();
+
+                    const dadosAssinatura = {
+                        loja_id: usuario.loja_id || 1,
+                        produto_id: produtoIdSalvo,
+                        cliente_id: dadosProduto.plano_cliente_id,
+                        plano_nome: dadosProduto.plano_nome,
+                        frequencia: dadosProduto.plano_frequencia,
+                        valor: dadosProduto.plano_valor,
+                        data_vencimento: dadosProduto.plano_data_vencimento,
+                        status: 'ativo',
+                        updated_at: new Date().toISOString()
+                    };
+
+                    if (existente && existente.id) {
+                        await supabaseClient
+                            .from('servicos_recorrentes')
+                            .update(dadosAssinatura)
+                            .eq('id', existente.id);
+                    } else {
+                        await supabaseClient
+                            .from('servicos_recorrentes')
+                            .insert([dadosAssinatura]);
+                    }
+                } catch (eAssinatura) {
+                    console.error('Erro ao sincronizar assinatura recorrente:', eAssinatura);
                 }
             }
             
@@ -864,6 +1062,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const valComissao = document.getElementById('comissao_valor');
         if (valComissao) valComissao.value = '';
+
+        // Reset de campos de assinatura recorrente
+        const checkRecorrente = document.getElementById('is_recorrente');
+        if (checkRecorrente) {
+            checkRecorrente.checked = false;
+            checkRecorrente.dispatchEvent(new Event('change'));
+        }
+        const selCli = document.getElementById('plano_cliente_id');
+        if (selCli) selCli.value = '';
+        const inpPlanoNome = document.getElementById('plano_nome');
+        if (inpPlanoNome) inpPlanoNome.value = '';
+        const selFreq = document.getElementById('plano_frequencia');
+        if (selFreq) selFreq.value = 'mensal';
+        const inpPlanoVal = document.getElementById('plano_valor');
+        if (inpPlanoVal) inpPlanoVal.value = '';
+        const inpPlanoVenc = document.getElementById('plano_data_vencimento');
+        if (inpPlanoVenc) inpPlanoVenc.value = '';
+        const groupAssinatura = document.getElementById('groupAssinaturaServico');
+        if (groupAssinatura) groupAssinatura.style.display = 'none';
+        const groupAssinaturaCampos = document.getElementById('groupAssinaturaCampos');
+        if (groupAssinaturaCampos) groupAssinaturaCampos.style.display = 'none';
         
         const tipoSelect = document.getElementById('produtoTipo');
         if (tipoSelect) {
@@ -898,12 +1117,23 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const groupComissaoServico = document.getElementById('groupComissaoServico');
             if (groupComissaoServico) groupComissaoServico.style.display = 'block';
+
+            const groupAssinaturaServico = document.getElementById('groupAssinaturaServico');
+            if (groupAssinaturaServico) groupAssinaturaServico.style.display = 'block';
         } else {
             if (estoqueRow) estoqueRow.style.display = 'block';
             if (minEstoqueRow) minEstoqueRow.style.display = 'block';
             
             const groupComissaoServico = document.getElementById('groupComissaoServico');
             if (groupComissaoServico) groupComissaoServico.style.display = 'none';
+
+            const groupAssinaturaServico = document.getElementById('groupAssinaturaServico');
+            if (groupAssinaturaServico) groupAssinaturaServico.style.display = 'none';
+            const checkRecorrente = document.getElementById('is_recorrente');
+            if (checkRecorrente) {
+                checkRecorrente.checked = false;
+                checkRecorrente.dispatchEvent(new Event('change'));
+            }
             
             const selectProduto = document.getElementById('categoria');
             const selectedOption = selectProduto?.options[selectProduto.selectedIndex];
@@ -920,6 +1150,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const group = document.getElementById('groupComissaoValores');
         if (group) group.style.display = checked ? 'block' : 'none';
     });
+
+    document.getElementById('is_recorrente')?.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        const campos = document.getElementById('groupAssinaturaCampos');
+        if (campos) campos.style.display = checked ? 'flex' : 'none';
+        if (checked) {
+            const precoVenda = document.getElementById('valor_venda')?.value;
+            const inputPlanoValor = document.getElementById('plano_valor');
+            if (inputPlanoValor && !inputPlanoValor.value && precoVenda) {
+                inputPlanoValor.value = precoVenda;
+            }
+            const nomeProd = document.getElementById('nome')?.value;
+            const inputPlanoNome = document.getElementById('plano_nome');
+            if (inputPlanoNome && !inputPlanoNome.value && nomeProd) {
+                inputPlanoNome.value = `Plano ${nomeProd}`;
+            }
+            atualizarCicloAssinatura();
+        }
+    });
+
+    document.getElementById('plano_frequencia')?.addEventListener('change', () => {
+        const frequencia = document.getElementById('plano_frequencia')?.value;
+        const inputVenc = document.getElementById('plano_data_vencimento');
+        const d = new Date();
+        if (frequencia === 'semanal') d.setDate(d.getDate() + 7);
+        else if (frequencia === 'mensal') d.setMonth(d.getMonth() + 1);
+        else if (frequencia === 'trimestral') d.setMonth(d.getMonth() + 3);
+        else if (frequencia === 'semestral') d.setMonth(d.getMonth() + 6);
+        else if (frequencia === 'anual') d.setFullYear(d.getFullYear() + 1);
+        if (inputVenc) inputVenc.value = d.toISOString().split('T')[0];
+        atualizarCicloAssinatura();
+    });
+
+    document.getElementById('plano_data_vencimento')?.addEventListener('input', atualizarCicloAssinatura);
+    document.getElementById('plano_data_vencimento')?.addEventListener('change', atualizarCicloAssinatura);
 
     document.getElementById('comissao_100_porcento')?.addEventListener('change', (e) => {
         const checked = e.target.checked;
@@ -1076,6 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar
     carregarCategorias();
     carregarProdutos();
+    carregarClientesAssinatura();
     
     if (usuario.config_loja?.habilitar_seriais !== false) {
         carregarSeriais();

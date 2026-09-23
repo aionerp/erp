@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Vendas de Serviços Recorrentes - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/style.css?v=2.2.0">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        .tabs-header {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            color: var(--dark);
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            background: #FFFFFF;
+            box-shadow: var(--shadow-sm);
+            border-bottom: 3px solid var(--accent);
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-ativo { background: #dcfce7; color: #15803d; }
+        .badge-pendente { background: #fef3c7; color: #b45309; }
+        .badge-vencido { background: #fee2e2; color: #b91c1c; }
+        .badge-cancelado { background: #f1f5f9; color: #64748b; }
+
+        .badge-countdown {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .countdown-ok { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .countdown-warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .countdown-urgent { background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; }
+        .countdown-danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+        /* Clientes Ativos Grid */
+        .clients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .client-card {
+            background: #FFFFFF;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .client-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+            border-color: #cbd5e1;
+        }
+
+        .client-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .client-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #111824;
+            color: #EAB308;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Fullscreen Focus Mode */
+        .fullscreen-focus {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 99999 !important;
+            background: #f8fafc !important;
+            padding: 24px !important;
+            box-sizing: border-box !important;
+            overflow-y: auto !important;
+        }
+    </style>
+</head>
+<body class="hold-transition">
+<div class="dashboard">
+
+    <!-- ── Sidebar ──────────────────────────────── -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Aion ERP</h2>
+            <div class="subtitle">by AionLabs</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="dashboard.html"><span class="icon">📊</span> Dashboard</a></li>
+            <li class="nav-section">GERAL</li>
+            <li><a href="produtos.html"><span class="icon">📦</span> Serviços & Produtos</a></li>
+            <li><a href="categorias.html"><span class="icon">🏷️</span> Categorias</a></li>
+            <li><a href="estoque.html"><span class="icon">💾</span> Estoque</a></li>
+            <li><a href="entradas.html"><span class="icon">📥</span> Entradas</a></li>
+            <li><a href="saidas.html"><span class="icon">💳</span> PDV / Vendas</a></li>
+            <li><a href="assinaturas.html" class="active"><span class="icon">🔄</span> Serviços Recorrentes</a></li>
+            <li><a href="promocoes.html"><span class="icon">🎯</span> Ações Promocionais</a></li>
+            <li><a href="devolucoes.html"><span class="icon">🔄</span> Devoluções</a></li>
+            <li class="nav-section">CRM</li>
+            <li><a href="clientes.html"><span class="icon">👥</span> Clientes</a></li>
+            <li><a href="fornecedores.html"><span class="icon">🏭</span> Fornecedores</a></li>
+            <li class="nav-section">SISTEMA</li>
+            <li><a href="relatorios.html"><span class="icon">📈</span> Relatórios</a></li>
+            <li><a href="usuarios.html"><span class="icon">👤</span> Usuários</a></li>
+        </ul>
+    </aside>
+
+    <!-- ── Main Content ─────────────────────────── -->
+    <main class="main-content">
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle">☰</button>
+            <div class="user-info">
+                <span class="user-name" id="userName">Carregando...</span>
+                <span class="user-perfil" id="userPerfil"></span>
+                <button class="logout-btn" id="logoutBtn">Sair</button>
+            </div>
+        </header>
+
+        <div class="content" id="monitorContainer">
+            <!-- Header do Monitor -->
+            <div class="produtos-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 15px;">
+                <div>
+                    <h1 style="display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 800; color: var(--dark); margin: 0;">
+                        🔄 Monitor de Serviços Recorrentes
+                    </h1>
+                    <p style="color: var(--gray); font-size: 13.5px; margin: 4px 0 0 0;">
+                        Gestão de planos, assinaturas, contagem regressiva de mensalidades e acompanhamento de clientes ativos.
+                    </p>
+                </div>
+                <div class="btn-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button class="btn-primary" id="btnNovaAssinatura" style="display: flex; align-items: center; gap: 6px;">
+                        <span>+</span> Nova Assinatura
+                    </button>
+                    <button class="btn-secondary" id="btnExpandirMonitor" style="background: #FFFFFF; border: 1px solid var(--border); color: var(--dark); padding: 8px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        ⛶ Expandir Tela
+                    </button>
+                    <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
+                    <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
+                </div>
+            </div>
+
+            <!-- KPIs de Recorrência -->
+            <div class="dashboard-metrics-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                <div class="metric-card" style="background: #FFFFFF; border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-xs);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--gray); font-weight: 600;">Receita Mensal (MRR)</span>
+                        <div style="background: #fef3c7; color: #b45309; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">$</div>
+                    </div>
+                    <div id="kpiMRR" style="font-size: 24px; font-weight: 800; color: #0F172A;">R$ 0,00</div>
+                    <small style="color: var(--gray); font-size: 11.5px; margin-top: 4px; display: block;">Base normalizada mensal</small>
+                </div>
+
+                <div class="metric-card" style="background: #FFFFFF; border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-xs);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--gray); font-weight: 600;">Clientes Ativos</span>
+                        <div style="background: #dcfce7; color: #15803d; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">👥</div>
+                    </div>
+                    <div id="kpiClientesAtivos" style="font-size: 24px; font-weight: 800; color: #0F172A;">0</div>
+                    <small style="color: var(--gray); font-size: 11.5px; margin-top: 4px; display: block;">Contratos vigentes</small>
+                </div>
+
+                <div class="metric-card" style="background: #FFFFFF; border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-xs);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--gray); font-weight: 600;">A Vencer (7 dias)</span>
+                        <div style="background: #fff7ed; color: #ea580c; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">⏳</div>
+                    </div>
+                    <div id="kpiAVencer" style="font-size: 24px; font-weight: 800; color: #ea580c;">0</div>
+                    <small style="color: var(--gray); font-size: 11.5px; margin-top: 4px; display: block;">Mensalidades próximas</small>
+                </div>
+
+                <div class="metric-card" style="background: #FFFFFF; border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-xs);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; color: var(--gray); font-weight: 600;">Planos Vencidos</span>
+                        <div style="background: #fee2e2; color: #b91c1c; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">🚨</div>
+                    </div>
+                    <div id="kpiVencidos" style="font-size: 24px; font-weight: 800; color: #b91c1c;">0</div>
+                    <small style="color: var(--gray); font-size: 11.5px; margin-top: 4px; display: block;">Aguardando cobrança/renovação</small>
+                </div>
+            </div>
+
+            <!-- Abas do Monitor -->
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="tab-tabela">
+                    📋 Monitor de Assinaturas
+                </button>
+                <button class="tab-btn" data-tab="tab-clientes">
+                    👥 Painel com Clientes Ativos (<span id="totalClientesTab">0</span>)
+                </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-container" style="background: #FFFFFF; border: 1px solid var(--border); padding: 14px 18px; border-radius: 10px; margin-bottom: 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 10px; flex: 1; flex-wrap: wrap; align-items: center; min-width: 280px;">
+                    <input type="text" id="searchAssinatura" placeholder="Buscar por cliente, documento ou plano..." style="flex: 2; min-width: 200px; margin-bottom: 0;">
+                    <select id="filtroFrequencia" style="width: auto; margin-bottom: 0;">
+                        <option value="">Todas Frequências</option>
+                        <option value="semanal">Semanal</option>
+                        <option value="mensal">Mensal</option>
+                        <option value="trimestral">Trimestral</option>
+                        <option value="semestral">Semestral</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                    <select id="filtroStatus" style="width: auto; margin-bottom: 0;">
+                        <option value="">Todos Status</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="a_vencer">A Vencer (7 dias)</option>
+                        <option value="vencido">Vencidos</option>
+                        <option value="cancelado">Cancelados</option>
+                    </select>
+                    <button class="btn-primary" id="btnFiltrar" style="margin-bottom: 0;">🔍 Filtrar</button>
+                </div>
+                <div style="font-size: 13px; color: var(--gray);" id="totalRegistrosTexto">
+                    Carregando assinaturas...
+                </div>
+            </div>
+
+            <!-- Visualização 1: Tabela de Assinaturas -->
+            <div id="tab-tabela" class="tab-content">
+                <div class="table-container" style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; overflow-x: auto;">
+                    <table id="assinaturasTable">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Tipo de Plano & Serviço</th>
+                                <th>Cobrança</th>
+                                <th>Valor</th>
+                                <th>Data Vencimento</th>
+                                <th>Expira em</th>
+                                <th>Último Pagamento</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assinaturasTableBody">
+                            <tr>
+                                <td colspan="9" style="text-align: center; padding: 30px; color: var(--gray);">
+                                    Carregando monitor de serviços recorrentes...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="paginationAssinaturas" style="margin-top: 15px;"></div>
+            </div>
+
+            <!-- Visualização 2: Painel de Clientes Ativos -->
+            <div id="tab-clientes" class="tab-content" style="display: none;">
+                <div id="clientesGrid" class="clients-grid">
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--gray);">
+                        Carregando painel de clientes ativos...
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /content -->
+    </main>
+</div>
+
+<!-- Modal Nova / Editar Assinatura -->
+<div id="modalAssinatura" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h2 id="modalAssinaturaTitle">Nova Assinatura Recorrente</h2>
+            <span class="close" id="closeModalAssinatura">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="assinaturaForm">
+                <input type="hidden" id="assinaturaId">
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Cliente (Obrigatório)</label>
+                        <select id="modal_cliente_id" required style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px;">
+                            <option value="">Carregando clientes...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Serviço Vinculado (Opcional)</label>
+                        <select id="modal_produto_id" style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px;">
+                            <option value="">Selecione um serviço cadastrado...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Nome do Plano</label>
+                        <input type="text" id="modal_plano_nome" placeholder="Ex: Mensalidade VIP, Suporte Mensal..." required>
+                    </div>
+                    <div class="form-group">
+                        <label class="required-label">Frequência de Cobrança</label>
+                        <select id="modal_frequencia" required style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px;">
+                            <option value="semanal">Semanal (7 dias)</option>
+                            <option value="mensal" selected>Mensal (30 dias)</option>
+                            <option value="trimestral">Trimestral (90 dias)</option>
+                            <option value="semestral">Semestral (180 dias)</option>
+                            <option value="anual">Anual (365 dias)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Valor (R$)</label>
+                        <input type="number" step="0.01" min="0.01" id="modal_valor" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="required-label">Data de Vencimento</label>
+                        <input type="date" id="modal_data_vencimento" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="required-label">Status</label>
+                        <select id="modal_status" required style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px;">
+                            <option value="ativo" selected>Ativo</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="suspenso">Suspenso</option>
+                            <option value="cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="modalCicloInfo" style="font-size: 13px; color: #15803d; background: #dcfce7; padding: 12px 14px; border-radius: 8px; border-left: 4px solid #16a34a; margin-bottom: 15px;">
+                    📅 <strong>Ciclo de Cobrança:</strong> Mensalidade a cada 30 dias. <span id="modalSpanDias"></span>
+                </div>
+
+                <div class="form-group">
+                    <label>Observações / Anotações do Contrato</label>
+                    <textarea id="modal_observacao" rows="3" placeholder="Informações adicionais do cliente ou do serviço recorrente..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border);">
+            <button class="btn-warning" id="btnCancelarAssinatura">Cancelar</button>
+            <button class="btn-primary" id="btnSalvarAssinatura">Salvar Assinatura</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Baixar Pagamento de Mensalidade -->
+<div id="modalPagamentoAssinatura" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2 style="display: flex; align-items: center; gap: 8px;">
+                💳 Registrar Pagamento de Mensalidade
+            </h2>
+            <span class="close" id="closeModalPagamento">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="pagamentoAssinaturaForm" onsubmit="return false;">
+                <input type="hidden" id="pag_assinaturaId">
+
+                <!-- Card Resumo do Contrato -->
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <span style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Cliente</span>
+                            <div id="pag_clienteNome" style="font-size: 15px; font-weight: 800; color: #0F172A;">-</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Plano / Serviço</span>
+                            <div id="pag_planoNome" style="font-size: 14px; font-weight: 700; color: #0284C7;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed #CBD5E1; padding-top: 8px; font-size: 12.5px;">
+                        <span>Vencimento do Ciclo: <strong id="pag_vencimentoAtual" style="color: #B91C1C;">-</strong></span>
+                        <span>Frequência: <strong id="pag_frequenciaTexto" style="color: #334155; text-transform: capitalize;">-</strong></span>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Valor Recebido (R$)</label>
+                        <input type="number" step="0.01" min="0.01" id="pag_valor" placeholder="0.00" required style="font-size: 16px; font-weight: 700; color: #0F172A;">
+                    </div>
+                    <div class="form-group">
+                        <label class="required-label">Data do Pagamento</label>
+                        <input type="date" id="pag_dataPagamento" required>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label class="required-label">Forma de Pagamento</label>
+                        <select id="pag_formaPagamento" required style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); padding: 8px; font-weight: 600;">
+                            <option value="pix" selected>⚡ PIX</option>
+                            <option value="dinheiro">💵 Dinheiro</option>
+                            <option value="cartao_credito">💳 Cartão de Crédito</option>
+                            <option value="cartao_debito">💳 Cartão de Débito</option>
+                            <option value="boleto">📄 Boleto Bancário</option>
+                            <option value="transferencia">🏦 Transferência / TED</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Caixa / Turno do Dia</label>
+                        <div id="pag_caixaStatus" style="font-size: 12.5px; padding: 10px 12px; background: #f1f5f9; border-radius: 8px; border: 1px solid #cbd5e1; color: #334155;">
+                            Verificando caixa aberto...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Próximo Vencimento Calculado -->
+                <div class="form-group" style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 12px 14px; margin-bottom: 15px;">
+                    <label style="color: #065F46; font-weight: 700; margin-bottom: 6px; display: block;">
+                        📅 Próximo Vencimento da Assinatura (Renovação Automática)
+                    </label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="pag_proximoVencimento" required style="flex: 1; height: 38px; border-radius: 6px; border: 1px solid #10B981; font-weight: 600; padding: 0 10px;">
+                        <span id="pag_spanCicloDias" style="font-size: 12px; color: #047857; font-weight: 600;"></span>
+                    </div>
+                    <small style="color: #047857; font-size: 11.5px; margin-top: 4px; display: block;">
+                        Ao confirmar, o vencimento deste contrato será estendido para a data acima e uma venda oficial será gravada no sistema.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Observação da Venda / Comprovante</label>
+                    <textarea id="pag_observacao" rows="2" placeholder="Informações adicionais do acerto da mensalidade..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border);">
+            <button class="btn-warning" id="btnCancelarPagamento">Cancelar</button>
+            <button class="btn-success" id="btnConfirmarPagamento" style="background: #10B981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <span>✅</span> Confirmar Pagamento & Gerar Venda
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<script src="js/security.js?v=2.2.0"></script>
+<script src="js/config.js?v=2.2.0"></script>
+<script src="js/auth-check.js?v=2.2.0"></script>
+<script src="js/export-helper.js?v=2.2.0"></script>
+<script src="js/assinaturas.js?v=2.2.0"></script>
+<script src="js/active-nav.js?v=2.2.0"></script>
+</body>
+</html>

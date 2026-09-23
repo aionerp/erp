@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'estoque.html': 'estoque',
         'entradas.html': 'entradas',
         'saidas.html': 'saidas',
+        'assinaturas.html': 'saidas',
         'fechamento.html': 'saidas',
         'despesas.html': 'financeiro',
         'devolucoes.html': 'saidas',
@@ -200,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: '💰 Faturamento',
                 items: [
                     { label: labelVendas, href: 'saidas.html', modulo: 'saidas' },
+                    { label: '🔄 Serviços Recorrentes', href: 'assinaturas.html', modulo: 'saidas' },
                     { label: '🎯 Ações Promocionais', href: 'promocoes.html', modulo: 'saidas' },
                     { label: '💵 Fechamento de Caixa', href: 'fechamento.html', modulo: 'saidas' },
                     { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },

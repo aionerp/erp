@@ -68,7 +68,8 @@ const TABLES_WITH_LOJA_ID = new Set([
     'agendamentos', 'boletos_pagar', 'caixas', 'categorias',
     'clientes', 'colaboradores', 'config_loja', 'despesas',
     'entradas', 'mesas_comandas', 'movimentos_estoque', 'produtos',
-    'promocao_produtos', 'promocoes', 'saidas', 'usuarios'
+    'promocao_produtos', 'promocoes', 'saidas', 'usuarios',
+    'servicos_recorrentes'
 ]);
 
 // Helper para converter sintaxe de relações do Supabase / PostgREST em subqueries JSON do PostgreSQL
@@ -112,7 +113,9 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
         despesas: { categorias: 'categoria_id', caixas: 'caixa_id', colaboradores: 'colaborador_id' },
         agendamentos: { clientes: 'cliente_id', produtos: 'produto_id', colaboradores: 'profissional_id', usuarios: 'usuario_id' },
         usuarios: { lojas: 'loja_id', config_loja: 'loja_id' },
-        boletos_pagar: { fornecedores: 'fornecedor_id', clientes: 'fornecedor_id', entradas: 'entrada_id' }
+        boletos_pagar: { fornecedores: 'fornecedor_id', clientes: 'fornecedor_id', entradas: 'entrada_id' },
+        servicos_recorrentes: { clientes: 'cliente_id', produtos: 'produto_id' },
+        produtos: { clientes: 'plano_cliente_id' }
     };
 
     const resultColumns = [];
@@ -205,7 +208,10 @@ async function handleApiRequest(req, res) {
 
         try {
             const body = await parseJsonBody(req);
-            const tenantId = req.headers['x-tenant-id'] || body.loja_id;
+            let tenantId = req.headers['x-tenant-id'] || body.loja_id;
+            if (!tenantId && TABLES_WITH_LOJA_ID.has(tableName)) {
+                tenantId = 1;
+            }
 
             if (body.action === 'select') {
                 const selectClause = parsePostgrestSelect(tableName, body.select, 'm');
