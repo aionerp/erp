@@ -360,7 +360,14 @@ async function handleApiRequest(req, res) {
                         delete r.id;
                     }
                     const cols = Object.keys(r);
-                    const vals = cols.map(c => r[c] === undefined ? null : r[c]);
+                    const vals = cols.map(c => {
+                        const val = r[c];
+                        if (val === undefined) return null;
+                        if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
+                            return JSON.stringify(val);
+                        }
+                        return val;
+                    });
                     const placeholders = vals.map((_, idx) => `$${idx + 1}`);
 
                     const q = `INSERT INTO public.${tableName} (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
@@ -375,7 +382,14 @@ async function handleApiRequest(req, res) {
             if (body.action === 'update') {
                 const values = body.values || {};
                 const cols = Object.keys(values).filter(c => c !== 'id');
-                const params = cols.map(c => values[c] === undefined ? null : values[c]);
+                const params = cols.map(c => {
+                    const val = values[c];
+                    if (val === undefined) return null;
+                    if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
+                        return JSON.stringify(val);
+                    }
+                    return val;
+                });
 
                 let whereClauses = [];
                 if (tenantId && TABLES_WITH_LOJA_ID.has(tableName)) {
