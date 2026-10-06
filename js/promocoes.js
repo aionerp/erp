@@ -489,12 +489,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const perfilLabels = { admin: '👑 Administrador', gerente: '📊 Gerente', vendedor: '💰 Vendedor', basico: '👤 Básico' };
     document.getElementById('userPerfil').textContent = perfilLabels[usuario.perfil] || usuario.perfil || '';
 
-    document.getElementById('logoutBtn')?.addEventListener('click', () => {
-        if (confirm('Deseja sair do sistema?')) {
-            sessionStorage.clear();
-            window.location.href = 'index.html';
-        }
-    });
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn && typeof window.fazerLogout === 'function') {
+        logoutBtn.addEventListener('click', window.fazerLogout);
+    }
 
     document.getElementById('menuToggle')?.addEventListener('click', () => {
         document.querySelector('.sidebar')?.classList.toggle('open');

@@ -493,19 +493,14 @@ document.addEventListener('DOMContentLoaded', () => {
         btnConfig.addEventListener('click', abrirModalConfigLoja);
     }
     
-    // === LOGOUT ===
+    // === LOGOUT CENTRALIZADO (Confirmação Única) ===
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
+        logoutBtn.removeAttribute('onclick');
         const newLogoutBtn = logoutBtn.cloneNode(true);
+        newLogoutBtn.removeAttribute('onclick');
         logoutBtn.parentNode.replaceChild(newLogoutBtn, logoutBtn);
-        newLogoutBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (confirm('Tem certeza que deseja sair do sistema?')) {
-                sessionStorage.clear();
-                window.location.replace('index.html');
-            }
-        });
+        newLogoutBtn.addEventListener('click', window.executarLogout);
     }
     
     // === MENU TOGGLE (mobile) ===

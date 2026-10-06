@@ -35,12 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Logout & Menu Toggle
-    document.getElementById('logoutBtn')?.addEventListener('click', () => {
-        if (confirm('Tem certeza que deseja sair?')) {
-            sessionStorage.clear();
-            window.location.href = 'index.html';
-        }
-    });
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn && typeof window.fazerLogout === 'function') {
+        logoutBtn.addEventListener('click', window.fazerLogout);
+    }
 
     document.getElementById('menuToggle')?.addEventListener('click', () => {
         document.querySelector('.sidebar')?.classList.toggle('open');

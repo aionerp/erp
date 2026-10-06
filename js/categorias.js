@@ -36,15 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
         userPerfilElement.textContent = perfilLabels[usuario.perfil] || usuario.perfil || 'Usuário';
     }
     
-    // Logout
+    // Logout (Centralizado)
     const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            if (confirm('Tem certeza que deseja sair?')) {
-                sessionStorage.clear();
-                window.location.href = 'index.html';
-            }
-        });
+    if (logoutBtn && typeof window.fazerLogout === 'function') {
+        logoutBtn.addEventListener('click', window.fazerLogout);
     }
     
     // Menu toggle

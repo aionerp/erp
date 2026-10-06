@@ -80,24 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =====================================================
-    // CONTROLE DE LOGOUT (Garantia de ação imediata)
+    // CONTROLE DE LOGOUT (Centralizado via auth-check / config)
     // =====================================================
-    window.fazerLogoutDashboard = function(e) {
-        if (e && typeof e.preventDefault === 'function') {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-        if (confirm('Tem certeza que deseja sair do sistema?')) {
-            sessionStorage.clear();
-            localStorage.removeItem('supabase.auth.token');
-            window.location.replace('index.html');
-        }
-    };
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', window.fazerLogoutDashboard);
-    }
+    window.fazerLogoutDashboard = window.executarLogout;
 
     // =====================================================
     // GLOBALS E ELEMENTOS DO DOM

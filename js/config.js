@@ -426,14 +426,30 @@ function mostrarNotificacao(mensagem, tipo = 'info') {
     }, 3000);
 }
 
-// Função global de logout - PREVENÇÃO DE LOOP
-function fazerLogout() {
+// Função global de logout centralizada com proteção estrita contra disparos múltiplos
+window._isLoggingOut = false;
+window.executarLogout = function(e) {
+    if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (window._isLoggingOut) return;
+
     if (confirm('Tem certeza que deseja sair do sistema?')) {
-        // Limpar completamente a sessão
-        sessionStorage.clear();
-        // Usar window.location.replace para não manter histórico
+        window._isLoggingOut = true;
+        try {
+            sessionStorage.clear();
+            localStorage.removeItem('supabase.auth.token');
+            localStorage.removeItem('active_client');
+        } catch (err) {}
         window.location.replace('index.html');
     }
+};
+window.fazerLogout = window.executarLogout;
+window.fazerLogoutDashboard = window.executarLogout;
+function fazerLogout(e) {
+    window.executarLogout(e);
 }
 
 // Adicionar estilos de notificação se não existirem
