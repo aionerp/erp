@@ -61,6 +61,9 @@
             } catch(e) {}
 
             if (window.location) {
+                if (window.location.protocol === 'file:') {
+                    return 'http://127.0.0.1:3000';
+                }
                 const host = window.location.hostname;
                 const port = window.location.port;
                 if ((host === 'localhost' || host === '127.0.0.1') && port !== '3000' && port !== '') {
@@ -257,10 +260,14 @@
                 };
             } catch (err) {
                 console.error(`[DataLayer] Erro ao conectar ao servidor backend em ${endpoint}:`, err);
+                const isFileProtocol = typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
                 const isGitHubPages = typeof window !== 'undefined' && window.location && window.location.hostname.includes('github.io');
-                const msg = isGitHubPages
-                    ? `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`
-                    : `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.`;
+                let msg = `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal e acessar por http://localhost:3000.`;
+                if (isGitHubPages) {
+                    msg = `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`;
+                } else if (isFileProtocol) {
+                    msg = `Você abriu o arquivo diretamente (file://). Inicie o servidor com 'npm run dev' no terminal e acesse pelo navegador em: http://localhost:3000`;
+                }
                 return { data: null, error: { message: msg }, count: 0 };
             }
         }
@@ -297,10 +304,14 @@
                 return { data: result.data, error: null };
             } catch (err) {
                 console.error(`[DataLayer] Erro ao executar RPC em ${endpoint}:`, err);
+                const isFileProtocol = typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
                 const isGitHubPages = typeof window !== 'undefined' && window.location && window.location.hostname.includes('github.io');
-                const msg = isGitHubPages
-                    ? `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`
-                    : `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal.`;
+                let msg = `Servidor backend offline. Certifique-se de executar 'npm run dev' no terminal e acessar por http://localhost:3000.`;
+                if (isGitHubPages) {
+                    msg = `O GitHub Pages é uma hospedagem de páginas estáticas e não executa o servidor Node.js/Neon. Para funcionar na nuvem, publique o backend (Render, Vercel ou Railway) e configure a API_URL.`;
+                } else if (isFileProtocol) {
+                    msg = `Você abriu o arquivo diretamente (file://). Inicie o servidor com 'npm run dev' no terminal e acesse pelo navegador em: http://localhost:3000`;
+                }
                 return { data: null, error: { message: msg } };
             }
         }
