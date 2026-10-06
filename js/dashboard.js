@@ -57,12 +57,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     const topDateEl = document.getElementById('topBarSubDate');
     if (topDateEl) topDateEl.textContent = textoData;
 
+    // Atualizar relógio em tempo real no Dashboard (Painel de Hora Atual)
+    const horaAtualEl = document.getElementById('horaAtualDashboard');
+    const atualizarRelogioDashboard = () => {
+        const agora = new Date();
+        const h = String(agora.getHours()).padStart(2, '0');
+        const m = String(agora.getMinutes()).padStart(2, '0');
+        const s = String(agora.getSeconds()).padStart(2, '0');
+        if (horaAtualEl) {
+            horaAtualEl.textContent = `${h}:${m}:${s}`;
+        }
+    };
+    atualizarRelogioDashboard();
+    setInterval(atualizarRelogioDashboard, 1000);
+
     // Avatar
     const avatarEl = document.getElementById('userAvatarCircle');
     if (avatarEl && usuario.nome) {
         const nomes = usuario.nome.trim().split(' ');
         const iniciais = (nomes.length > 1 ? nomes[0][0] + nomes[nomes.length - 1][0] : nomes[0].substring(0, 2)).toUpperCase();
         avatarEl.textContent = iniciais;
+    }
+
+    // =====================================================
+    // CONTROLE DE LOGOUT (Garantia de ação imediata)
+    // =====================================================
+    window.fazerLogoutDashboard = function(e) {
+        if (e && typeof e.preventDefault === 'function') {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (confirm('Tem certeza que deseja sair do sistema?')) {
+            sessionStorage.clear();
+            localStorage.removeItem('supabase.auth.token');
+            window.location.replace('index.html');
+        }
+    };
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', window.fazerLogoutDashboard);
     }
 
     // =====================================================
@@ -99,69 +133,80 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =====================================================
-    // CARREGAR DADOS GERAIS DO SUPABASE
+    // CARREGAR DADOS GERAIS DO SUPABASE (ALTA PERFORMANCE)
     // =====================================================
     async function carregarDashboard() {
         try {
-            // 1. Carregar contagem de clientes com tratamento seguro
-            try {
-                const { count: totalClientes, error: errorClientes } = await supabaseClient
-                    .from('clientes')
-                    .select('id', { count: 'exact', head: true });
-                
-                const kpiClientesEl = document.getElementById('kpiTotalClientes');
-                if (kpiClientesEl) {
-                    kpiClientesEl.textContent = (totalClientes !== null && totalClientes !== undefined) ? totalClientes : 0;
-                }
-            } catch (e) {
-                console.warn('Aviso ao carregar contagem de clientes:', e);
-            }
-
-            // 2. Carregar todas as vendas não canceladas (respeitando a permissão de ver vendas de outros)
-            try {
-                const verOutros = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
-                let querySaidas = supabaseClient
-                    .from('saidas')
-                    .select('*');
-                
-                if (!verOutros && usuario?.id) {
-                    querySaidas = querySaidas.eq('usuario_id', usuario.id);
-                }
-                
-                const { data: saidasData, error: errorSaidas } = await querySaidas;
-
-                if (!errorSaidas && saidasData) {
-                    // Filtrar no cliente para garantir que vendas canceladas sejam ignoradas
-                    vendas = saidasData.filter(v => v.cancelado !== true);
-                } else {
-                    console.warn('Aviso na busca de saídas:', errorSaidas);
-                    vendas = [];
-                }
-            } catch (e) {
-                console.warn('Erro ao carregar saídas:', e);
-                vendas = [];
-            }
-
-            // 3. Processar métricas de faturamento e ticket médio
-            processarMetricasFaturamento();
-
-            // 4. Carregar e preencher as últimas compras (Entradas) de forma isolada
-            await carregarEntradasRecentes();
-
-            // 5. Carregar e preencher o Ranking Top 20 Produtos de forma isolada
-            await carregarRankingProdutos();
-
-            // 6. Carregar Monitor de Serviços Recorrentes & Assinaturas
-            await carregarMonitorRecorrenciasDashboard();
-
-            // 7. Inicializar Gráficos
-            inicializarGraficoSaidas();
-            inicializarGraficoMovimentoDiario();
-
+            // Executar consultas independentes em paralelo com Promise.allSettled para fluidez máxima
+            await Promise.allSettled([
+                carregarTotalClientes(),
+                carregarSaidasDashboard(),
+                carregarEntradasRecentes(),
+                carregarMonitorRecorrenciasDashboard()
+            ]);
         } catch (error) {
             console.error('Erro geral ao processar dados do dashboard:', error);
             mostrarNotificacao('Erro ao carregar dados do Dashboard', 'error');
         }
+    }
+
+    // 1. Carregar contagem de clientes com tratamento seguro
+    async function carregarTotalClientes() {
+        try {
+            const { count: totalClientes, error: errorClientes } = await supabaseClient
+                .from('clientes')
+                .select('id', { count: 'exact', head: true });
+            
+            const kpiClientesEl = document.getElementById('kpiTotalClientes');
+            if (kpiClientesEl) {
+                kpiClientesEl.textContent = (totalClientes !== null && totalClientes !== undefined) ? totalClientes : 0;
+            }
+        } catch (e) {
+            console.warn('Aviso ao carregar contagem de clientes:', e);
+        }
+    }
+
+    // 2. Carregar todas as vendas não canceladas (otimizado com payload leve e filtros inteligentes)
+    async function carregarSaidasDashboard() {
+        try {
+            const verOutros = typeof temPermissao === 'function' ? temPermissao('saidas', 'ver_vendas_outros') : true;
+
+            // Limitar consulta ao início do ano anterior para garantir histórico completo dos gráficos sem sobrecarregar a memória
+            const dataMinima = new Date();
+            dataMinima.setFullYear(dataMinima.getFullYear() - 1, 0, 1);
+            const dataMinimaStr = dataMinima.toISOString().split('T')[0];
+
+            let querySaidas = supabaseClient
+                .from('saidas')
+                .select('id, data, total, cancelado, usuario_id')
+                .gte('data', dataMinimaStr)
+                .order('data', { ascending: false });
+            
+            if (!verOutros && usuario?.id) {
+                querySaidas = querySaidas.eq('usuario_id', usuario.id);
+            }
+            
+            const { data: saidasData, error: errorSaidas } = await querySaidas;
+
+            if (!errorSaidas && saidasData) {
+                // Filtrar apenas vendas ativas
+                vendas = saidasData.filter(v => v.cancelado !== true);
+            } else {
+                console.warn('Aviso na busca de saídas:', errorSaidas);
+                vendas = [];
+            }
+        } catch (e) {
+            console.warn('Erro ao carregar saídas:', e);
+            vendas = [];
+        }
+
+        // Processar métricas e gráficos imediatamente assim que as saídas chegam
+        processarMetricasFaturamento();
+        inicializarGraficoSaidas();
+        inicializarGraficoMovimentoDiario();
+
+        // Carregar ranking de produtos de forma desacoplada para não travar a UI
+        carregarRankingProdutos();
     }
 
     // =====================================================
@@ -280,6 +325,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 100,
+                animation: {
+                    duration: 350,
+                    easing: 'easeOutQuart'
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -377,6 +427,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 100,
+                animation: {
+                    duration: 350,
+                    easing: 'easeOutQuart'
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {

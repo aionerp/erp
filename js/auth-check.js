@@ -3,8 +3,9 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     // Verificar se a página atual é index.html (login)
-    const currentPage = window.location.pathname.split('/').pop();
-    if (currentPage === 'index.html' || currentPage === '') {
+    const rawPath = window.location.pathname.replace(/\/+$/, '');
+    const currentPage = rawPath.split('/').pop() || 'index.html';
+    if (currentPage === 'index.html') {
         return;
     }
     
@@ -62,7 +63,27 @@ document.addEventListener('DOMContentLoaded', () => {
         habilitar_lotes: false,
         habilitar_variacoes: false
     };
-    const config = { ...baseConfig, ...window.ENV?.FEATURES || window.ENV?.features };
+    const config = { ...baseConfig, ...(window.ENV?.FEATURES || window.ENV?.features || {}) };
+
+    // Determinar o nome e subtítulo da empresa/loja ativa com prioridade multi-tenant (escopo de página)
+    let currentCompanyName = 'MarceloMotos';
+    let currentCompanySubtitle = 'Matriz';
+
+    const activeCliStr = sessionStorage.getItem('active_client');
+    let activeCli = null;
+    if (activeCliStr) {
+        try { activeCli = JSON.parse(activeCliStr); } catch(e){}
+    }
+
+    if (activeCli && activeCli.companyName) {
+        currentCompanyName = activeCli.companyName;
+        currentCompanySubtitle = activeCli.companySubtitle || currentCompanySubtitle;
+    } else if (window.ENV?.COMPANY_NAME || window.ENV?.companyName) {
+        currentCompanyName = window.ENV.COMPANY_NAME || window.ENV.companyName;
+        currentCompanySubtitle = window.ENV.COMPANY_SUBTITLE || window.ENV.companySubtitle || currentCompanySubtitle;
+    } else if (usuario.loja_nome && usuario.loja_nome !== 'Aion ERP') {
+        currentCompanyName = usuario.loja_nome;
+    }
 
     // === RECONSTRUIR SIDEBAR DINAMICAMENTE POR RECURSOS ATIVOS ===
     const sidebar = document.querySelector('.sidebar');
@@ -272,25 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Determinar o nome e subtítulo da empresa/loja ativa com prioridade multi-tenant
-        let currentCompanyName = 'MarceloMotos';
-        let currentCompanySubtitle = 'Matriz';
-
-        const activeCliStr = sessionStorage.getItem('active_client');
-        let activeCli = null;
-        if (activeCliStr) {
-            try { activeCli = JSON.parse(activeCliStr); } catch(e){}
-        }
-
-        if (activeCli && activeCli.companyName) {
-            currentCompanyName = activeCli.companyName;
-            currentCompanySubtitle = activeCli.companySubtitle || currentCompanySubtitle;
-        } else if (window.ENV?.COMPANY_NAME || window.ENV?.companyName) {
-            currentCompanyName = window.ENV.COMPANY_NAME || window.ENV.companyName;
-            currentCompanySubtitle = window.ENV.COMPANY_SUBTITLE || window.ENV.companySubtitle || currentCompanySubtitle;
-        } else if (usuario.loja_nome && usuario.loja_nome !== 'Aion ERP') {
-            currentCompanyName = usuario.loja_nome;
-        }
 
         sidebar.innerHTML = `
             <div class="sidebar-header" style="padding: 22px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);">
@@ -386,20 +388,35 @@ document.addEventListener('DOMContentLoaded', () => {
         clockContainer.id = 'topBarClock';
         clockContainer.className = 'top-bar-clock';
         
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'clock-date';
+        
+        const dividerSpan = document.createElement('span');
+        dividerSpan.className = 'clock-divider';
+        dividerSpan.textContent = '|';
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'clock-time';
+        
+        clockContainer.appendChild(dateSpan);
+        clockContainer.appendChild(dividerSpan);
+        clockContainer.appendChild(timeSpan);
+        
+        let ultimoDia = -1;
         const atualizarHorario = () => {
             const agora = new Date();
-            const dia = String(agora.getDate()).padStart(2, '0');
-            const mes = String(agora.getMonth() + 1).padStart(2, '0');
-            const ano = agora.getFullYear();
+            const diaNum = agora.getDate();
+            if (diaNum !== ultimoDia) {
+                ultimoDia = diaNum;
+                const dia = String(diaNum).padStart(2, '0');
+                const mes = String(agora.getMonth() + 1).padStart(2, '0');
+                const ano = agora.getFullYear();
+                dateSpan.textContent = `📅 ${dia}/${mes}/${ano}`;
+            }
             const horas = String(agora.getHours()).padStart(2, '0');
             const minutos = String(agora.getMinutes()).padStart(2, '0');
             const segundos = String(agora.getSeconds()).padStart(2, '0');
-            
-            clockContainer.innerHTML = `
-                <span class="clock-date">📅 ${dia}/${mes}/${ano}</span>
-                <span class="clock-divider">|</span>
-                <span class="clock-time">⏰ ${horas}:${minutos}:${segundos}</span>
-            `;
+            timeSpan.textContent = `⏰ ${horas}:${minutos}:${segundos}`;
         };
         
         atualizarHorario();

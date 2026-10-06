@@ -422,15 +422,24 @@
                     <div class="user-subdate" id="topBarSubDate">quinta-feira, 03 de setembro de 2026</div>
                 </div>
                 <div class="user-avatar" id="userAvatarCircle">AR</div>
-                <button class="logout-btn" id="logoutBtn">Sair</button>
+                <button class="logout-btn" id="logoutBtn" onclick="fazerLogoutDashboard(event)" title="Sair do Sistema">Sair</button>
             </div>
         </header>
 
         <div class="content">
-            <!-- Saudação & Header -->
-            <div class="dashboard-header-block" style="margin-bottom: 24px;">
-                <h1 id="saudacaoDashboard">Boa noite, Ailton!</h1>
-                <p id="dataAtual">quinta-feira, 03 de setembro de 2026</p>
+            <!-- Saudação & Header com Painel de Hora Atual -->
+            <div class="dashboard-header-block" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                <div>
+                    <h1 id="saudacaoDashboard">Boa noite, Ailton!</h1>
+                    <p id="dataAtual">quinta-feira, 03 de setembro de 2026</p>
+                </div>
+                <div id="painelHoraAtualCard" style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid var(--border); padding: 10px 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
+                    <div style="font-size: 24px; line-height: 1;">⏰</div>
+                    <div>
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--gray); font-weight: 700; letter-spacing: 0.5px;">Hora Atual</div>
+                        <div id="horaAtualDashboard" style="font-size: 20px; font-weight: 800; color: var(--dark); font-variant-numeric: tabular-nums; font-family: 'Inter', -apple-system, sans-serif;">--:--:--</div>
+                    </div>
+                </div>
             </div>
 
             <!-- ── Grid de Métricas (4 Cards Exatos do Modelo) ── -->

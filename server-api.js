@@ -2,7 +2,19 @@
 // Roteador de API Backend para persistencia segura com Neon PostgreSQL
 
 require('dotenv').config();
-const { Pool, types } = require('pg');
+
+let Pool, types;
+try {
+    const neon = require('@neondatabase/serverless');
+    const ws = require('ws');
+    neon.neonConfig.webSocketConstructor = ws;
+    Pool = neon.Pool;
+    types = neon.types;
+} catch (e) {
+    const pg = require('pg');
+    Pool = pg.Pool;
+    types = pg.types;
+}
 
 // Converter colunas NUMERIC/DECIMAL (OID 1700) para números JavaScript (evitando strings no frontend)
 types.setTypeParser(1700, val => val === null ? null : parseFloat(val));
@@ -27,7 +39,6 @@ function getPool(clientId) {
 
     const pool = new Pool({
         connectionString: dbUrl,
-        ssl: { rejectUnauthorized: false },
         max: 10,
         idleTimeoutMillis: 30000
     });

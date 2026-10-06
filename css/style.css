@@ -1777,6 +1777,18 @@ body.dark-theme .top-bar-clock .clock-time {
     -webkit-text-fill-color: transparent !important;
 }
 
+[data-theme="dark"] #painelHoraAtualCard,
+body.dark-theme #painelHoraAtualCard {
+    background: #111C30 !important;
+    border-color: #1E293B !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] #horaAtualDashboard,
+body.dark-theme #horaAtualDashboard {
+    color: #F8FAFC !important;
+}
+
 [data-theme="dark"] .theme-toggle-btn,
 body.dark-theme .theme-toggle-btn {
     background: #1E293B !important;

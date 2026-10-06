@@ -26,7 +26,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "dotenv": "^17.4.2",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "ws": "^8.22.0"
   }
 }
