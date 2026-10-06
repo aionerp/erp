@@ -710,28 +710,25 @@ AS $$
 DECLARE
     v_clean_cnpj text;
     v_qtd_usuarios integer;
-    v_qtd_lojas integer;
-    v_loja_nome text;
     v_usuario_adm text;
+    v_loja_nome text;
 BEGIN
     v_clean_cnpj := regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g');
 
+    -- Uma loja só é considerada ativada se já tiver pelo menos um usuário cadastrado (ignora resquício adm.padrao)
     SELECT COUNT(*), (ARRAY_AGG(email))[1]
     INTO v_qtd_usuarios, v_usuario_adm
     FROM public.usuarios
-    WHERE ativo = true;
+    WHERE ativo = true AND email <> 'adm.padrao';
 
-    SELECT COUNT(*), (ARRAY_AGG(nome))[1]
-    INTO v_qtd_lojas, v_loja_nome
-    FROM public.lojas;
-
-    IF coalesce(v_qtd_usuarios, 0) > 0 OR coalesce(v_qtd_lojas, 0) > 0 THEN
+    IF coalesce(v_qtd_usuarios, 0) > 0 THEN
+        SELECT nome INTO v_loja_nome FROM public.lojas LIMIT 1;
         RETURN jsonb_build_object(
             'loja_ativa', true,
             'permite_onboarding', false,
             'qtd_usuarios', v_qtd_usuarios,
             'usuario_adm', v_usuario_adm,
-            'loja_nome', v_loja_nome,
+            'loja_nome', coalesce(v_loja_nome, 'Loja Ativa'),
             'mensagem', 'Acesso Negado (Loja já ativada). Acione o supervisor do seu sistema.'
         );
     ELSE
@@ -773,37 +770,72 @@ DECLARE
 BEGIN
     v_clean_cnpj := regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g');
 
+    -- Limpar qualquer resquício legado de usuário genérico
+    DELETE FROM public.usuarios WHERE email = 'adm.padrao';
+
+    -- Trava 1: Se já houver usuário ativo cadastrado (diferente de adm.padrao), não permite novo primeiro acesso
+    IF EXISTS (SELECT 1 FROM public.usuarios WHERE ativo = true AND email <> 'adm.padrao') THEN
+        RAISE EXCEPTION 'TRAVA_SEGURANCA: Esta loja já possui usuários cadastrados. Utilize a tela de login.';
+    END IF;
+
+    -- Trava 2: Usuário não pode duplicar
     IF EXISTS (SELECT 1 FROM public.usuarios WHERE email = p_usuario_adm) THEN
         RAISE EXCEPTION 'TRAVA_SEGURANCA: O usuário % já existe no banco de dados.', p_usuario_adm;
     END IF;
 
-    IF v_clean_cnpj <> '' AND EXISTS (SELECT 1 FROM public.lojas WHERE regexp_replace(coalesce(cnpj, ''), '\D', '', 'g') = v_clean_cnpj) THEN
-        RAISE EXCEPTION 'TRAVA_SEGURANCA: O CNPJ % já foi cadastrado no banco de dados.', p_cnpj;
+    -- Criar ou atualizar a loja
+    SELECT id INTO v_loja_id FROM public.lojas LIMIT 1;
+    IF v_loja_id IS NOT NULL THEN
+        UPDATE public.lojas SET
+            nome = p_razao_social,
+            segmento = coalesce(p_segmento, 'geral'),
+            cnpj = p_cnpj,
+            telefone = p_telefone,
+            endereco = p_endereco
+        WHERE id = v_loja_id;
+    ELSE
+        INSERT INTO public.lojas (nome, segmento, cnpj, telefone, endereco)
+        VALUES (p_razao_social, coalesce(p_segmento, 'geral'), p_cnpj, p_telefone, p_endereco)
+        RETURNING id INTO v_loja_id;
     END IF;
 
-    INSERT INTO public.lojas (nome, segmento, cnpj, telefone, endereco)
-    VALUES (p_razao_social, coalesce(p_segmento, 'geral'), p_cnpj, p_telefone, p_endereco)
-    RETURNING id INTO v_loja_id;
-
-    INSERT INTO public.config_loja (
-        loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco,
-        habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes,
-        permitir_venda_sem_saldo
-    ) VALUES (
-        v_loja_id,
-        coalesce(p_nome_fantasia, p_razao_social),
-        p_razao_social,
-        p_cnpj,
-        p_telefone,
-        p_email,
-        p_endereco,
-        coalesce((p_features->>'habilitar_seriais')::boolean, true),
-        coalesce((p_features->>'habilitar_agendamentos')::boolean, false),
-        coalesce((p_features->>'habilitar_mesas')::boolean, false),
-        coalesce((p_features->>'habilitar_lotes')::boolean, true),
-        coalesce((p_features->>'habilitar_variacoes')::boolean, false),
-        coalesce((p_features->>'permitir_venda_sem_saldo')::boolean, false)
-    );
+    -- Criar ou atualizar config_loja
+    IF EXISTS (SELECT 1 FROM public.config_loja WHERE loja_id = v_loja_id) THEN
+        UPDATE public.config_loja SET
+            nome_fantasia = coalesce(p_nome_fantasia, p_razao_social),
+            razao_social = p_razao_social,
+            cnpj = p_cnpj,
+            telefone = p_telefone,
+            email = p_email,
+            endereco = p_endereco,
+            habilitar_seriais = coalesce((p_features->>'habilitar_seriais')::boolean, true),
+            habilitar_agendamentos = coalesce((p_features->>'habilitar_agendamentos')::boolean, false),
+            habilitar_mesas = coalesce((p_features->>'habilitar_mesas')::boolean, false),
+            habilitar_lotes = coalesce((p_features->>'habilitar_lotes')::boolean, true),
+            habilitar_variacoes = coalesce((p_features->>'habilitar_variacoes')::boolean, false),
+            permitir_venda_sem_saldo = coalesce((p_features->>'permitir_venda_sem_saldo')::boolean, false)
+        WHERE loja_id = v_loja_id;
+    ELSE
+        INSERT INTO public.config_loja (
+            loja_id, nome_fantasia, razao_social, cnpj, telefone, email, endereco,
+            habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes,
+            permitir_venda_sem_saldo
+        ) VALUES (
+            v_loja_id,
+            coalesce(p_nome_fantasia, p_razao_social),
+            p_razao_social,
+            p_cnpj,
+            p_telefone,
+            p_email,
+            p_endereco,
+            coalesce((p_features->>'habilitar_seriais')::boolean, true),
+            coalesce((p_features->>'habilitar_agendamentos')::boolean, false),
+            coalesce((p_features->>'habilitar_mesas')::boolean, false),
+            coalesce((p_features->>'habilitar_lotes')::boolean, true),
+            coalesce((p_features->>'habilitar_variacoes')::boolean, false),
+            coalesce((p_features->>'permitir_venda_sem_saldo')::boolean, false)
+        );
+    END IF;
 
     v_permissoes := '{
         "dashboard": { "ver": true },
@@ -850,53 +882,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authent
 -- ============================================================================
 -- 28. CARGA INICIAL PADRÃO (SEEDS PARA NOVA INSTÂNCIA)
 -- ============================================================================
--- 28.1 Criar Loja Matriz Inicial (ID 1)
-INSERT INTO public.lojas (id, nome, segmento, cnpj, telefone)
-VALUES (1, 'Loja Matriz', 'geral', '12.345.678/0001-90', '(11) 99999-9999')
-ON CONFLICT (id) DO NOTHING;
+-- REGRA DE SEGURANÇA E ISOLAMENTO MULTI-TENANT:
+-- NENHUM USUÁRIO É PRÉ-INSERIDO NESTE SCRIPT!
+-- O primeiro usuário administrador (com formato adm.<prefixo>) DEVE ser configurado
+-- exclusivamente através da tela inicial do ERP ("✨ Primeiro Acesso? Identificar Loja por CNPJ").
 
--- 28.2 Criar Configurações da Loja Matriz
-INSERT INTO public.config_loja (
-    loja_id, nome_fantasia, razao_social, cnpj, 
-    habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes, permitir_venda_sem_saldo
-)
-VALUES (
-    1, 'Loja Matriz', 'Loja Matriz LTDA', '12.345.678/0001-90',
-    true, false, false, true, false, false
-)
-ON CONFLICT (loja_id) DO NOTHING;
-
--- 28.3 Criar Usuário Administrador Padrão (adm.padrao / senha: 123)
--- (Pode ser alterado na tela de Usuários ou no Primeiro Acesso)
-INSERT INTO public.usuarios (loja_id, nome, email, senha, perfil, nivel_acesso, permissoes, ativo)
-VALUES (
-    1,
-    'Administrador',
-    'adm.padrao',
-    '123',
-    'admin',
-    'admin',
-    '{
-        "dashboard": { "ver": true },
-        "clientes": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "produtos": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "categorias": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "estoque": { "ver": true, "ajustar": true },
-        "entradas": { "ver": true, "criar": true, "excluir": true },
-        "saidas": { "ver": true, "criar": true, "cancelar": true, "ver_vendas_outros": true },
-        "assinaturas": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "fornecedores": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "ordens_servico": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "colaboradores": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "financeiro": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "relatorios": { "ver": true, "exportar": true },
-        "usuarios": { "ver": true, "criar": true, "editar": true, "excluir": true }
-    }'::jsonb,
-    true
-)
-ON CONFLICT (email) DO NOTHING;
-
--- 28.4 Criar Produto de Serviço Padrão para Quitação de Mensalidades Recorrentes
+-- 28.1 Criar Produto de Serviço Padrão para Quitação de Mensalidades Recorrentes
 INSERT INTO public.produtos (
     loja_id, codigo, nome, tipo, valor_venda, valor_compra, estoque, estoque_total, ativo
 )
@@ -905,7 +896,7 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- 28.5 Atualizar os ponteiros das sequences para evitar colisões
+-- 28.2 Atualizar os ponteiros das sequences para evitar colisões
 SELECT setval('public.lojas_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.lojas));
 SELECT setval('public.usuarios_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.usuarios));
 SELECT setval('public.produtos_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.produtos));

@@ -43,53 +43,10 @@ TRUNCATE TABLE
     public.lojas
 RESTART IDENTITY CASCADE;
 
--- 2. REINSERIR LOJA MATRIZ INICIAL (ID 1)
-INSERT INTO public.lojas (id, nome, segmento, cnpj, telefone)
-VALUES (1, 'Loja Matriz', 'eletronico', '12.345.678/0001-90', '(11) 99999-9999')
-ON CONFLICT (id) DO NOTHING;
+-- 2. BANCO LIMPO PARA NOVO PRIMEIRO ACESSO
+-- Nenhuma loja ou usuário pré-inserido. O cadastro será gerado via tela inicial "Primeiro Acesso por CNPJ".
 
--- 3. REINSERIR CONFIGURAÇÕES DA LOJA MATRIZ (ID 1)
-INSERT INTO public.config_loja (
-    loja_id, nome_fantasia, razao_social, cnpj, 
-    habilitar_seriais, habilitar_agendamentos, habilitar_mesas, habilitar_lotes, habilitar_variacoes
-)
-VALUES (
-    1, 'Loja Matriz', 'Loja Matriz LTDA', '12.345.678/0001-90',
-    true, false, false, true, false
-)
-ON CONFLICT (loja_id) DO NOTHING;
-
--- 4. REINSERIR USUÁRIO ADMINISTRADOR PADRÃO (adm.padrao / senha: 123)
--- Permite login imediato após zerar o banco
-INSERT INTO public.usuarios (loja_id, nome, email, senha, perfil, nivel_acesso, permissoes, ativo)
-VALUES (
-    1,
-    'Administrador',
-    'adm.padrao',
-    '123',
-    'admin',
-    'admin',
-    '{
-        "dashboard": { "ver": true },
-        "clientes": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "produtos": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "categorias": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "estoque": { "ver": true, "ajustar": true },
-        "entradas": { "ver": true, "criar": true, "excluir": true },
-        "saidas": { "ver": true, "criar": true, "cancelar": true, "ver_vendas_outros": true },
-        "assinaturas": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "fornecedores": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "ordens_servico": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "colaboradores": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "financeiro": { "ver": true, "criar": true, "editar": true, "excluir": true },
-        "relatorios": { "ver": true, "exportar": true },
-        "usuarios": { "ver": true, "criar": true, "editar": true, "excluir": true }
-    }'::jsonb,
-    true
-)
-ON CONFLICT (email) DO NOTHING;
-
--- 5. REINSERIR PRODUTO PADRÃO PARA RECORRÊNCIAS / ASSINATURAS
+-- 3. REINSERIR PRODUTO PADRÃO PARA RECORRÊNCIAS / ASSINATURAS
 INSERT INTO public.produtos (
     loja_id, codigo, nome, tipo, valor_venda, valor_compra, estoque, estoque_total, ativo
 )
@@ -98,7 +55,7 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- 6. SINCRONIZAR SEQUENCES PARA O PRÓXIMO REGISTRO
+-- 4. SINCRONIZAR SEQUENCES PARA O PRÓXIMO REGISTRO
 SELECT setval('public.lojas_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.lojas));
 SELECT setval('public.usuarios_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.usuarios));
 SELECT setval('public.produtos_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.produtos));
@@ -108,7 +65,5 @@ COMMIT;
 
 -- ============================================================================
 -- DADOS ZERADOS COM SUCESSO!
--- Login disponível:
---   Usuário: adm.padrao
---   Senha:   123
+-- O banco está limpo e disponível para realização do Primeiro Acesso por CNPJ.
 -- ============================================================================

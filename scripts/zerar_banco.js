@@ -45,9 +45,8 @@ async function run() {
         console.log('================================================================');
         console.log(`✅ SUCESSO! Banco de dados de ${targetClient.toUpperCase()} foi zerado.`);
         if (!keepUsers) {
-            console.log('🔑 Acesso padrão disponível:');
-            console.log('   Usuário: adm.padrao');
-            console.log('   Senha:   123');
+            console.log('✨ Banco de dados limpo para novo Primeiro Acesso via CNPJ.');
+            console.log('   Acesse a tela inicial do ERP e clique em "Primeiro Acesso à Loja".');
         } else {
             console.log('ℹ️  Seus usuários e dados da loja foram mantidos.');
         }

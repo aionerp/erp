@@ -43,7 +43,7 @@ O arquivo `database/schema_completo.sql` contém **100% da estrutura do ERP**:
 - 21 tabelas (Vendas, Produtos, Seriais/IMEI, Lotes, Recorrência/Assinaturas, Financeiro, etc.)
 - Triggers automáticos de senha criptografada em bcrypt
 - Funções de autenticação e isolamento por loja
-- Carga inicial pronta: Loja Matriz, configurações e usuário administrador `adm.padrao` (senha: `123`).
+- Estrutura pronta e limpa para o Primeiro Acesso da loja via CNPJ (sem usuários pré-inseridos).
 
 Você pode rodar de **uma única vez** escolhendo uma das duas opções:
 
@@ -133,19 +133,19 @@ git push origin main
 
 ---
 
-## 🔑 Como Acessar a Nova Loja
+## 🔑 Como Ativar e Acessar a Nova Loja (Regra Obrigatória)
 
-Assim que o banco for provisionado, o acesso inicial pode ser feito de duas formas:
+Para garantir **isolamento total** e evitar conflitos entre bancos de lojas, o banco de dados provisionado **não possui usuário pré-cadastrado**. O primeiro acesso deve ser feito obrigatoriamente pela tela inicial:
 
-### 1. Login com o Administrador Padrão
-- **Usuário:** `adm.padrao`
-- **Senha:** `123`
-- Ao entrar, acesse o menu **Usuários** para alterar a senha ou criar novos colaboradores.
-
-### 2. Pelo botão "Primeiro Acesso por CNPJ"
-- Na tela de login, clique em **✨ Primeiro Acesso? Identificar Loja por CNPJ**.
-- Digite o CNPJ cadastrado no `config.json`.
-- O sistema reconhece a loja e solicita a criação da senha de administrador personalizada.
+### ✨ Primeiro Acesso à Loja por CNPJ
+1. Abra a tela de login do ERP.
+2. Clique no botão: **✨ Primeiro Acesso? Identificar Loja por CNPJ**.
+3. Digite o CNPJ da empresa cadastrado no `config.json` (ex: `37.725.245/0001-96`).
+4. O sistema identificará a empresa e exibirá a **Ficha da Empresa & Usuário ADM**.
+5. O usuário de login será gerado automaticamente com o prefixo da loja:  
+   👉 `adm.<prefixo>` (exemplo: `adm.marcelomotos`).
+6. Defina a senha do Administrador e clique em **Concluir Primeiro Acesso e Salvar**.
+7. Pronto! A loja estará ativada e pronta para o primeiro login isolado.
 
 ---
 

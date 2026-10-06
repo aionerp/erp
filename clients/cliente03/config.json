@@ -1,0 +1,26 @@
+{
+  "clientId": "cliente03",
+  "companyName": "MarceloMotos",
+  "companySubtitle": "Matriz",
+  "prefix": "marcelomotos",
+  "cnpj": "37.725.245/0001-96",
+  "active": true,
+  "configured": true,
+  "database": {
+    "provider": "neon",
+    "connectionId": "cliente03"
+  },
+  "branding": {
+    "primaryColor": "#111824",
+    "primaryDarkColor": "#0a1525",
+    "primaryLightColor": "#152031"
+  },
+  "features": {
+    "habilitar_seriais": true,
+    "habilitar_agendamentos": true,
+    "habilitar_mesas": true,
+    "habilitar_lotes": true,
+    "habilitar_variacoes": true
+  }
+}
+

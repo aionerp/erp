@@ -39,58 +39,167 @@ if (typeof window.AionDataLayer === 'undefined') {
 }
 
 
-// 2. Se houver um cliente ativo na sessão (definido no login ou primeiro acesso), usar suas credenciais
+// 2. Carregar manifesto de clientes de forma síncrona se disponível para resolução imediata
+if (!window._CLIENTS_MANIFEST) {
+    try {
+        const xhrM = new XMLHttpRequest();
+        xhrM.open('GET', 'clients.json?t=' + Date.now(), false);
+        xhrM.send();
+        if (xhrM.status === 200) {
+            window._CLIENTS_MANIFEST = JSON.parse(xhrM.responseText);
+        }
+    } catch (e) {}
+}
+
+// 3. Determinar e sincronizar o cliente ativo
 const activeClientStr = sessionStorage.getItem('active_client');
 let activeClientObj = null;
+
 if (activeClientStr) {
     try {
         activeClientObj = JSON.parse(activeClientStr);
-        // Se for cliente01, desativar Supabase obsoleto/pausado
-        if (activeClientObj && activeClientObj.clientId === 'cliente01') {
-            activeClientObj.database = { provider: 'neon', connectionId: 'cliente01' };
-            delete activeClientObj.supabase;
-            try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}
-        }
-
-        if (activeClientObj) {
-            // Padronizar todas as lojas na cor original do sistema (Modern SaaS Gold & Deep Navy #111824)
-            if (activeClientObj.branding) {
-                activeClientObj.branding.primaryColor = '#111824';
-                activeClientObj.branding.primaryDarkColor = '#0a1525';
-                activeClientObj.branding.primaryLightColor = '#152031';
-                try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}
-            }
-            const activeCid = activeClientObj.clientId || activeClientObj.CLIENT_ID;
-            const activeDb = activeClientObj.database || (activeClientObj.supabase?.url ? { provider: 'supabase', connectionId: activeCid } : { provider: 'neon', connectionId: activeCid });
-            const activeBrand = activeClientObj.branding || {};
-            const activeFeat = activeClientObj.features || {};
-
-            window.ENV = {
-                ...window.ENV,
-                CLIENT_ID: activeCid,
-                clientId: activeCid,
-                COMPANY_NAME: activeClientObj.companyName,
-                companyName: activeClientObj.companyName,
-                COMPANY_SUBTITLE: activeClientObj.companySubtitle,
-                companySubtitle: activeClientObj.companySubtitle,
-                PREFIX: activeClientObj.prefix,
-                prefix: activeClientObj.prefix,
-                CNPJ: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
-                cnpj: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
-                DATABASE: activeDb,
-                database: activeDb,
-                SUPABASE_URL: activeClientObj.supabase?.url,
-                SUPABASE_ANON_KEY: activeClientObj.supabase?.anonKey,
-                BRANDING: activeBrand,
-                branding: activeBrand,
-                FEATURES: activeFeat,
-                features: activeFeat
-            };
-        }
     } catch (e) {
-        console.warn('Erro ao carregar active_client da sessão:', e);
+        activeClientObj = null;
     }
 }
+
+// Se não há active_client salvo, verificar se o usuario na sessão tem clientId
+if (!activeClientObj) {
+    try {
+        const uStr = sessionStorage.getItem('usuario');
+        if (uStr) {
+            const u = JSON.parse(uStr);
+            const targetId = u.clientId || u.cliente_id || window.ENV?.CLIENT_ID || window.ENV?.clientId;
+            if (targetId && window._CLIENTS_MANIFEST) {
+                const found = window._CLIENTS_MANIFEST.find(c => c.clientId === targetId || c.prefix === targetId);
+                if (found) {
+                    activeClientObj = found;
+                }
+            }
+        }
+    } catch(e) {}
+}
+
+// Se ainda não há activeClientObj, sincronizar com o clientId padrão definido no window.ENV
+if (!activeClientObj && window.ENV?.CLIENT_ID && window._CLIENTS_MANIFEST) {
+    const found = window._CLIENTS_MANIFEST.find(c => c.clientId === window.ENV.CLIENT_ID || c.prefix === window.ENV.PREFIX);
+    if (found) {
+        activeClientObj = found;
+    }
+}
+
+// Se o cliente ativo na sessão diferir do CLIENT_ID embutido no build atual,
+// e o usuario na sessão não pertencer explicitamente a esse outro cliente, sincronizar com o build
+if (activeClientObj && window.ENV?.CLIENT_ID && activeClientObj.clientId !== window.ENV.CLIENT_ID) {
+    try {
+        const uStr = sessionStorage.getItem('usuario');
+        const u = uStr ? JSON.parse(uStr) : null;
+        if (!u || u.clientId === window.ENV.CLIENT_ID || !u.clientId) {
+            if (window._CLIENTS_MANIFEST) {
+                const envClient = window._CLIENTS_MANIFEST.find(c => c.clientId === window.ENV.CLIENT_ID);
+                if (envClient) {
+                    activeClientObj = envClient;
+                }
+            }
+        }
+    } catch(e) {}
+}
+
+if (activeClientObj) {
+    const cid = activeClientObj.clientId || activeClientObj.CLIENT_ID;
+
+    // Atualizar dados com o manifesto mais recente em clients.json
+    if (window._CLIENTS_MANIFEST) {
+        const fresh = window._CLIENTS_MANIFEST.find(c => c.clientId === cid);
+        if (fresh) {
+            activeClientObj.companyName = fresh.companyName || activeClientObj.companyName;
+            activeClientObj.companySubtitle = fresh.companySubtitle || activeClientObj.companySubtitle;
+            activeClientObj.prefix = fresh.prefix || activeClientObj.prefix;
+            activeClientObj.cnpjFormatted = fresh.cnpjFormatted || fresh.cnpj || activeClientObj.cnpjFormatted;
+            activeClientObj.database = fresh.database || activeClientObj.database;
+            activeClientObj.branding = fresh.branding || activeClientObj.branding;
+            activeClientObj.features = fresh.features || activeClientObj.features;
+        }
+    }
+
+    // Se window.ENV for do mesmo cliente, respeitar os dados mais recentes do build
+    if (window.ENV && (window.ENV.CLIENT_ID === cid || window.ENV.clientId === cid)) {
+        if (window.ENV.COMPANY_NAME) activeClientObj.companyName = window.ENV.COMPANY_NAME;
+        if (window.ENV.COMPANY_SUBTITLE) activeClientObj.companySubtitle = window.ENV.COMPANY_SUBTITLE;
+        if (window.ENV.PREFIX) activeClientObj.prefix = window.ENV.PREFIX;
+        if (window.ENV.CNPJ) activeClientObj.cnpjFormatted = window.ENV.CNPJ;
+    }
+
+    // Se for cliente01, desativar Supabase obsoleto/pausado
+    if (activeClientObj.clientId === 'cliente01') {
+        activeClientObj.database = { provider: 'neon', connectionId: 'cliente01' };
+        delete activeClientObj.supabase;
+    }
+
+    // Padronizar todas as lojas na cor original do sistema (Modern SaaS Gold & Deep Navy #111824)
+    if (activeClientObj.branding) {
+        activeClientObj.branding.primaryColor = '#111824';
+        activeClientObj.branding.primaryDarkColor = '#0a1525';
+        activeClientObj.branding.primaryLightColor = '#152031';
+    }
+
+    try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}
+
+    const activeCid = activeClientObj.clientId || activeClientObj.CLIENT_ID;
+    const activeDb = activeClientObj.database || (activeClientObj.supabase?.url ? { provider: 'supabase', connectionId: activeCid } : { provider: 'neon', connectionId: activeCid });
+    const activeBrand = activeClientObj.branding || {};
+    const activeFeat = activeClientObj.features || {};
+
+    window.ENV = {
+        ...window.ENV,
+        CLIENT_ID: activeCid,
+        clientId: activeCid,
+        COMPANY_NAME: activeClientObj.companyName,
+        companyName: activeClientObj.companyName,
+        COMPANY_SUBTITLE: activeClientObj.companySubtitle,
+        companySubtitle: activeClientObj.companySubtitle,
+        PREFIX: activeClientObj.prefix,
+        prefix: activeClientObj.prefix,
+        CNPJ: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
+        cnpj: activeClientObj.cnpjFormatted || activeClientObj.cnpj,
+        DATABASE: activeDb,
+        database: activeDb,
+        SUPABASE_URL: activeClientObj.supabase?.url,
+        SUPABASE_ANON_KEY: activeClientObj.supabase?.anonKey,
+        BRANDING: activeBrand,
+        branding: activeBrand,
+        FEATURES: activeFeat,
+        features: activeFeat
+    };
+
+    // Sincronizar com usuario na sessão se presente
+    try {
+        const uStr = sessionStorage.getItem('usuario');
+        if (uStr) {
+            const u = JSON.parse(uStr);
+            let mudou = false;
+            if (activeClientObj.companyName && u.loja_nome !== activeClientObj.companyName) {
+                u.loja_nome = activeClientObj.companyName;
+                mudou = true;
+            }
+            if (activeCid && u.clientId !== activeCid) {
+                u.clientId = activeCid;
+                u.cliente_id = activeCid;
+                mudou = true;
+            }
+            if (mudou) {
+                sessionStorage.setItem('usuario', JSON.stringify(u));
+            }
+        }
+    } catch(e) {}
+}
+
+window.getCompanyName = function() {
+    return window.ENV?.COMPANY_NAME || window.ENV?.companyName || (activeClientObj && activeClientObj.companyName) || 'MarceloMotos';
+};
+window.getCompanySubtitle = function() {
+    return window.ENV?.COMPANY_SUBTITLE || window.ENV?.companySubtitle || (activeClientObj && activeClientObj.companySubtitle) || 'Matriz';
+};
 
 // Garantir a paleta original do sistema para todos os clientes (Modern SaaS: Sidebar Azul Profundo / Dourado)
 const existingBrandStyle = document.getElementById('dynamic-branding-styles');

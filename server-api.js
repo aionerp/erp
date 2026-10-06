@@ -17,9 +17,11 @@ function getPool(clientId) {
     if (pools.has(key)) return pools.get(key);
 
     const envKey = `${key.toUpperCase()}_DATABASE_URL`;
-    const dbUrl = process.env[envKey] || process.env.DATABASE_URL;
+    // Isolamento estrito de tenancy: cada cliente conecta EXCLUSIVAMENTE ao seu próprio banco de dados
+    const dbUrl = process.env[envKey] || (key === 'cliente01' ? process.env.DATABASE_URL : null);
 
     if (!dbUrl || dbUrl.includes('[SENHA]')) {
+        console.warn(`[Pool] Banco de dados não configurado para o cliente: ${key} (${envKey} ausente no .env)`);
         return null;
     }
 

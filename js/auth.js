@@ -36,25 +36,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const inputIdentificador = email.trim();
             let matchedClient = null;
 
-            // Identificar prefixo no usuário (ex: adm.originaleletronico ou adm.aionerp) e rotear para o cliente correto
+            // Identificar prefixo no usuário (ex: adm.marcelomotos, adm.originaleletronico ou adm.aionerp)
             if (inputIdentificador.includes('.') && !inputIdentificador.includes('@')) {
                 const parts = inputIdentificador.split('.');
                 const prefix = parts[parts.length - 1].toLowerCase();
                 if (typeof window.buscarClientePorPrefixo === 'function') {
                     matchedClient = await window.buscarClientePorPrefixo(prefix);
-                    if (matchedClient) {
-                        console.log(`Prefixo identificado (${prefix}). Conectando à loja: ${matchedClient.companyName}`);
-                        window.conectarClienteSupabase(matchedClient);
-                    }
                 }
-            } else {
-                // Se for email sem prefixo (ex: arc48388528@gmail.com), rotear para o cliente01 padrão
-                if (typeof window.buscarClientePorPrefixo === 'function') {
-                    matchedClient = await window.buscarClientePorPrefixo('aionerp');
-                    if (matchedClient) {
-                        window.conectarClienteSupabase(matchedClient);
-                    }
-                }
+            }
+
+            // Se não encontrou cliente pelo prefixo (ex: adm.padrao ou login por email), usar o cliente configurado no ambiente
+            if (!matchedClient && typeof window.buscarClientePorPrefixo === 'function') {
+                const defaultTarget = window.ENV?.CLIENT_ID || window.ENV?.clientId || window.ENV?.PREFIX || 'cliente03';
+                matchedClient = await window.buscarClientePorPrefixo(defaultTarget);
+            }
+
+            if (matchedClient && typeof window.conectarClienteSupabase === 'function') {
+                console.log(`Conectando à loja: ${matchedClient.companyName} (${matchedClient.clientId})`);
+                window.conectarClienteSupabase(matchedClient);
             }
             
             try {
@@ -120,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ativo: u.ativo,
                                 permissoes: u.permissoes,
                                 loja_id: u.loja_id,
-                                loja_nome: u.lojas?.nome || window.ENV?.COMPANY_NAME || 'Aion ERP',
+                                loja_nome: matchedClient?.companyName || u.lojas?.nome || window.ENV?.COMPANY_NAME || 'MarceloMotos',
                                 loja_segmento: u.lojas?.segmento || 'eletronico',
                                 config_loja: u.config_loja?.[0] || u.config_loja || null
                             }];
@@ -146,7 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Usuário inativo! Contate o administrador.');
                 }
                 
-                const targetClientId = matchedClient?.clientId || window.ENV?.clientId || window.ENV?.CLIENT_ID || 'cliente01';
+                const targetClientId = matchedClient?.clientId || window.ENV?.clientId || window.ENV?.CLIENT_ID || 'cliente03';
+                const targetLojaNome = matchedClient?.companyName || userData.loja_nome || window.ENV?.COMPANY_NAME || 'MarceloMotos';
 
                 // Salvar sessão com todas as informações (incluindo dados do tenant/loja e configurações)
                 const usuarioLogado = {
@@ -158,8 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     permissoes: userData.permissoes || {},
                     ativo: userData.ativo,
                     loja_id: userData.loja_id,
-                    loja_nome: userData.loja_nome || 'Aion ERP',
-                    loja_segmento: userData.loja_segmento || 'eletronico',
+                    loja_nome: targetLojaNome,
+                    loja_segmento: userData.loja_segmento || 'geral',
                     clientId: targetClientId,
                     cliente_id: targetClientId,
                     config_loja: userData.config_loja || {
@@ -172,6 +172,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 
                 sessionStorage.setItem('usuario', JSON.stringify(usuarioLogado));
+                if (matchedClient) {
+                    sessionStorage.setItem('active_client', JSON.stringify(matchedClient));
+                }
                 
                 // Atualizar último acesso
                 try {

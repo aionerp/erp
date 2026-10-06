@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aion ERP - Ficha Cadastral e de Configuração de Cliente (Padaria 1)</title>
+  <style>
+    :root {
+      --primary: #0A1628;
+      --primary-light: #1E293B;
+      --accent-blue: #2563EB;
+      --accent-amber: #D97706;
+      --border-color: #CBD5E1;
+      --bg-gray: #F8FAFC;
+      --text-dark: #0F172A;
+      --text-muted: #64748B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: #E2E8F0;
+      color: var(--text-dark);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .no-print-bar {
+      width: 210mm;
+      max-width: 100%;
+      background: #FFFFFF;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-print {
+      background: var(--accent-blue);
+      color: #FFFFFF;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-print:hover { background: #1D4ED8; }
+
+    .a4-page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 14mm 14mm 16mm 14mm;
+      background: #FFFFFF;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      border-radius: 4px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      page-break-after: always;
+    }
+
+    /* Header */
+    .header-banner {
+      background: var(--primary);
+      border-radius: 8px;
+      padding: 16px 20px;
+      color: #FFFFFF;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 4px solid var(--accent-blue);
+      margin-bottom: 12px;
+    }
+
+    .header-banner h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .header-banner p {
+      font-size: 11px;
+      color: #CBD5E1;
+      margin-top: 3px;
+    }
+
+    .tag-status {
+      background: #DC2626;
+      color: #FFFFFF;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Box Destaque: Prefixo do Usuário */
+    .box-info-prefixo {
+      background: #EFF6FF;
+      border: 1.5px solid #93C5FD;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+
+    .box-info-prefixo h3 {
+      font-size: 11px;
+      color: #1D4ED8;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .box-info-prefixo p {
+      font-size: 9.5px;
+      color: #1E293B;
+      line-height: 1.45;
+    }
+
+    /* Seções */
+    .section-title {
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: #F1F5F9;
+      border-left: 4px solid var(--accent-blue);
+      padding: 5px 10px;
+      margin: 10px 0 6px 0;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .grid-2 { grid-template-columns: 1fr 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .grid-4 { grid-template-columns: 1.2fr 1fr 1fr 0.8fr; }
+    .grid-addr { grid-template-columns: 90px 1fr 80px; }
+    .grid-addr-2 { grid-template-columns: 1fr 1fr 1fr 60px; }
+
+    .field-card {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 5px 8px;
+      background: #FFFFFF;
+    }
+
+    .field-card.highlight {
+      background: #F0FDF4;
+      border-color: #86EFAC;
+    }
+
+    .field-card.highlight-blue {
+      background: #EFF6FF;
+      border-color: #93C5FD;
+    }
+
+    .field-label {
+      font-size: 8px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .field-value {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dark);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .field-value.blue {
+      color: var(--accent-blue);
+      font-weight: 800;
+    }
+
+    /* Features Grid */
+    .features-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border-color);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      background: var(--bg-gray);
+    }
+
+    .feature-item.active {
+      background: #ECFDF5;
+      border-color: #A7F3D0;
+      color: #065F46;
+      font-weight: 700;
+    }
+
+    .checkbox-box {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1.5px solid #059669;
+      background: #059669;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .checkbox-box.inactive {
+      background: white;
+      border-color: #94A3B8;
+      color: transparent;
+    }
+
+    /* Code Box */
+    .code-box {
+      background: #0F172A;
+      color: #93C5FD;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 9.5px;
+      padding: 12px;
+      border-radius: 8px;
+      line-height: 1.4;
+      white-space: pre;
+      overflow-x: auto;
+      margin: 6px 0;
+    }
+
+    /* Footer & Signatures */
+    .signatures-block {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    .sign-line {
+      width: 220px;
+      border-top: 1px solid #475569;
+      padding-top: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #1E293B;
+    }
+
+    .sign-role {
+      font-size: 8.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .page-footer-bar {
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid #E2E8F0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8.5px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      body {
+        background: transparent;
+        padding: 0;
+        gap: 0;
+      }
+      .no-print-bar { display: none; }
+      .a4-page {
+        box-shadow: none;
+        margin: 0;
+        width: 100%;
+        min-height: auto;
+        padding: 10mm 12mm;
+        page-break-after: always;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print-bar">
+    <div>
+      <strong>📄 Visualização de Ficha Cadastral do Cliente</strong>
+      <span style="font-size: 12px; color: #64748B; margin-left: 10px;">Aion ERP Multi-tenant • Exemplo: Padaria 1</span>
+    </div>
+    <button class="btn-print" onclick="window.print()">
+      🖨️ Imprimir / Salvar como PDF
+    </button>
+  </div>
+
+  <!-- PÁGINA 1 -->
+  <div class="a4-page">
+    
+    <div class="header-banner">
+      <div>
+        <h1>AION ERP — FICHA CADASTRAL & CONFIGURAÇÃO</h1>
+        <p>Formulário de Coleta de Informações e Provisionamento de Loja (Multicliente Neon PostgreSQL)</p>
+      </div>
+      <div class="tag-status">Exemplo: Padaria 1</div>
+    </div>
+
+    <!-- Explicação do Prefixo do Usuário -->
+    <div class="box-info-prefixo">
+      <h3>ℹ️ O Que é o "Prefixo do Usuário" no Aion ERP? (Explicação do Sistema)</h3>
+      <p>
+        O Aion ERP possui arquitetura <strong>Multicliente (Multi-tenant)</strong> com bancos de dados isolados no PostgreSQL (Neon).
+        Como a tela de login (<code>index.html</code>) é única para todas as empresas, o <strong>PREFIXO DO USUÁRIO</strong> é a chave exclusiva que identifica a loja.
+        <br>
+        • <strong>Regra de Login:</strong> Todos os logins seguem o formato <code>&lt;usuario&gt;.&lt;prefixo&gt;</code> (ex: <code>adm.padaria1</code>, <code>caixa.padaria1</code>, <code>balcao.padaria1</code>).
+        <br>
+        • <strong>Validação no Sistema:</strong> Ao digitar o login, o sistema detecta o sufixo <code>.padaria1</code>, busca as credenciais no arquivo <code>clients.json</code> e conecta automaticamente ao banco de dados isolado da <strong>Padaria 1</strong> antes de validar a senha.
+      </p>
+    </div>
+
+    <!-- 1. Identificação da Empresa -->
+    <div class="section-title">1. Identificação da Empresa (Dados Fiscais e Jurídicos)</div>
+    <div class="form-grid grid-2">
+      <div class="field-card highlight-blue">
+        <span class="field-label">Razão Social (Nome no Sistema - companyName)*</span>
+        <div class="field-value blue">Padaria 1 Panificadora e Confeitaria Ltda.</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Nome Fantasia / Unidade (companySubtitle)</span>
+        <div class="field-value">Padaria 1 - Matriz Centro</div>
+      </div>
+    </div>
+
+    <div class="form-grid grid-4">
+      <div class="field-card highlight">
+        <span class="field-label">CNPJ (14 dígitos)*</span>
+        <div class="field-value">00.000.000/0001-00 (0000000000)</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Inscrição Estadual (IE)</span>
+        <div class="field-value">123.456.789.110</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Data de Fundação</span>
+        <div class="field-value">15/03/2021</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Regime Fiscal</span>
+        <div class="field-value">Simples Nacional</div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field-card">
+        <span class="field-label">Segmento de Atuação (Validação de Banco: public.lojas.segmento)*</span>
+        <div class="field-value">mercado (Opções do ERP: mercado, restaurante, eletronico, estetica, bijuteria, geral)</div>
+      </div>
+    </div>
+
+    <!-- 2. Endereço Completo -->
+    <div class="section-title">2. Localização e Endereço da Loja</div>
+    <div class="form-grid grid-addr">
+      <div class="field-card">
+        <span class="field-label">CEP*</span>
+        <div class="field-value">01001-000</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Logradouro / Endereço (Rua, Avenida)*</span>
+        <div class="field-value">Rua do Comércio Central</div>
+      </div>
+      <div class="field-card highlight">
+        <span class="field-label">Número*</span>
+        <div class="field-value">1050</div>
+      </div>
+    </div>
+
+    <div class="form-grid grid-addr-2">
+      <div class="field-card">
+        <span class="field-label">Complemento</span>
+        <div class="field-value">Térreo - Loja 1</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Bairro*</span>
+        <div class="field-value">Centro Histórico</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Cidade / Município*</span>
+        <div class="field-value">São Paulo</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Estado (UF)*</span>
+        <div class="field-value">SP</div>
+      </div>
+    </div>
+
+    <!-- 3. Contatos e Responsável Legal -->
+    <div class="section-title">3. Responsável Legal e Canais de Contato</div>
+    <div class="form-grid grid-3">
+      <div class="field-card">
+        <span class="field-label">Nome do Responsável / Proprietário*</span>
+        <div class="field-value">Ailton Cordeiro</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Cargo / Função</span>
+        <div class="field-value">Sócio-Proprietário</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">CPF do Responsável</span>
+        <div class="field-value">123.456.789-00</div>
+      </div>
+    </div>
+
+    <div class="form-grid grid-2">
+      <div class="field-card">
+        <span class="field-label">Telefone Comercial / WhatsApp (Para Notificações)*</span>
+        <div class="field-value">(11) 98765-4321</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">E-mail Oficial (Contato / Faturamento)*</span>
+        <div class="field-value">contato@padaria1.com.br</div>
+      </div>
+    </div>
+
+    <!-- 4. Acesso ao ERP -->
+    <div class="section-title">4. Configurações de Acesso ao ERP (O Prefixo na Prática)</div>
+    <div class="form-grid grid-3">
+      <div class="field-card highlight-blue">
+        <span class="field-label">Prefixo do Usuário (Palavra única minúscula)*</span>
+        <div class="field-value blue">padaria1</div>
+      </div>
+      <div class="field-card highlight-blue">
+        <span class="field-label">Login Gerado para Administrador*</span>
+        <div class="field-value blue">adm.padaria1</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Senha Inicial Provisória*</span>
+        <div class="field-value">P@daria1#2026</div>
+      </div>
+    </div>
+
+    <!-- 5. Recursos e Features -->
+    <div class="section-title">5. Módulos Operacionais Habilitados para a Padaria 1</div>
+    <div class="features-list">
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Mesas & Comandas:</strong> Controle de mesas, consumo e balcão</span>
+      </div>
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Lotes & Validade:</strong> Controle de perecíveis e insumos de panificação</span>
+      </div>
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Variações de Produtos:</strong> Tamanhos, sabores e pesos (grade)</span>
+      </div>
+      <div class="feature-item">
+        <div class="checkbox-box inactive"></div>
+        <span style="color:#64748B;"><strong>Controle de Seriais / IMEI:</strong> (Inativo - Apenas eletrônicos)</span>
+      </div>
+    </div>
+
+    <div class="page-footer-bar">
+      <span>Aion ERP Core • Arquitetura Multicliente Neon PostgreSQL</span>
+      <span>Página 1 de 2</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 2 -->
+  <div class="a4-page">
+    
+    <div class="header-banner">
+      <div>
+        <h1>AION ERP — IMPLANTAÇÃO TÉCNICA E VALIDAÇÃO</h1>
+        <p>Configuração do Ambiente, Banco de Dados Neon e Checklist de Conformidade</p>
+      </div>
+      <div class="tag-status">Especificação de TI</div>
+    </div>
+
+    <!-- 6. TI / Provisionamento -->
+    <div class="section-title">6. Parâmetros Técnicos de Provisionamento (Equipe de TI)</div>
+    <div class="form-grid grid-2">
+      <div class="field-card">
+        <span class="field-label">Client ID no Sistema (Identificador de Pasta)</span>
+        <div class="field-value">cliente03 (Próximo sequencial ativo no catálogo)</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Provedor de Banco de Dados</span>
+        <div class="field-value">Neon PostgreSQL (neondb isolado com 21 tabelas)</div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field-card">
+        <span class="field-label">Variável de Conexão (.env e Render.com)</span>
+        <div class="field-value">CLIENTE03_DATABASE_URL=postgresql://neondb_owner:***@ep-***.neon.tech/neondb</div>
+      </div>
+    </div>
+
+    <div class="form-grid grid-2">
+      <div class="field-card">
+        <span class="field-label">Arquivo de Configuração</span>
+        <div class="field-value">clients/cliente03/config.json</div>
+      </div>
+      <div class="field-card">
+        <span class="field-label">Comando de Provisionamento do Schema</span>
+        <div class="field-value">node scripts/migration/02_setup_neon_schema.js cliente03</div>
+      </div>
+    </div>
+
+    <!-- 7. JSON Gerado -->
+    <div class="section-title">7. Arquivo de Configuração do Sistema (clients/cliente03/config.json)</div>
+    <div class="code-box">{
+  "clientId": "cliente03",
+  "companyName": "Padaria 1 Panificadora e Confeitaria Ltda.",
+  "companySubtitle": "Matriz Centro",
+  "prefix": "padaria1",                   // <-- PREFIXO DO USUÁRIO NO LOGIN
+  "cnpj": "00.000.000/0001-00",
+  "active": true,
+  "configured": true,
+  "database": {
+    "provider": "neon",
+    "connectionId": "cliente03"
+  },
+  "branding": {
+    "primaryColor": "#D97706",
+    "primaryDarkColor": "#78350F",
+    "primaryLightColor": "#FDE68A"
+  },
+  "features": {
+    "habilitar_mesas": true,              // Ativo para mesas e comandas de balcão
+    "habilitar_lotes": true,              // Ativo para controle de validade de pães e frios
+    "habilitar_variacoes": true,          // Ativo para tamanhos e porções
+    "habilitar_seriais": false,
+    "habilitar_agendamentos": false
+  }
+}</div>
+
+    <!-- 8. Checklist de Validação -->
+    <div class="section-title">8. Checklist de Validação das Informações no Sistema</div>
+    <div class="features-list">
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Validação de CNPJ:</strong> 14 dígitos com máscara e trava de primeiro acesso</span>
+      </div>
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Usuário Administrador:</strong> Criado como <code>adm.padaria1</code> com perfil total</span>
+      </div>
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Provisionamento Neon:</strong> 21 tabelas e triggers bcrypt gerados em &lt; 3 seg</span>
+      </div>
+      <div class="feature-item active">
+        <div class="checkbox-box">✓</div>
+        <span><strong>Catálogo Multicliente:</strong> Compilado via <code>node build.js</code> no clients.json</span>
+      </div>
+    </div>
+
+    <!-- 9. Termo de Ciência e Assinaturas -->
+    <div class="section-title">9. Termo de Autorização e Assinaturas</div>
+    <p style="font-size: 9.5px; color: #334155; line-height: 1.45; margin-top: 6px;">
+      Declaramos que as informações cadastrais e de configuração acima prestadas são verdadeiras e refletem as especificações solicitadas para o provisionamento do ambiente Aion ERP. O prefixo definido (<strong>padaria1</strong>) é de uso institucional para login de todos os operadores da empresa e não poderá ser alterado após a consolidação das tabelas no banco de dados.
+    </p>
+
+    <div style="font-size: 10px; font-style: italic; color: #475569; margin-top: 14px;">
+      São Paulo, _____ de _____________________________ de 2026.
+    </div>
+
+    <div class="signatures-block">
+      <div>
+        <div class="sign-line">PADARIA 1 / CLIENTE</div>
+        <div class="sign-role">Ailton Cordeiro (Responsável Legal)</div>
+      </div>
+      <div>
+        <div class="sign-line">AION ERP / IMPLANTAÇÃO</div>
+        <div class="sign-role">Analista de Sistemas Responsável</div>
+      </div>
+    </div>
+
+    <div class="page-footer-bar">
+      <span>Aion ERP Core • Arquitetura Multicliente Neon PostgreSQL</span>
+      <span>Página 2 de 2</span>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -272,14 +272,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Determinar o nome e subtítulo da empresa/loja ativa com prioridade multi-tenant
+        let currentCompanyName = 'MarceloMotos';
+        let currentCompanySubtitle = 'Matriz';
+
+        const activeCliStr = sessionStorage.getItem('active_client');
+        let activeCli = null;
+        if (activeCliStr) {
+            try { activeCli = JSON.parse(activeCliStr); } catch(e){}
+        }
+
+        if (activeCli && activeCli.companyName) {
+            currentCompanyName = activeCli.companyName;
+            currentCompanySubtitle = activeCli.companySubtitle || currentCompanySubtitle;
+        } else if (window.ENV?.COMPANY_NAME || window.ENV?.companyName) {
+            currentCompanyName = window.ENV.COMPANY_NAME || window.ENV.companyName;
+            currentCompanySubtitle = window.ENV.COMPANY_SUBTITLE || window.ENV.companySubtitle || currentCompanySubtitle;
+        } else if (usuario.loja_nome && usuario.loja_nome !== 'Aion ERP') {
+            currentCompanyName = usuario.loja_nome;
+        }
+
         sidebar.innerHTML = `
             <div class="sidebar-header" style="padding: 22px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);">
                 <h2 style="font-size: 17px; font-weight: 700; color: #FFFFFF; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: -0.2px;">
                     <span style="background: #EAB308; color: #0A1628; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px;">ERP</span>
-                    <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</span>
+                    <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" title="${currentCompanyName}">${currentCompanyName}</span>
                 </h2>
-                <div style="font-size: 11px; letter-spacing: 0.8px; color: #94A3B8; margin-top: 4px; font-weight: 500;">
-                    ${window.ENV?.COMPANY_SUBTITLE || 'by AionLabs'}
+                <div class="brand-subtitle" style="font-size: 11px; letter-spacing: 0.8px; color: #94A3B8; margin-top: 4px; font-weight: 500;">
+                    ${currentCompanySubtitle}
                 </div>
             </div>
             <ul class="sidebar-nav" style="overflow-y: auto; max-height: calc(100vh - 120px);">
@@ -307,13 +327,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // === DEFINIR TÍTULO DA PÁGINA COM NOME DO SISTEMA ===
-    const cleanTitle = document.title.replace(' - Sistema de Estoque', '');
-    document.title = `${window.ENV?.COMPANY_NAME || 'Aion ERP'} | ${cleanTitle}`;
+    const cleanTitle = document.title.replace(' - Sistema de Estoque', '').replace(/^[^\s|]+\s*\|\s*/, '');
+    document.title = `${currentCompanyName} | ${cleanTitle}`;
     
     // Mostrar informações do usuário & Avatar Modern SaaS
     const userNameElement = document.getElementById('userName');
     const userPerfilElement = document.getElementById('userPerfil');
     const userInfoWrapper = document.querySelector('.user-info');
+    
+    // Injetar Badge de Loja Ativa no Topo Direito (.user-info)
+    if (userInfoWrapper && !document.getElementById('topBarStoreBadge')) {
+        const storeBadge = document.createElement('div');
+        storeBadge.id = 'topBarStoreBadge';
+        storeBadge.className = 'topbar-store-badge';
+        storeBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background: rgba(234, 179, 8, 0.14); color: #B45309; border: 1px solid rgba(234, 179, 8, 0.35); padding: 5px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; margin-right: 12px; white-space: nowrap;';
+        storeBadge.innerHTML = `🏢 <span class="badge-store-name">${currentCompanyName}</span>${currentCompanySubtitle ? ` <span style="font-size: 10.5px; opacity: 0.8; font-weight: 500;">(${currentCompanySubtitle})</span>` : ''}`;
+        storeBadge.title = `Loja Ativa: ${currentCompanyName} • ${currentCompanySubtitle}`;
+        userInfoWrapper.prepend(storeBadge);
+    }
     
     if (userNameElement) {
         userNameElement.textContent = usuario.nome || 'Usuário';

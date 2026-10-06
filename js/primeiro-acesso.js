@@ -267,60 +267,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 let lojaJaAtivada = false;
                 let usuarioPrincipal = usuarioAdmEsperado;
 
-                // 2. Trava 1: Checagem no Manifesto/JSON do Cliente (config.json)
-                if (cliente.active === true || cliente.status === 'ativo' || cliente.configured === true || cliente.ativado === true) {
-                    lojaJaAtivada = true;
-                }
+                // 2. Trava de Segurança: Conectar dinamicamente ao banco do cliente e verificar status de ativação
+                btn.textContent = 'Verificando status de ativação no banco...';
+                const clientSupabase = window.conectarClienteSupabase(cliente) || window.supabaseClient;
+                if (clientSupabase) {
+                    // 2.1 RPC de Segurança no PostgreSQL
+                    try {
+                        const { data: statusLoja, error: errRpc } = await clientSupabase.rpc('verificar_status_loja', {
+                            p_cnpj: cleanCnpj
+                        });
 
-                // 3. Trava 2: Conectar dinamicamente ao banco Supabase daquele cliente e verificar banco de dados
-                if (!lojaJaAtivada) {
-                    btn.textContent = 'Verificando status de ativação no banco...';
-                    const clientSupabase = window.conectarClienteSupabase(cliente);
-                    if (clientSupabase) {
-                        // 3.1 RPC de Segurança no PostgreSQL
-                        try {
-                            const { data: statusLoja, error: errRpc } = await clientSupabase.rpc('verificar_status_loja', {
-                                p_cnpj: cleanCnpj
-                            });
-
-                            if (!errRpc && statusLoja) {
-                                if (statusLoja.loja_ativa === true || statusLoja.permite_onboarding === false) {
-                                    lojaJaAtivada = true;
-                                    if (statusLoja.usuario_adm) usuarioPrincipal = statusLoja.usuario_adm;
-                                }
+                        if (!errRpc && statusLoja) {
+                            if (statusLoja.loja_ativa === true || statusLoja.permite_onboarding === false) {
+                                lojaJaAtivada = true;
+                                if (statusLoja.usuario_adm) usuarioPrincipal = statusLoja.usuario_adm;
                             }
-                        } catch (rpcEx) {
-                            console.log('RPC verificar_status_loja:', rpcEx);
                         }
+                    } catch (rpcEx) {
+                        console.log('RPC verificar_status_loja:', rpcEx);
+                    }
 
-                        // 3.2 Checagem direta de usuários cadastrados
-                        if (!lojaJaAtivada) {
-                            try {
-                                const { data: usersCadastrados } = await clientSupabase
-                                    .from('usuarios')
-                                    .select('id, email, nome, ativo')
-                                    .limit(5);
+                    // 2.2 Checagem direta de usuários cadastrados (apenas usuários ativos e que NÃO sejam adm.padrao)
+                    if (!lojaJaAtivada) {
+                        try {
+                            const { data: usersCadastrados } = await clientSupabase
+                                .from('usuarios')
+                                .select('id, email, nome, ativo')
+                                .limit(10);
 
-                                if (usersCadastrados && usersCadastrados.length > 0) {
-                                    lojaJaAtivada = true;
-                                    const uAdm = usersCadastrados.find(u => u.email && u.email.startsWith('adm.')) || usersCadastrados[0];
-                                    if (uAdm?.email) usuarioPrincipal = uAdm.email;
-                                }
-                            } catch (e) {}
-                        }
+                            const usuariosAtivosReais = (usersCadastrados || []).filter(u => 
+                                u.ativo !== false && 
+                                u.email && 
+                                u.email !== 'adm.padrao'
+                            );
 
-                        // 3.3 Checagem direta de lojas cadastradas
-                        if (!lojaJaAtivada) {
-                            try {
-                                const { data: lojasCadastradas } = await clientSupabase
-                                    .from('lojas')
-                                    .select('id, nome, cnpj')
-                                    .limit(5);
-
-                                if (lojasCadastradas && lojasCadastradas.length > 0) {
-                                    lojaJaAtivada = true;
-                                }
-                            } catch (e) {}
+                            if (usuariosAtivosReais.length > 0) {
+                                lojaJaAtivada = true;
+                                const uAdm = usuariosAtivosReais.find(u => u.email && u.email.startsWith('adm.')) || usuariosAtivosReais[0];
+                                if (uAdm?.email) usuarioPrincipal = uAdm.email;
+                            }
+                        } catch (e) {
+                            console.log('Checagem direta de usuários:', e);
                         }
                     }
                 }
@@ -476,10 +463,15 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Salvando e configurando loja...';
 
             try {
+                const clientSupabase = window.conectarClienteSupabase(cliente) || window.supabaseClient;
+                if (!clientSupabase) {
+                    throw new Error('Não foi possível inicializar a conexão com o banco de dados do cliente.');
+                }
+
                 // 1. Tentar primeiro via RPC segura registrar_primeiro_acesso
                 let salvouViaRpc = false;
                 try {
-                    const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('registrar_primeiro_acesso', {
+                    const { data: rpcRes, error: rpcErr } = await clientSupabase.rpc('registrar_primeiro_acesso', {
                         p_razao_social: razaoSocial,
                         p_nome_fantasia: nomeFantasia || razaoSocial,
                         p_cnpj: document.getElementById('paCnpj').value,
@@ -504,25 +496,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 2. Fallback de Inserts Diretos se a RPC não estiver disponível
                 if (!salvouViaRpc) {
-                    // Inserir Loja em public.lojas
-                    const { data: lojaCriada, error: errLoja } = await supabaseClient
-                        .from('lojas')
-                        .insert([{
-                            nome: razaoSocial,
-                            segmento: segmento || 'eletronico',
-                            cnpj: cleanCnpj,
-                            telefone: telefone || null,
-                            endereco: endereco || null
-                        }])
-                        .select();
+                    // Limpar resquício legado de adm.padrao se existir
+                    try {
+                        await clientSupabase.from('usuarios').delete().eq('email', 'adm.padrao');
+                    } catch (e) {}
 
-                    if (errLoja) throw errLoja;
-                    const lojaId = lojaCriada && lojaCriada.length > 0 ? lojaCriada[0].id : 1;
+                    // Inserir ou atualizar Loja em public.lojas
+                    let lojaId = 1;
+                    try {
+                        const { data: lojasExistentes } = await clientSupabase.from('lojas').select('id').limit(1);
+                        if (lojasExistentes && lojasExistentes.length > 0) {
+                            lojaId = lojasExistentes[0].id;
+                            await clientSupabase
+                                .from('lojas')
+                                .update({
+                                    nome: razaoSocial,
+                                    segmento: segmento || 'eletronico',
+                                    cnpj: cleanCnpj,
+                                    telefone: telefone || null,
+                                    endereco: endereco || null
+                                })
+                                .eq('id', lojaId);
+                        } else {
+                            const { data: lojaCriada, error: errLoja } = await clientSupabase
+                                .from('lojas')
+                                .insert([{
+                                    nome: razaoSocial,
+                                    segmento: segmento || 'eletronico',
+                                    cnpj: cleanCnpj,
+                                    telefone: telefone || null,
+                                    endereco: endereco || null
+                                }])
+                                .select();
 
-                    // Inserir Configurações em public.config_loja
-                    await supabaseClient
-                        .from('config_loja')
-                        .insert([{
+                            if (errLoja) throw errLoja;
+                            if (lojaCriada && lojaCriada.length > 0) lojaId = lojaCriada[0].id;
+                        }
+                    } catch (errLojaOp) {
+                        console.warn('Operação em lojas:', errLojaOp);
+                    }
+
+                    // Inserir ou atualizar Configurações em public.config_loja
+                    try {
+                        const { data: configExistente } = await clientSupabase.from('config_loja').select('id').limit(1);
+                        const configPayload = {
                             loja_id: lojaId,
                             nome_fantasia: nomeFantasia || razaoSocial,
                             razao_social: razaoSocial,
@@ -533,9 +550,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             habilitar_seriais: cliente.features?.habilitar_seriais !== false,
                             habilitar_agendamentos: cliente.features?.habilitar_agendamentos === true,
                             habilitar_mesas: cliente.features?.habilitar_mesas === true,
-                            habilitar_lotes: cliente.features?.habilitar_lotes === true,
+                            habilitar_lotes: cliente.features?.habilitar_lotes !== false,
                             habilitar_variacoes: cliente.features?.habilitar_variacoes === true
-                        }]);
+                        };
+
+                        if (configExistente && configExistente.length > 0) {
+                            await clientSupabase.from('config_loja').update(configPayload).eq('loja_id', lojaId);
+                        } else {
+                            await clientSupabase.from('config_loja').insert([configPayload]);
+                        }
+                    } catch (errCfgOp) {
+                        console.warn('Operação em config_loja:', errCfgOp);
+                    }
 
                     // Montar permissões ativas
                     const permissoesCompletas = {
@@ -554,8 +580,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         usuarios: { ver: true, criar: true, editar: true, excluir: true }
                     };
 
-                    // Criar usuário ADM
-                    const { error: errUser } = await supabaseClient
+                    // Criar usuário ADM exclusivo da loja
+                    const { error: errUser } = await clientSupabase
                         .from('usuarios')
                         .insert([{
                             loja_id: lojaId,
