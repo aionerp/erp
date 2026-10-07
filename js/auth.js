@@ -162,13 +162,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     loja_segmento: userData.loja_segmento || 'geral',
                     clientId: targetClientId,
                     cliente_id: targetClientId,
-                    config_loja: userData.config_loja || {
+                    config_loja: Object.assign({
                         habilitar_seriais: true,
-                        habilitar_agendamentos: false,
-                        habilitar_mesas: false,
-                        habilitar_lotes: false,
+                        habilitar_agendamentos: true,
+                        habilitar_mesas: true,
+                        habilitar_lotes: true,
                         habilitar_variacoes: false
-                    }
+                    }, matchedClient?.features || window.ENV?.FEATURES || userData.config_loja || {})
                 };
                 
                 sessionStorage.setItem('usuario', JSON.stringify(usuarioLogado));

@@ -56,12 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    const baseConfig = usuario.config_loja || {
-        habilitar_seriais: true,
-        habilitar_agendamentos: false,
-        habilitar_mesas: false,
-        habilitar_lotes: false,
-        habilitar_variacoes: false
+    const userConfig = usuario.config_loja || {};
+    const baseConfig = {
+        habilitar_seriais: userConfig.habilitar_seriais !== undefined ? userConfig.habilitar_seriais : true,
+        habilitar_agendamentos: userConfig.habilitar_agendamentos !== undefined ? userConfig.habilitar_agendamentos : true,
+        habilitar_mesas: userConfig.habilitar_mesas !== undefined ? userConfig.habilitar_mesas : true,
+        habilitar_lotes: userConfig.habilitar_lotes !== undefined ? userConfig.habilitar_lotes : true,
+        habilitar_variacoes: userConfig.habilitar_variacoes !== undefined ? userConfig.habilitar_variacoes : false
     };
     const config = { ...baseConfig, ...(window.ENV?.FEATURES || window.ENV?.features || {}) };
 

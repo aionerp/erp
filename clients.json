@@ -22,7 +22,7 @@
     "features": {
       "habilitar_seriais": true,
       "habilitar_agendamentos": true,
-      "habilitar_mesas": false,
+      "habilitar_mesas": true,
       "habilitar_lotes": true,
       "habilitar_variacoes": false
     }

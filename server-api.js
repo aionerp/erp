@@ -124,7 +124,7 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
         produtos_seriais: { produtos: 'produto_id' },
         promocao_produtos: { produtos: 'produto_id', promocoes: 'promocao_id' },
         despesas: { categorias: 'categoria_id', caixas: 'caixa_id', colaboradores: 'colaborador_id' },
-        agendamentos: { clientes: 'cliente_id', produtos: 'produto_id', colaboradores: 'profissional_id', usuarios: 'usuario_id' },
+        agendamentos: { clientes: 'cliente_id', produtos: 'servico_id', servicos: 'servico_id', colaboradores: 'profissional_id', usuarios: 'usuario_id' },
         usuarios: { lojas: 'loja_id', config_loja: 'loja_id' },
         boletos_pagar: { fornecedores: 'fornecedor_id', clientes: 'fornecedor_id', entradas: 'entrada_id' },
         servicos_recorrentes: { clientes: 'cliente_id', produtos: 'produto_id' },
