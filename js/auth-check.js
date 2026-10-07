@@ -520,8 +520,32 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================
 
 function abrirModalConfigLoja() {
-    const usuario = JSON.parse(sessionStorage.getItem('usuario')) || {};
-    const config = usuario.config_loja || {};
+    executarAberturaModalConfigLoja();
+}
+
+async function executarAberturaModalConfigLoja() {
+    let usuario = JSON.parse(sessionStorage.getItem('usuario')) || {};
+    let config = usuario.config_loja || {};
+
+    // Sincronizar dados atualizados diretamente do banco de dados
+    const client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : (window.supabaseClient || window.dbClient);
+    if (client && usuario.loja_id) {
+        try {
+            const { data: dbConfigData } = await client
+                .from('config_loja')
+                .select('*')
+                .eq('loja_id', usuario.loja_id)
+                .maybeSingle();
+
+            if (dbConfigData) {
+                config = { ...config, ...dbConfigData };
+                usuario.config_loja = config;
+                sessionStorage.setItem('usuario', JSON.stringify(usuario));
+            }
+        } catch (e) {
+            console.warn('Não foi possível sincronizar config_loja do banco:', e);
+        }
+    }
 
     let modal = document.getElementById('modalGlobalConfigLoja');
     if (modal) {
@@ -533,33 +557,21 @@ function abrirModalConfigLoja() {
     modal.className = 'modal';
     modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999;';
 
-    let termosHtml = '';
-    if (config.termo_garantia !== undefined) {
-        termosHtml = `
-            <div class="form-group" style="margin-bottom:12px;">
-                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Garantia dos Produtos (Cupom)</label>
-                <textarea id="cfgTermoGarantia" rows="5" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
-            </div>
-            <div class="form-group" style="margin-bottom:12px;">
-                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Política de Trocas (Cupom)</label>
-                <textarea id="cfgTermoTroca" rows="4" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
-            </div>
-        `;
-    } else {
-        termosHtml = `
-            <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:12px; margin-bottom:12px; font-size:12px; color:#b45309; line-height:1.4;">
-                <strong style="display:block; margin-bottom:4px;">⚠️ Habilitar Termos no Cupom</strong>
-                Para habilitar a personalização de garantia e trocas nos cupons, execute este script SQL no editor do seu Supabase:
-                <textarea readonly style="width:100%; height:60px; font-family:monospace; font-size:11px; margin-top:6px; padding:6px; border:1px solid #fcd34d; border-radius:4px; background:#fff; resize:none; box-sizing:border-box;" onclick="this.select()">ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_garantia TEXT;
-ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_troca TEXT;</textarea>
-            </div>
-        `;
-    }
+    const termosHtml = `
+        <div class="form-group" style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Garantia dos Produtos (Cupom)</label>
+            <textarea id="cfgTermoGarantia" rows="5" placeholder="Termos de garantia para impressão no cupom" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Política de Trocas (Cupom)</label>
+            <textarea id="cfgTermoTroca" rows="4" placeholder="Política de trocas para impressão no cupom" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:monospace; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+    `;
 
     modal.innerHTML = `
         <div class="modal-content" style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:500px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease; box-sizing:border-box; font-family:inherit;">
             <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
-                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - ${window.ENV?.COMPANY_NAME || 'Aion ERP'}</h2>
+                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - ${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</h2>
                 <span class="close-config" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
             </div>
             <div class="modal-body" style="max-height: 430px; overflow-y: auto; padding-right: 5px;">
@@ -601,14 +613,16 @@ ALTER TABLE public.config_loja ADD COLUMN IF NOT EXISTS termo_troca TEXT;</texta
     document.getElementById('btnFecharConfig').addEventListener('click', () => modal.style.display = 'none');
     document.getElementById('btnSalvarConfigLoja').addEventListener('click', salvarConfigLojaMaster);
 
-    document.getElementById('cfgNome').value = usuario.loja_nome || '';
+    document.getElementById('cfgNome').value = config.nome_fantasia || usuario.loja_nome || '';
     document.getElementById('cfgRazao').value = config.razao_social || '';
     document.getElementById('cfgCnpj').value = config.cnpj || '';
     document.getElementById('cfgTelefone').value = config.telefone || '';
     document.getElementById('cfgEndereco').value = config.endereco || '';
     
-    if (config.termo_garantia !== undefined) {
+    if (document.getElementById('cfgTermoGarantia')) {
         document.getElementById('cfgTermoGarantia').value = config.termo_garantia || '';
+    }
+    if (document.getElementById('cfgTermoTroca')) {
         document.getElementById('cfgTermoTroca').value = config.termo_troca || '';
     }
     
@@ -619,6 +633,12 @@ async function salvarConfigLojaMaster() {
     const usuario = JSON.parse(sessionStorage.getItem('usuario'));
     if (!usuario) return;
     
+    const client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : (window.supabaseClient || window.dbClient);
+    if (!client) {
+        mostrarNotificacao('Cliente do banco de dados não encontrado.', 'error');
+        return;
+    }
+
     const btn = document.getElementById('btnSalvarConfigLoja');
     btn.disabled = true;
     btn.textContent = 'Salvando...';
@@ -628,31 +648,28 @@ async function salvarConfigLojaMaster() {
     const cnpj = document.getElementById('cfgCnpj').value.trim();
     const tel = document.getElementById('cfgTelefone').value.trim();
     const endereco = document.getElementById('cfgEndereco').value.trim();
-    
-    const hasTermosFields = document.getElementById('cfgTermoGarantia') !== null;
+    const termoGarantia = document.getElementById('cfgTermoGarantia') ? document.getElementById('cfgTermoGarantia').value : '';
+    const termoTroca = document.getElementById('cfgTermoTroca') ? document.getElementById('cfgTermoTroca').value : '';
     
     const updateData = {
         nome_fantasia: nome,
         razao_social: razao,
         cnpj: cnpj,
         telefone: tel,
-        endereco: endereco
+        endereco: endereco,
+        termo_garantia: termoGarantia,
+        termo_troca: termoTroca
     };
     
-    if (hasTermosFields) {
-        updateData.termo_garantia = document.getElementById('cfgTermoGarantia').value;
-        updateData.termo_troca = document.getElementById('cfgTermoTroca').value;
-    }
-    
     try {
-        const { error: errConfig } = await supabaseClient
+        const { error: errConfig } = await client
             .from('config_loja')
             .update(updateData)
             .eq('loja_id', usuario.loja_id);
             
         if (errConfig) throw errConfig;
         
-        const { error: errLoja } = await supabaseClient
+        const { error: errLoja } = await client
             .from('lojas')
             .update({ nome: nome })
             .eq('id', usuario.loja_id);
@@ -661,17 +678,9 @@ async function salvarConfigLojaMaster() {
         
         usuario.loja_nome = nome;
         usuario.config_loja = {
-            ...usuario.config_loja,
-            nome_fantasia: nome,
-            razao_social: razao,
-            cnpj: cnpj,
-            telefone: tel,
-            endereco: endereco
+            ...(usuario.config_loja || {}),
+            ...updateData
         };
-        if (hasTermosFields) {
-            usuario.config_loja.termo_garantia = updateData.termo_garantia;
-            usuario.config_loja.termo_troca = updateData.termo_troca;
-        }
         sessionStorage.setItem('usuario', JSON.stringify(usuario));
         
         mostrarNotificacao('Dados da empresa atualizados com sucesso!', 'success');
@@ -683,7 +692,7 @@ async function salvarConfigLojaMaster() {
         
     } catch (e) {
         console.error('Erro ao salvar configurações:', e);
-        mostrarNotificacao('Erro ao salvar configurações', 'error');
+        mostrarNotificacao('Erro ao salvar configurações: ' + (e.message || e), 'error');
         btn.disabled = false;
         btn.textContent = 'Salvar';
     }

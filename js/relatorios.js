@@ -1758,31 +1758,41 @@ async function carregarRelatorioDespesas() {
         if (dataInicio) qDesp = qDesp.gte('data', dataInicio);
         if (dataFim) qDesp = qDesp.lte('data', dataFim);
         
-        // 2. Consultar boletos pendentes no período
+        // 2. Consultar boletos pendentes da tabela boletos_pagar
         let qBoletos = supabaseClient
             .from('boletos_pagar')
-            .select('*, clientes:fornecedor_id(nome), entradas(observacao)')
+            .select('*, clientes:fornecedor_id(nome), entradas(id, data, total, observacao)')
             .eq('confirmado', false);
-        if (dataInicio) qBoletos = qBoletos.gte('data_vencimento', dataInicio);
-        if (dataFim) qBoletos = qBoletos.lte('data_vencimento', dataFim);
 
-        // 3. Consultar saídas (faturamento) no período para o comparativo
+        // 3. Consultar saídas (faturamento e comissões) no período para o comparativo
         let qSaidas = supabaseClient
             .from('saidas')
-            .select('id, data, total, cancelado')
+            .select('id, data, total, cancelado, colaborador_id, comissao_calculada, comissao_paga')
             .eq('cancelado', false);
         if (dataInicio) qSaidas = qSaidas.gte('data', dataInicio);
         if (dataFim) qSaidas = qSaidas.lte('data', dataFim);
 
-        const [despRes, boletosRes, saidasRes] = await Promise.all([
+        // 4. Consultar colaboradores para vincular nomes e taxas de comissão
+        let qColabs = supabaseClient
+            .from('colaboradores')
+            .select('id, nome, sobrenome, comissao');
+
+        const [despRes, boletosRes, saidasRes, colabsRes] = await Promise.all([
             qDesp.order('data', { ascending: false }),
             qBoletos.order('data_vencimento', { ascending: false }),
-            qSaidas
+            qSaidas,
+            qColabs
         ]);
 
         const despesasRaw = despRes.data || [];
         const boletosPendentesRaw = boletosRes.data || [];
         const saidasRaw = saidasRes.data || [];
+        const colabsRaw = colabsRes.data || [];
+
+        const colabMap = {};
+        colabsRaw.forEach(c => {
+            colabMap[c.id] = c;
+        });
 
         // Faturamento Total no período
         const totalFaturamento = saidasRaw.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
@@ -1811,21 +1821,72 @@ async function carregarRelatorioDespesas() {
 
         // Adicionar boletos pendentes da tabela boletos_pagar que ainda não viraram despesa
         boletosPendentesRaw.forEach(b => {
+            const dataEntrada = b.entradas?.data ? b.entradas.data.split('T')[0] : (b.created_at ? (typeof b.created_at === 'string' ? b.created_at.split('T')[0] : new Date(b.created_at).toISOString().split('T')[0]) : null);
+            const dataVenc = b.data_vencimento ? (typeof b.data_vencimento === 'string' ? b.data_vencimento.split('T')[0] : new Date(b.data_vencimento).toISOString().split('T')[0]) : null;
+
+            // O boleto é relevante ao período se a compra/entrada foi no período OU se vence no período OU se venceu até dataFim e continua pendente
+            let pertenceAoPeriodo = true;
+            if (dataInicio && dataFim) {
+                pertenceAoPeriodo = (dataEntrada && dataEntrada >= dataInicio && dataEntrada <= dataFim) ||
+                                    (dataVenc && dataVenc >= dataInicio && dataVenc <= dataFim) ||
+                                    (dataVenc && dataVenc <= dataFim);
+            } else if (dataInicio) {
+                pertenceAoPeriodo = (dataEntrada && dataEntrada >= dataInicio) || (dataVenc && dataVenc >= dataInicio);
+            } else if (dataFim) {
+                pertenceAoPeriodo = (dataEntrada && dataEntrada <= dataFim) || (dataVenc && dataVenc <= dataFim);
+            }
+
+            if (!pertenceAoPeriodo) return;
+
             let numNota = '-';
             if (b.entradas?.observacao) {
                 const match = b.entradas.observacao.match(/Nota:\s*([^\s|]+)/);
                 if (match) numNota = match[1];
             }
+            const vencFmt = dataVenc ? dataVenc.split('-').reverse().join('/') : '-';
+            const dataRef = dataEntrada || dataVenc || new Date().toISOString().split('T')[0];
+
             todasDespesas.push({
                 id: `boleto-${b.id}`,
                 origemId: b.id,
                 tipo: 'boleto',
                 tipoLabel: '📄 Boleto Fornecedor',
                 tipoBadge: 'badge-origem-boleto',
-                descricao: `Boleto a Pagar - Fornecedor: ${b.clientes?.nome || 'Fornecedor'}${numNota !== '-' ? ' | Nota: #' + numNota : ''}`,
+                descricao: `Boleto a Pagar - Fornecedor: ${b.clientes?.nome || 'Fornecedor'}${numNota !== '-' ? ' | Nota: #' + numNota : ''} (Venc: ${vencFmt})`,
                 categoria: 'Boleto Fornecedor',
                 valor: Number(b.valor) || 0,
-                data: b.data_vencimento,
+                data: dataRef,
+                status: 'pendente'
+            });
+        });
+
+        // Adicionar comissões geradas de vendas com colaboradores que estão pendentes
+        const vendasComComissaoPend = saidasRaw.filter(s => s.colaborador_id && s.comissao_paga !== true && !s.cancelado);
+        vendasComComissaoPend.forEach(s => {
+            const colab = colabMap[s.colaborador_id];
+            let valorComissao = 0;
+            if (s.comissao_calculada !== undefined && s.comissao_calculada !== null && parseFloat(s.comissao_calculada) >= 0) {
+                valorComissao = parseFloat(s.comissao_calculada);
+            } else if (colab && colab.comissao) {
+                const pct = parseFloat(colab.comissao || 0) / 100;
+                valorComissao = (Number(s.total) || 0) * pct;
+            }
+
+            if (valorComissao <= 0) return;
+
+            const colabNome = colab ? `${colab.nome} ${colab.sobrenome || ''}`.trim() : 'Colaborador';
+            const dataVenda = s.data ? (typeof s.data === 'string' ? s.data.split('T')[0] : new Date(s.data).toISOString().split('T')[0]) : (new Date().toISOString().split('T')[0]);
+
+            todasDespesas.push({
+                id: `comissao-${s.id}`,
+                origemId: s.id,
+                tipo: 'funcionario',
+                tipoLabel: '👥 Funcionários',
+                tipoBadge: 'badge-origem-funcionario',
+                descricao: `Comissão a Pagar - ${colabNome} (Venda #${s.id})`,
+                categoria: 'Comissão Vendedor',
+                valor: valorComissao,
+                data: dataVenda,
                 status: 'pendente'
             });
         });
@@ -1850,6 +1911,9 @@ async function carregarRelatorioDespesas() {
         let totalBoletos = 0;
         let totalAvulsas = 0;
 
+        let totalBoletosPendentes = 0;
+        let totalComissoesPendentes = 0;
+
         const categoriasValores = {};
 
         despesasFiltradas.forEach(d => {
@@ -1858,6 +1922,8 @@ async function carregarRelatorioDespesas() {
                 totalDespesasPagas += d.valor;
             } else {
                 totalDespesasPendentes += d.valor;
+                if (d.tipo === 'boleto') totalBoletosPendentes += d.valor;
+                if (d.tipo === 'funcionario') totalComissoesPendentes += d.valor;
             }
 
             if (d.tipo === 'funcionario') totalFuncionarios += d.valor;
@@ -1920,6 +1986,8 @@ async function carregarRelatorioDespesas() {
             totalAvulsas,
             totalDespesasPagas,
             totalDespesasPendentes,
+            totalBoletosPendentes,
+            totalComissoesPendentes,
             totalDespesasGeral,
             saldoRealizado,
             saldoProjetado,
@@ -1948,6 +2016,8 @@ async function carregarRelatorioDespesas() {
             totalFaturamento,
             totalDespesasPagas,
             totalDespesasPendentes,
+            totalBoletosPendentes,
+            totalComissoesPendentes,
             totalDespesasGeral,
             saldoRealizado,
             margemRealizada,
@@ -1971,7 +2041,7 @@ function renderizarDreResumo(dados) {
     const container = document.getElementById('dreResumoContainer');
     if (!container) return;
 
-    const { totalFaturamento, totalFuncionarios, totalBoletos, totalAvulsas, totalDespesasPagas, totalDespesasPendentes, saldoRealizado, saldoProjetado, margemRealizada, comprometimento, fmtMoeda } = dados;
+    const { totalFaturamento, totalFuncionarios, totalBoletos, totalAvulsas, totalDespesasPagas, totalDespesasPendentes, totalBoletosPendentes, totalComissoesPendentes, saldoRealizado, saldoProjetado, margemRealizada, comprometimento, fmtMoeda } = dados;
 
     container.innerHTML = `
         <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);">
@@ -1995,7 +2065,7 @@ function renderizarDreResumo(dados) {
                         <span style="color: #4338ca; font-weight: 600;">${fmtMoeda(totalFuncionarios)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
-                        <span><span style="color: #b45309;">(-) Boletos Pagos / Fornecedores:</span></span>
+                        <span><span style="color: #b45309;">(-) Boletos / Fornecedores:</span></span>
                         <span style="color: #b45309; font-weight: 600;">${fmtMoeda(totalBoletos)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
@@ -2017,6 +2087,12 @@ function renderizarDreResumo(dados) {
                         <span><span style="color: #d97706;">(-) Obrigações Pendentes (A Pagar):</span></span>
                         <span style="color: #d97706; font-weight: 600;">${fmtMoeda(totalDespesasPendentes)}</span>
                     </div>
+                    ${(totalBoletosPendentes > 0 || totalComissoesPendentes > 0) ? `
+                    <div style="display: flex; justify-content: space-between; padding: 3px 6px; margin: 3px 0; background: #fffbeb; border-radius: 4px; font-size: 11px; color: #92400e; border: 1px dashed #fde68a;">
+                        <span>• Boletos a Pagar: <strong>${fmtMoeda(totalBoletosPendentes)}</strong></span>
+                        <span>• Comissões Pendentes: <strong>${fmtMoeda(totalComissoesPendentes)}</strong></span>
+                    </div>
+                    ` : ''}
                     <div style="display: flex; justify-content: space-between; padding: 4px 0; background: #f8fafc; border-radius: 4px; padding-left: 6px; padding-right: 6px;">
                         <span><strong style="color: #0f172a;">(=) Saldo Final Projetado:</strong></span>
                         <strong style="color: #0f172a;">${fmtMoeda(saldoProjetado)}</strong>
@@ -2346,6 +2422,8 @@ function exportarExcel(tipo) {
                 ['Faturamento Total (Vendas no Período)', `R$ ${despExp.totalFaturamento.toFixed(2)}`],
                 ['Despesas Pagas (Quitadas)', `R$ ${despExp.totalDespesasPagas.toFixed(2)}`],
                 ['Despesas Pendentes (A Pagar)', `R$ ${despExp.totalDespesasPendentes.toFixed(2)}`],
+                ['  • Boletos de Fornecedores a Pagar', `R$ ${(despExp.totalBoletosPendentes || 0).toFixed(2)}`],
+                ['  • Comissões de Vendedores Pendentes', `R$ ${(despExp.totalComissoesPendentes || 0).toFixed(2)}`],
                 ['Total Geral de Despesas', `R$ ${despExp.totalDespesasGeral.toFixed(2)}`],
                 ['Resultado Operacional Líquido Realizado', `R$ ${despExp.saldoRealizado.toFixed(2)}`],
                 ['Margem Líquida Realizada', `${despExp.margemRealizada.toFixed(2)}%`],

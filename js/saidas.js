@@ -2759,8 +2759,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- TERMOS DE GARANTIA E TROCAS -->
                     <div style="border-top:1px solid #000;padding-top:10px;font-size:13px;line-height:1.4;text-align:left;">
                         <p style="margin:4px 0;font-weight:bold;text-align:center;">GARANTIA DOS PRODUTOS</p>
-                        ${(usuario.config_loja && usuario.config_loja.termo_garantia) ? `
-                            <div style="white-space: pre-wrap; margin-top: 4px;">${usuario.config_loja.termo_garantia}</div>
+                        ${((loja && loja.termo_garantia) || (usuario.config_loja && usuario.config_loja.termo_garantia)) ? `
+                            <div style="white-space: pre-wrap; margin-top: 4px;">${loja?.termo_garantia || usuario.config_loja?.termo_garantia}</div>
                         ` : `
                             <br>
                             <p style="margin:2px 0;font-weight:bold;">1 ANO PARA:</p>
@@ -2780,8 +2780,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <br>
                         <p style="margin:4px 0;font-weight:bold;text-align:center;">POLITICA DE TROCAS</p>
-                        ${(usuario.config_loja && usuario.config_loja.termo_troca) ? `
-                            <div style="white-space: pre-wrap; text-align: justify; margin-top: 4px;">${usuario.config_loja.termo_troca}</div>
+                        ${((loja && loja.termo_troca) || (usuario.config_loja && usuario.config_loja.termo_troca)) ? `
+                            <div style="white-space: pre-wrap; text-align: justify; margin-top: 4px;">${loja?.termo_troca || usuario.config_loja?.termo_troca}</div>
                         ` : `
                             <br>
                             <p style="margin:2px 0;text-align:justify;">O prazo de troca dos produtos é de 7 dias úteis para qualquer defeito funcional, após esse prazo, procure um posto autorizado do fabricante, norma que se aplica aos produtos APPLE, SANSUNG, DELL, ACER, LENOVO, HP, LG, MOTOROLA</p>

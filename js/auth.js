@@ -148,6 +148,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const targetClientId = matchedClient?.clientId || window.ENV?.clientId || window.ENV?.CLIENT_ID || 'cliente03';
                 const targetLojaNome = matchedClient?.companyName || userData.loja_nome || window.ENV?.COMPANY_NAME || 'MarceloMotos';
 
+                // Buscar dados completos de config_loja se não estiverem presentes em userData
+                let dbConfigLoja = (userData.config_loja && typeof userData.config_loja === 'object') ? userData.config_loja : {};
+                if (dbConfigLoja.termo_garantia === undefined && userData.loja_id) {
+                    try {
+                        const { data: cfgRow } = await client
+                            .from('config_loja')
+                            .select('*')
+                            .eq('loja_id', userData.loja_id)
+                            .maybeSingle();
+                        if (cfgRow) {
+                            dbConfigLoja = { ...dbConfigLoja, ...cfgRow };
+                        }
+                    } catch (e) {
+                        console.warn('Não foi possível obter config_loja adicional no login:', e);
+                    }
+                }
+
+                const clientFeatures = matchedClient?.features || window.ENV?.FEATURES || {};
+
                 // Salvar sessão com todas as informações (incluindo dados do tenant/loja e configurações)
                 const usuarioLogado = {
                     id: userData.id,
@@ -162,13 +181,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     loja_segmento: userData.loja_segmento || 'geral',
                     clientId: targetClientId,
                     cliente_id: targetClientId,
-                    config_loja: Object.assign({
+                    config_loja: {
                         habilitar_seriais: true,
                         habilitar_agendamentos: true,
                         habilitar_mesas: true,
                         habilitar_lotes: true,
-                        habilitar_variacoes: false
-                    }, matchedClient?.features || window.ENV?.FEATURES || userData.config_loja || {})
+                        habilitar_variacoes: false,
+                        ...dbConfigLoja,
+                        ...clientFeatures
+                    }
                 };
                 
                 sessionStorage.setItem('usuario', JSON.stringify(usuarioLogado));
