@@ -1312,7 +1312,16 @@ document.addEventListener('DOMContentLoaded', () => {
             observacao: `Status alterado de "${statusAnterior}" para "${novoStatus}"`
         };
 
-        const historicoAtual = Array.isArray(a.historico) ? a.historico : [];
+        let historicoAtual = [];
+        if (Array.isArray(a.historico)) {
+            historicoAtual = [...a.historico];
+        } else if (typeof a.historico === 'string') {
+            try {
+                historicoAtual = JSON.parse(a.historico) || [];
+            } catch (_) {
+                historicoAtual = [];
+            }
+        }
         historicoAtual.push(novoRegistroHistorico);
 
         try {
@@ -1349,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Erro ao transicionar status:', error);
-            mostrarNotificacao('Erro ao alterar status do atendimento', 'error');
+            mostrarNotificacao(`Erro ao alterar status do atendimento: ${error.message || error.detail || ''}`, 'error');
         }
     };
 
@@ -1366,7 +1375,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     .single();
 
                 if (pData) {
-                    const novoEstoque = Math.max(0, (Number(pData.estoque_total) || 0) - Number(item.quantidade));
+                    const estoqueAnt = Number(pData.estoque_total) || 0;
+                    const qtdBaixa = Number(item.quantidade) || 0;
+                    const novoEstoque = Math.max(0, estoqueAnt - qtdBaixa);
                     await supabaseClient
                         .from('produtos')
                         .update({ estoque_total: novoEstoque })
@@ -1379,10 +1390,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             loja_id: usuario.loja_id || 1,
                             produto_id: item.id,
                             tipo: 'saida',
-                            quantidade: Number(item.quantidade),
-                            origem: `Agendamento #${agendamentoId}`,
-                            observacao: 'Baixa automática por conclusão de atendimento',
-                            data_movimento: new Date().toISOString()
+                            quantidade: qtdBaixa,
+                            quantidade_anterior: estoqueAnt,
+                            quantidade_nova: novoEstoque,
+                            motivo: `Agendamento #${agendamentoId}`,
+                            data: new Date().toISOString(),
+                            usuario_id: usuario.id || null
                         }]);
                 }
             }
@@ -1464,13 +1477,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!a) return;
 
         const cliente = clientes.find(c => c.id === a.cliente_id);
+
+        let servicosList = Array.isArray(a.servicos) ? a.servicos : [];
+        if (servicosList.length === 0 && a.servico_id) {
+            const servProd = servicos.find(s => s.id === a.servico_id) || produtos.find(p => p.id === a.servico_id);
+            servicosList = [{
+                id: a.servico_id,
+                nome: servProd?.nome || 'Serviço Agendado',
+                codigo: servProd?.codigo || `SRV-${a.servico_id}`,
+                valor: Number(a.valor || 0),
+                duracao_minutos: a.duracao_minutos || 60
+            }];
+        }
+
+        const produtosList = Array.isArray(a.produtos) ? a.produtos : [];
+        const primeiroServico = servicosList[0] || {};
+
         sessionStorage.setItem('checkout_agendamento', JSON.stringify({
             agendamento_id: a.id,
             cliente_id: a.cliente_id,
             cliente_nome: cliente?.nome || 'Cliente Agendamento',
-            servicos: a.servicos || [],
-            produtos: a.produtos || [],
-            total: a.total || a.valor || 0,
+            servicos: servicosList,
+            produtos: produtosList,
+            servico_id: primeiroServico.id || a.servico_id || null,
+            servico_nome: primeiroServico.nome || 'Serviço do Agendamento',
+            codigo: primeiroServico.codigo || (primeiroServico.id ? `SRV-${primeiroServico.id}` : 'SRV-01'),
+            valor: Number(a.total || a.valor || 0),
+            desconto: Number(a.desconto || 0),
+            total: Number(a.total || a.valor || 0),
             profissional_id: a.profissional_id
         }));
 

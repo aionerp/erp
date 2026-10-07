@@ -883,8 +883,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checkoutAgendamentoStr) {
                 try {
                     const checkout = JSON.parse(checkoutAgendamentoStr);
-                    const valorAgend = parseFloat(checkout.valor || 0);
-                    mostrarNotificacao(`Carregando agendamento: ${checkout.servico_nome} - R$ ${valorAgend.toFixed(2)}`, 'info');
                     
                     const obsField = document.getElementById('observacao');
                     if (obsField) {
@@ -897,30 +895,101 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (cliente) {
                             document.getElementById('clienteId').value = cliente.id;
                             document.getElementById('searchCliente').value = cliente.nome;
-                            document.getElementById('clienteSelecionado').innerHTML = `
-                                <div class="selected-customer-card" style="margin-top: 10px; padding: 12px; background: var(--light); border-radius: 8px; border-left: 4px solid var(--primary);">
-                                    👤 <strong>${cliente.nome}</strong><br>
-                                    📞 ${cliente.telefone || 'Sem telefone'}
-                                </div>
-                            `;
+                            const clienteSelecionadoEl = document.getElementById('clienteSelecionado');
+                            if (clienteSelecionadoEl) {
+                                clienteSelecionadoEl.innerHTML = `
+                                    <div class="selected-customer-card" style="margin-top: 10px; padding: 12px; background: var(--light); border-radius: 8px; border-left: 4px solid var(--primary);">
+                                        👤 <strong>${cliente.nome}</strong><br>
+                                        📞 ${cliente.telefone || 'Sem telefone'}
+                                    </div>
+                                `;
+                            }
                         }
                     }
 
-                    // Carrega o serviço no carrinho
-                    carrinho = [{
-                        id: checkout.servico_id,
-                        nome: checkout.servico_nome,
-                        codigo: checkout.codigo,
-                        categoria: 'Serviço',
-                        valor_venda: checkout.valor,
-                        quantidade: 1,
-                        subtotal: checkout.valor,
-                        serial: null,
-                        imei: null
-                    }];
-                    
+                    // Montar carrinho com serviços e produtos do agendamento
+                    const novoCarrinho = [];
+
+                    // 1. Serviços
+                    if (Array.isArray(checkout.servicos) && checkout.servicos.length > 0) {
+                        checkout.servicos.forEach(s => {
+                            const val = parseFloat(s.valor || 0);
+                            const qtd = parseInt(s.quantidade || 1);
+                            novoCarrinho.push({
+                                id: s.id || null,
+                                nome: s.nome || 'Serviço Agendado',
+                                codigo: s.codigo || (s.id ? `SRV-${s.id}` : 'SRV'),
+                                categoria: 'Serviço',
+                                tipo: 'servico',
+                                valor_venda: val,
+                                quantidade: qtd,
+                                desconto: 0,
+                                desconto_unitario: 0,
+                                acrescimo: 0,
+                                subtotal: val * qtd,
+                                serial: null,
+                                imei: null
+                            });
+                        });
+                    }
+
+                    // 2. Produtos
+                    if (Array.isArray(checkout.produtos) && checkout.produtos.length > 0) {
+                        checkout.produtos.forEach(p => {
+                            const val = parseFloat(p.valor_unitario || p.valor || 0);
+                            const qtd = parseFloat(p.quantidade || 1);
+                            const totalItem = parseFloat(p.total || (val * qtd));
+                            novoCarrinho.push({
+                                id: p.id || null,
+                                nome: p.nome || 'Produto Utilizado',
+                                codigo: p.codigo || (p.id ? `PROD-${p.id}` : 'PROD'),
+                                categoria: p.categoria || 'Produto',
+                                tipo: 'produto',
+                                valor_venda: val,
+                                quantidade: qtd,
+                                desconto: 0,
+                                desconto_unitario: 0,
+                                acrescimo: 0,
+                                subtotal: totalItem,
+                                serial: null,
+                                imei: null
+                            });
+                        });
+                    }
+
+                    // Se não tiver serviços nem produtos em lista, faz fallback para o item legado
+                    if (novoCarrinho.length === 0 && (checkout.servico_nome || checkout.valor)) {
+                        const val = parseFloat(checkout.valor || 0);
+                        novoCarrinho.push({
+                            id: checkout.servico_id || null,
+                            nome: checkout.servico_nome || 'Serviço Agendado',
+                            codigo: checkout.codigo || (checkout.servico_id ? `SRV-${checkout.servico_id}` : 'SRV-01'),
+                            categoria: 'Serviço',
+                            tipo: 'servico',
+                            valor_venda: val,
+                            quantidade: 1,
+                            desconto: 0,
+                            desconto_unitario: 0,
+                            acrescimo: 0,
+                            subtotal: val,
+                            serial: null,
+                            imei: null
+                        });
+                    }
+
+                    carrinho = novoCarrinho;
+
+                    // Aplicar desconto do agendamento se houver
+                    const descVal = parseFloat(checkout.desconto || 0);
+                    const inputDesconto = document.getElementById('desconto');
+                    if (inputDesconto && descVal > 0) {
+                        inputDesconto.value = descVal.toFixed(2);
+                    }
+
                     renderizarCarrinho();
                     calcularTotais();
+
+                    mostrarNotificacao(`Agendamento #${checkout.agendamento_id} carregado no PDV com ${carrinho.length} item(ns)!`, 'info');
                 } catch (e) {
                     console.error('Erro ao processar checkout_agendamento:', e);
                 }
@@ -2271,9 +2340,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checkoutAgendamentoStr) {
                 try {
                     const checkout = JSON.parse(checkoutAgendamentoStr);
+                    const timestampAgora = new Date().toISOString();
                     await supabaseClient
                         .from('agendamentos')
-                        .update({ status: 'concluido' })
+                        .update({
+                            status: 'concluido',
+                            status_pagamento: 'pago',
+                            forma_pagamento: formaPagamento,
+                            valor_pago: total,
+                            valor_pendente: 0,
+                            updated_at: timestampAgora
+                        })
                         .eq('id', checkout.agendamento_id);
                     sessionStorage.removeItem('checkout_agendamento');
                 } catch (e) {

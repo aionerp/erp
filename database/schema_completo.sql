@@ -375,6 +375,8 @@ CREATE TABLE public.movimentos_estoque (
     produto_id INTEGER NOT NULL REFERENCES public.produtos(id) ON DELETE CASCADE,
     tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('entrada', 'saida', 'ajuste', 'devolucao')),
     quantidade INTEGER NOT NULL,
+    quantidade_anterior INTEGER DEFAULT 0,
+    quantidade_nova INTEGER DEFAULT 0,
     motivo TEXT,
     data TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL
@@ -417,7 +419,7 @@ CREATE TABLE public.agendamentos (
     data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
     data_hora_fim TIMESTAMP WITH TIME ZONE,
     duracao_minutos INTEGER DEFAULT 60,
-    status VARCHAR(50) DEFAULT 'agendado',
+    status VARCHAR(50) DEFAULT 'agendado' CHECK (status IN ('agendado', 'confirmado', 'em_atendimento', 'concluido', 'cancelado', 'nao_compareceu')),
     valor NUMERIC(10, 2) DEFAULT 0.00,
     subtotal NUMERIC(10, 2) DEFAULT 0.00,
     desconto NUMERIC(10, 2) DEFAULT 0.00,
