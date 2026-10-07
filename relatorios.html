@@ -231,6 +231,59 @@
             flex-wrap: wrap;
         }
         
+        .badge-status-pago {
+            background: #d4edda;
+            color: #155724;
+            padding: 3px 9px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .badge-status-pendente {
+            background: #fff3cd;
+            color: #856404;
+            padding: 3px 9px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .badge-origem-avulsa {
+            background: #f1f5f9;
+            color: #334155;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            border: 1px solid #cbd5e1;
+        }
+
+        .badge-origem-boleto {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            border: 1px solid #fde68a;
+        }
+
+        .badge-origem-funcionario {
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            border: 1px solid #c7d2fe;
+        }
+
         @media print {
             .btn-export, .btn-pdf, .btn-excel, .filtros-relatorio {
                 display: none !important;
@@ -311,6 +364,11 @@
                         <h3>Produtos com Desconto</h3>
                         <p>Descontos concedidos e ações promocionais</p>
                     </div>
+                    <div class="card-relatorio" onclick="abrirAba('despesas')" style="border-left-color: #EF4444;">
+                        <div class="icon">💸</div>
+                        <h3>Despesas & Comparativo</h3>
+                        <p>Avulsas, boletos, colaboradores e comparativo x faturamento</p>
+                    </div>
                 </div>
                 
                 <!-- Abas de Relatórios -->
@@ -318,6 +376,7 @@
                     <button class="tab-btn active" data-tab="dashboard" onclick="abrirAba('dashboard')">📊 Dashboard</button>
                     <button class="tab-btn" data-tab="movimento" onclick="abrirAba('movimento')">📋 Movimento Diário</button>
                     <button class="tab-btn" data-tab="faturamento" onclick="abrirAba('faturamento')">💰 Faturamento</button>
+                    <button class="tab-btn" data-tab="despesas" onclick="abrirAba('despesas')">💸 Despesas & Comparativo</button>
                     <button class="tab-btn" data-tab="vendas" onclick="abrirAba('vendas')">📦 Vendas por Produto</button>
                     <button class="tab-btn" data-tab="colaborador" onclick="abrirAba('colaborador')">👥 Comissões</button>
                     <button class="tab-btn" data-tab="lucro" onclick="abrirAba('lucro')">📈 Ganho X Custo</button>
@@ -589,6 +648,125 @@
                         <!-- Container Tabela 2: Produtos em Campanhas -->
                         <div id="descontosProdutosCampanhasContainer" style="display: none;">
                             <div style="text-align: center; padding: 20px;">Carregando produtos em campanhas...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Despesas & Comparativo Financeiro -->
+                <div id="tab-despesas" class="tab-content">
+                    <div class="relatorio-container">
+                        <div class="relatorio-header">
+                            <h2>💸 Relatório de Despesas & Comparativo Financeiro <span class="ajuda-btn" data-help-id="despesas_relatorio" title="Ajuda sobre Despesas">ℹ️</span></h2>
+                            <div class="filtros-relatorio">
+                                <input type="date" id="despesasDataInicio">
+                                <input type="date" id="despesasDataFim">
+                                <select id="filtroTipoDespesa">
+                                    <option value="todos">Todos os Tipos (Avulsa / Boletos / Funcionários)</option>
+                                    <option value="avulsa">🏢 Despesas Avulsas / Fixas</option>
+                                    <option value="boleto">📄 Boletos de Fornecedores</option>
+                                    <option value="funcionario">👥 Funcionários (Salários / Comissões)</option>
+                                </select>
+                                <select id="filtroCategoriaDespesa">
+                                    <option value="todas">Todas as Categorias</option>
+                                    <option value="Aluguel">Aluguel</option>
+                                    <option value="Salários">Salários</option>
+                                    <option value="Comissão Vendedor">Comissão Vendedor</option>
+                                    <option value="Boleto Fornecedor">Boleto Fornecedor</option>
+                                    <option value="Água / Luz / Internet">Água / Luz / Internet</option>
+                                    <option value="Impostos / Taxas">Impostos / Taxas</option>
+                                    <option value="Marketing">Marketing</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                                <select id="filtroStatusDespesa">
+                                    <option value="todos">Todos os Status (Pagas + Pendentes)</option>
+                                    <option value="pago">🟢 Apenas Pagas</option>
+                                    <option value="pendente">🟡 Apenas Pendentes</option>
+                                </select>
+                                <button class="btn-primary" onclick="carregarRelatorioDespesas()">Filtrar</button>
+                                <button class="btn-excel" onclick="exportarExcel('despesas')">📊 Excel</button>
+                                <button class="btn-pdf" onclick="exportarPDF('despesas')">📄 PDF</button>
+                            </div>
+                        </div>
+
+                        <!-- Banner Informativo -->
+                        <div style="background: #eef2f7; border-left: 4px solid var(--info); padding: 14px 16px; border-radius: 8px; margin-bottom: 22px; font-size: 13px; color: var(--dark); line-height: 1.5;">
+                            <strong style="color: var(--primary); display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                                ℹ️ Visão Completa de Despesas & Balanço da Loja
+                            </strong>
+                            <span>
+                                Este relatório consolida <strong>todas as saídas de recursos da sua loja</strong>: despesas avulsas operacionais (aluguel, água, energia, marketing), pagamentos de boletos de fornecedores e custos com funcionários (salários e comissões), permitindo um <strong>comparativo direto com o faturamento de vendas</strong> para identificar o lucro operacional real.
+                            </span>
+                        </div>
+
+                        <!-- KPIs de Despesas & Comparativo -->
+                        <div class="dashboard-kpi" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 22px;">
+                            <div class="kpi-card success" style="border-top: 4px solid #10B981;">
+                                <div class="kpi-icon">💰</div>
+                                <div class="kpi-value" id="kpiRelDesp_Faturamento">R$ 0,00</div>
+                                <div class="kpi-label">Faturamento (Vendas no Período)</div>
+                            </div>
+                            <div class="kpi-card danger" style="border-top: 4px solid #EF4444;">
+                                <div class="kpi-icon">💸</div>
+                                <div class="kpi-value" id="kpiRelDesp_Pagas">R$ 0,00</div>
+                                <div class="kpi-label">Despesas Pagas (Quitadas)</div>
+                            </div>
+                            <div class="kpi-card warning" style="border-top: 4px solid #F59E0B;">
+                                <div class="kpi-icon">📄</div>
+                                <div class="kpi-value" id="kpiRelDesp_Pendentes">R$ 0,00</div>
+                                <div class="kpi-label">Despesas / Boletos Pendentes</div>
+                            </div>
+                            <div class="kpi-card primary" style="border-top: 4px solid var(--primary);">
+                                <div class="kpi-icon">📊</div>
+                                <div class="kpi-value" id="kpiRelDesp_Total">R$ 0,00</div>
+                                <div class="kpi-label">Total Geral de Despesas</div>
+                            </div>
+                            <div class="kpi-card info" id="cardRelDesp_Saldo" style="border-top: 4px solid #2563EB;">
+                                <div class="kpi-icon" id="iconRelDesp_Saldo">⚖️</div>
+                                <div class="kpi-value" id="kpiRelDesp_Saldo">R$ 0,00</div>
+                                <div class="kpi-label" id="labelRelDesp_Saldo">Saldo Operacional Realizado</div>
+                            </div>
+                            <div class="kpi-card warning" style="border-top: 4px solid #8B5CF6;">
+                                <div class="kpi-icon">🎯</div>
+                                <div class="kpi-value" id="kpiRelDesp_Margem">0.0%</div>
+                                <div class="kpi-label">Margem Líquida Realizada</div>
+                            </div>
+                        </div>
+
+                        <!-- Comparativo DRE e Gráficos -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                            <!-- Gráfico 1: Comparativo Faturamento x Despesas -->
+                            <div class="panel-secao" style="padding: 16px; background: #FFFFFF; border-radius: 10px; border: 1px solid var(--border);">
+                                <h3 style="margin-top: 0; font-size: 15px; color: var(--dark); display: flex; align-items: center; gap: 6px;">
+                                    📊 Comparativo: Faturamento x Despesas
+                                </h3>
+                                <div style="position: relative; height: 260px;">
+                                    <canvas id="chartComparativoDespesas"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico 2: Despesas por Classificação/Categoria -->
+                            <div class="panel-secao" style="padding: 16px; background: #FFFFFF; border-radius: 10px; border: 1px solid var(--border);">
+                                <h3 style="margin-top: 0; font-size: 15px; color: var(--dark); display: flex; align-items: center; gap: 6px;">
+                                    🍰 Distribuição por Categoria & Origem
+                                </h3>
+                                <div style="position: relative; height: 260px;">
+                                    <canvas id="chartCategoriasDespesas"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumo DRE Gerencial da Loja -->
+                        <div id="dreResumoContainer" style="margin-bottom: 25px;">
+                            <!-- Renderizado via Javascript -->
+                        </div>
+
+                        <!-- Tabela Detalhada com Todas as Despesas -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 style="margin: 0; font-size: 16px; color: var(--dark);">📋 Detalhamento de Todas as Despesas</h3>
+                            <span id="despesasTotalRegistros" style="font-size: 12px; color: var(--gray); font-weight: 600;">0 registro(s)</span>
+                        </div>
+                        <div id="despesasContainer">
+                            <div style="text-align: center; padding: 25px; color: var(--gray);">Selecione um período e clique em Filtrar para carregar</div>
                         </div>
                     </div>
                 </div>

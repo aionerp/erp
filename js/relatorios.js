@@ -6,6 +6,8 @@ let chartVendasMes = null;
 let chartTopProdutos = null;
 let chartFaturamento = null;
 let chartLucroObj = null;
+let chartComparativoDespesas = null;
+let chartCategoriasDespesas = null;
 
 // Flag para controle de carregamento
 let dadosCarregados = {
@@ -13,7 +15,8 @@ let dadosCarregados = {
     faturamento: false,
     vendas: false,
     lucro: false,
-    descontos: false
+    descontos: false,
+    despesas: false
 };
 
 // Variáveis para armazenar dados brutos para exportação
@@ -22,7 +25,8 @@ let dadosExportacao = {
     faturamento: null,
     vendas: null,
     lucro: null,
-    descontos: null
+    descontos: null,
+    despesas: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -78,7 +82,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('lucroDataFim')) document.getElementById('lucroDataFim').value = hoje;
     if (document.getElementById('descontosDataInicio')) document.getElementById('descontosDataInicio').value = trintaDiasAtrasStr;
     if (document.getElementById('descontosDataFim')) document.getElementById('descontosDataFim').value = hoje;
+    if (document.getElementById('despesasDataInicio')) document.getElementById('despesasDataInicio').value = trintaDiasAtrasStr;
+    if (document.getElementById('despesasDataFim')) document.getElementById('despesasDataFim').value = hoje;
     
+    // Verificar se há aba pré-selecionada via sessionStorage (ex: vindo do Dashboard)
+    const abaPreSelecionada = sessionStorage.getItem('abrir_aba_relatorio');
+    if (abaPreSelecionada) {
+        sessionStorage.removeItem('abrir_aba_relatorio');
+        setTimeout(() => {
+            if (typeof abrirAba === 'function') abrirAba(abaPreSelecionada);
+        }, 100);
+    }
+
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
         carregarDashboard();
@@ -88,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarComissoesColaborador();
         carregarRelatorioLucro();
         carregarRelatorioDescontos();
+        carregarRelatorioDespesas();
     });
 });
 
@@ -1704,6 +1720,441 @@ async function carregarRelatorioDescontos() {
 }
 
 // =====================================================
+// RELATÓRIO DE DESPESAS & COMPARATIVO FINANCEIRO
+// =====================================================
+
+function classificarDespesa(categoria = '', descricao = '') {
+    const c = (categoria || '').toLowerCase();
+    const d = (descricao || '').toLowerCase();
+
+    if (c.includes('salário') || c.includes('salario') || c.includes('comissão') || c.includes('comissao') ||
+        d.includes('comissao') || d.includes('comissão') || d.includes('salario') || d.includes('salário') ||
+        d.includes('vendedor') || d.includes('colaborador') || d.includes('funcionario') || d.includes('funcionário')) {
+        return { tipo: 'funcionario', label: '👥 Funcionários', badgeClass: 'badge-origem-funcionario' };
+    }
+    
+    if (c.includes('boleto') || d.includes('boleto') || d.includes('fornecedor') || d.includes('pagamento do boleto')) {
+        return { tipo: 'boleto', label: '📄 Boleto Fornecedor', badgeClass: 'badge-origem-boleto' };
+    }
+    
+    return { tipo: 'avulsa', label: '🏢 Despesa Avulsa', badgeClass: 'badge-origem-avulsa' };
+}
+
+async function carregarRelatorioDespesas() {
+    const dataInicio = document.getElementById('despesasDataInicio')?.value;
+    const dataFim = document.getElementById('despesasDataFim')?.value;
+    const filtroTipo = document.getElementById('filtroTipoDespesa')?.value || 'todos';
+    const filtroCategoria = document.getElementById('filtroCategoriaDespesa')?.value || 'todas';
+    const filtroStatus = document.getElementById('filtroStatusDespesa')?.value || 'todos';
+
+    const container = document.getElementById('despesasContainer');
+    if (container) {
+        container.innerHTML = '<div style="text-align: center; padding: 30px; color: var(--gray);">Carregando despesas e balanço financeiro...</div>';
+    }
+
+    try {
+        // 1. Consultar despesas no período
+        let qDesp = supabaseClient.from('despesas').select('*');
+        if (dataInicio) qDesp = qDesp.gte('data', dataInicio);
+        if (dataFim) qDesp = qDesp.lte('data', dataFim);
+        
+        // 2. Consultar boletos pendentes no período
+        let qBoletos = supabaseClient
+            .from('boletos_pagar')
+            .select('*, clientes:fornecedor_id(nome), entradas(observacao)')
+            .eq('confirmado', false);
+        if (dataInicio) qBoletos = qBoletos.gte('data_vencimento', dataInicio);
+        if (dataFim) qBoletos = qBoletos.lte('data_vencimento', dataFim);
+
+        // 3. Consultar saídas (faturamento) no período para o comparativo
+        let qSaidas = supabaseClient
+            .from('saidas')
+            .select('id, data, total, cancelado')
+            .eq('cancelado', false);
+        if (dataInicio) qSaidas = qSaidas.gte('data', dataInicio);
+        if (dataFim) qSaidas = qSaidas.lte('data', dataFim);
+
+        const [despRes, boletosRes, saidasRes] = await Promise.all([
+            qDesp.order('data', { ascending: false }),
+            qBoletos.order('data_vencimento', { ascending: false }),
+            qSaidas
+        ]);
+
+        const despesasRaw = despRes.data || [];
+        const boletosPendentesRaw = boletosRes.data || [];
+        const saidasRaw = saidasRes.data || [];
+
+        // Faturamento Total no período
+        const totalFaturamento = saidasRaw.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+
+        // Normalizar e unificar despesas
+        const todasDespesas = [];
+
+        // Adicionar despesas da tabela despesas
+        despesasRaw.forEach(d => {
+            const cat = d.categoria || 'Outros';
+            const desc = d.descricao || '';
+            const tipoInfo = classificarDespesa(cat, desc);
+            todasDespesas.push({
+                id: d.id,
+                origemId: d.id,
+                tipo: tipoInfo.tipo,
+                tipoLabel: tipoInfo.label,
+                tipoBadge: tipoInfo.badgeClass,
+                descricao: desc,
+                categoria: cat,
+                valor: Number(d.valor) || 0,
+                data: d.data,
+                status: d.status || 'pago'
+            });
+        });
+
+        // Adicionar boletos pendentes da tabela boletos_pagar que ainda não viraram despesa
+        boletosPendentesRaw.forEach(b => {
+            let numNota = '-';
+            if (b.entradas?.observacao) {
+                const match = b.entradas.observacao.match(/Nota:\s*([^\s|]+)/);
+                if (match) numNota = match[1];
+            }
+            todasDespesas.push({
+                id: `boleto-${b.id}`,
+                origemId: b.id,
+                tipo: 'boleto',
+                tipoLabel: '📄 Boleto Fornecedor',
+                tipoBadge: 'badge-origem-boleto',
+                descricao: `Boleto a Pagar - Fornecedor: ${b.clientes?.nome || 'Fornecedor'}${numNota !== '-' ? ' | Nota: #' + numNota : ''}`,
+                categoria: 'Boleto Fornecedor',
+                valor: Number(b.valor) || 0,
+                data: b.data_vencimento,
+                status: 'pendente'
+            });
+        });
+
+        // Ordenar por data decrescente
+        todasDespesas.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+        // Filtrar de acordo com os filtros selecionados
+        const despesasFiltradas = todasDespesas.filter(d => {
+            const matchTipo = filtroTipo === 'todos' || d.tipo === filtroTipo;
+            const matchCat = filtroCategoria === 'todas' || d.categoria === filtroCategoria;
+            const matchStatus = filtroStatus === 'todos' || d.status === filtroStatus;
+            return matchTipo && matchCat && matchStatus;
+        });
+
+        // Totais e cálculos financeiros
+        let totalDespesasPagas = 0;
+        let totalDespesasPendentes = 0;
+        let totalDespesasGeral = 0;
+
+        let totalFuncionarios = 0;
+        let totalBoletos = 0;
+        let totalAvulsas = 0;
+
+        const categoriasValores = {};
+
+        despesasFiltradas.forEach(d => {
+            totalDespesasGeral += d.valor;
+            if (d.status === 'pago') {
+                totalDespesasPagas += d.valor;
+            } else {
+                totalDespesasPendentes += d.valor;
+            }
+
+            if (d.tipo === 'funcionario') totalFuncionarios += d.valor;
+            else if (d.tipo === 'boleto') totalBoletos += d.valor;
+            else totalAvulsas += d.valor;
+
+            categoriasValores[d.categoria] = (categoriasValores[d.categoria] || 0) + d.valor;
+        });
+
+        // Cálculos comparativos
+        const saldoRealizado = totalFaturamento - totalDespesasPagas;
+        const saldoProjetado = totalFaturamento - totalDespesasGeral;
+        const margemRealizada = totalFaturamento > 0 ? (saldoRealizado / totalFaturamento) * 100 : 0;
+        const comprometimento = totalFaturamento > 0 ? (totalDespesasGeral / totalFaturamento) * 100 : 0;
+
+        // Atualizar KPIs
+        const fmtMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+        const elFat = document.getElementById('kpiRelDesp_Faturamento');
+        const elPagas = document.getElementById('kpiRelDesp_Pagas');
+        const elPend = document.getElementById('kpiRelDesp_Pendentes');
+        const elTotal = document.getElementById('kpiRelDesp_Total');
+
+        if (elFat) elFat.textContent = fmtMoeda(totalFaturamento);
+        if (elPagas) elPagas.textContent = fmtMoeda(totalDespesasPagas);
+        if (elPend) elPend.textContent = fmtMoeda(totalDespesasPendentes);
+        if (elTotal) elTotal.textContent = fmtMoeda(totalDespesasGeral);
+        
+        const elSaldo = document.getElementById('kpiRelDesp_Saldo');
+        const cardSaldo = document.getElementById('cardRelDesp_Saldo');
+        const iconSaldo = document.getElementById('iconRelDesp_Saldo');
+        const labelSaldo = document.getElementById('labelRelDesp_Saldo');
+        
+        if (elSaldo) {
+            elSaldo.textContent = fmtMoeda(saldoRealizado);
+            if (saldoRealizado >= 0) {
+                elSaldo.style.color = '#10B981';
+                if (cardSaldo) cardSaldo.style.borderTopColor = '#10B981';
+                if (iconSaldo) iconSaldo.textContent = '📈';
+                if (labelSaldo) labelSaldo.textContent = 'Saldo Operacional (Lucro Realizado)';
+            } else {
+                elSaldo.style.color = '#EF4444';
+                if (cardSaldo) cardSaldo.style.borderTopColor = '#EF4444';
+                if (iconSaldo) iconSaldo.textContent = '📉';
+                if (labelSaldo) labelSaldo.textContent = 'Déficit Operacional Realizado';
+            }
+        }
+
+        const elMargem = document.getElementById('kpiRelDesp_Margem');
+        if (elMargem) {
+            elMargem.textContent = `${margemRealizada.toFixed(1)}%`;
+            elMargem.style.color = margemRealizada >= 0 ? '#10B981' : '#EF4444';
+        }
+
+        // Renderizar Resumo DRE Gerencial
+        renderizarDreResumo({
+            totalFaturamento,
+            totalFuncionarios,
+            totalBoletos,
+            totalAvulsas,
+            totalDespesasPagas,
+            totalDespesasPendentes,
+            totalDespesasGeral,
+            saldoRealizado,
+            saldoProjetado,
+            margemRealizada,
+            comprometimento,
+            fmtMoeda
+        });
+
+        // Renderizar Gráficos Comparativos
+        renderizarGraficosDespesas(totalFaturamento, totalDespesasPagas, totalDespesasPendentes, saldoRealizado, categoriasValores, fmtMoeda);
+
+        // Renderizar Tabela Detalhada
+        renderizarTabelaDespesasRelatorio(despesasFiltradas, totalDespesasPagas, totalDespesasPendentes, totalDespesasGeral, fmtMoeda);
+
+        // Atualizar contador
+        const elReg = document.getElementById('despesasTotalRegistros');
+        if (elReg) elReg.textContent = `${despesasFiltradas.length} registro(s) encontrado(s)`;
+
+        // Salvar dados para exportação
+        dadosExportacao.despesas = {
+            dataInicio,
+            dataFim,
+            filtroTipo,
+            filtroCategoria,
+            filtroStatus,
+            totalFaturamento,
+            totalDespesasPagas,
+            totalDespesasPendentes,
+            totalDespesasGeral,
+            saldoRealizado,
+            margemRealizada,
+            totalFuncionarios,
+            totalBoletos,
+            totalAvulsas,
+            itens: despesasFiltradas
+        };
+        dadosCarregados.despesas = true;
+
+    } catch (error) {
+        console.error('Erro ao carregar relatório de despesas:', error);
+        mostrarNotificacao('Erro ao carregar relatório de despesas!', 'error');
+        if (container) {
+            container.innerHTML = '<div style="text-align: center; padding: 30px; color: #dc3545;">Erro ao carregar dados de despesas. Tente novamente.</div>';
+        }
+    }
+}
+
+function renderizarDreResumo(dados) {
+    const container = document.getElementById('dreResumoContainer');
+    if (!container) return;
+
+    const { totalFaturamento, totalFuncionarios, totalBoletos, totalAvulsas, totalDespesasPagas, totalDespesasPendentes, saldoRealizado, saldoProjetado, margemRealizada, comprometimento, fmtMoeda } = dados;
+
+    container.innerHTML = `
+        <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 15px; color: var(--dark); border-bottom: none; padding-bottom: 0;">
+                    📑 DRE Gerencial Sintético (Demonstrativo do Resultado no Período)
+                </h4>
+                <span style="font-size: 12px; color: var(--gray); font-weight: 600;">
+                    Comprometimento das Despesas: <strong style="color: ${comprometimento > 60 ? '#dc2626' : '#059669'};">${comprometimento.toFixed(1)}%</strong>
+                </span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; font-size: 13px;">
+                <div style="line-height: 2.1;">
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><strong style="color: #059669;">(+) Faturamento Bruto de Vendas:</strong></span>
+                        <strong style="color: #059669;">${fmtMoeda(totalFaturamento)}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><span style="color: #4338ca;">(-) Funcionários (Salários & Comissões):</span></span>
+                        <span style="color: #4338ca; font-weight: 600;">${fmtMoeda(totalFuncionarios)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><span style="color: #b45309;">(-) Boletos Pagos / Fornecedores:</span></span>
+                        <span style="color: #b45309; font-weight: 600;">${fmtMoeda(totalBoletos)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><span style="color: #dc2626;">(-) Despesas Avulsas / Operacionais:</span></span>
+                        <span style="color: #dc2626; font-weight: 600;">${fmtMoeda(totalAvulsas)}</span>
+                    </div>
+                </div>
+
+                <div style="line-height: 2.1;">
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><strong style="color: #dc2626;">(=) Total Despesas Realizadas (Pagas):</strong></span>
+                        <strong style="color: #dc2626;">${fmtMoeda(totalDespesasPagas)}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0; background: ${saldoRealizado >= 0 ? '#f0fdf4' : '#fef2f2'}; border-radius: 4px; padding-left: 6px; padding-right: 6px;">
+                        <span><strong style="color: ${saldoRealizado >= 0 ? '#15803d' : '#b91c1c'};">(=) Resultado Líquido Realizado:</strong></span>
+                        <strong style="color: ${saldoRealizado >= 0 ? '#15803d' : '#b91c1c'};">${fmtMoeda(saldoRealizado)} (${margemRealizada.toFixed(1)}%)</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 4px 0;">
+                        <span><span style="color: #d97706;">(-) Obrigações Pendentes (A Pagar):</span></span>
+                        <span style="color: #d97706; font-weight: 600;">${fmtMoeda(totalDespesasPendentes)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; background: #f8fafc; border-radius: 4px; padding-left: 6px; padding-right: 6px;">
+                        <span><strong style="color: #0f172a;">(=) Saldo Final Projetado:</strong></span>
+                        <strong style="color: #0f172a;">${fmtMoeda(saldoProjetado)}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderizarGraficosDespesas(faturamento, pagas, pendentes, saldoRealizado, categoriasValores, fmtMoeda) {
+    // 1. Gráfico Comparativo: Faturamento x Despesas Pagas x Despesas Pendentes x Saldo
+    const ctxComp = document.getElementById('chartComparativoDespesas')?.getContext('2d');
+    if (ctxComp) {
+        if (chartComparativoDespesas) chartComparativoDespesas.destroy();
+        chartComparativoDespesas = new Chart(ctxComp, {
+            type: 'bar',
+            data: {
+                labels: ['Faturamento (Vendas)', 'Despesas Pagas', 'Despesas Pendentes', 'Resultado Líquido'],
+                datasets: [{
+                    label: 'Valor (R$)',
+                    data: [faturamento, pagas, pendentes, saldoRealizado],
+                    backgroundColor: ['#10B981', '#EF4444', '#F59E0B', (saldoRealizado >= 0 ? '#2563EB' : '#DC2626')],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.label}: ${fmtMoeda(ctx.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: v => 'R$ ' + Number(v).toFixed(0) }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Gráfico de Rosca: Categorias de Despesas
+    const ctxCat = document.getElementById('chartCategoriasDespesas')?.getContext('2d');
+    if (ctxCat) {
+        if (chartCategoriasDespesas) chartCategoriasDespesas.destroy();
+        const catLabels = Object.keys(categoriasValores);
+        const catData = Object.values(categoriasValores);
+
+        const coresPaleta = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6', '#64748B'];
+
+        chartCategoriasDespesas = new Chart(ctxCat, {
+            type: 'doughnut',
+            data: {
+                labels: catLabels.length > 0 ? catLabels : ['Nenhuma Despesa'],
+                datasets: [{
+                    data: catData.length > 0 ? catData : [0],
+                    backgroundColor: coresPaleta.slice(0, Math.max(catLabels.length, 1))
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 12, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.label}: ${fmtMoeda(ctx.parsed)}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function renderizarTabelaDespesasRelatorio(itens, totalPagas, totalPendentes, totalGeral, fmtMoeda) {
+    const container = document.getElementById('despesasContainer');
+    if (!container) return;
+
+    if (itens.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 35px; color: var(--gray);">Nenhuma despesa encontrada para os filtros selecionados.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table-relatorio">
+            <thead>
+                <tr>
+                    <th style="width: 105px;">Data</th>
+                    <th>Descrição / Motivo</th>
+                    <th>Categoria</th>
+                    <th style="text-align: center; width: 165px;">Classificação / Origem</th>
+                    <th style="text-align: center; width: 110px;">Status</th>
+                    <th style="text-align: right; width: 130px;">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itens.map(item => {
+                    const dataFmt = item.data ? item.data.split('-').reverse().join('/') : '-';
+                    const isPago = item.status === 'pago';
+                    const statusBadge = isPago
+                        ? '<span class="badge-status-pago">🟢 Pago</span>'
+                        : '<span class="badge-status-pendente">🟡 Pendente</span>';
+                    
+                    return `
+                        <tr>
+                            <td><strong>${dataFmt}</strong></td>
+                            <td>${item.descricao || '-'}</td>
+                            <td>${item.categoria || 'Outros'}</td>
+                            <td style="text-align: center;"><span class="${item.tipoBadge}">${item.tipoLabel}</span></td>
+                            <td style="text-align: center;">${statusBadge}</td>
+                            <td style="text-align: right; font-weight: 700; color: ${isPago ? '#111827' : '#d97706'};">${fmtMoeda(item.valor)}</td>
+                        </tr>
+                    `;
+                }).join('')}
+                <tr class="total-row" style="background: #f8fafc; font-weight: 700;">
+                    <td colspan="3"><strong>RESUMO DOS TOTAIS</strong></td>
+                    <td style="text-align: center; color: #155724;">Pagas: ${fmtMoeda(totalPagas)}</td>
+                    <td style="text-align: center; color: #856404;">Pendentes: ${fmtMoeda(totalPendentes)}</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 14px;">Total: ${fmtMoeda(totalGeral)}</td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = html;
+}
+
+// =====================================================
 // EXPORTAÇÕES
 // =====================================================
 
@@ -1879,6 +2330,47 @@ function exportarExcel(tipo) {
             dados.push(['TOTAL', '', '', '', descData.totalQtd, '', '', `R$ ${descData.totalDescontos.toFixed(2)}`, '', `R$ ${descData.totalSubtotal.toFixed(2)}`, '', '']);
             nomeArquivo = `relatorio_descontos_promocoes_${new Date().toISOString().split('T')[0]}`;
             break;
+
+        case 'despesas':
+            if (!dadosCarregados.despesas || !dadosExportacao.despesas) {
+                mostrarNotificacao('Carregue o relatório de despesas primeiro!', 'warning');
+                return;
+            }
+            const despExp = dadosExportacao.despesas;
+            dados = [
+                ['RELATÓRIO DE DESPESAS & COMPARATIVO FINANCEIRO'],
+                [`Período: ${formatarDataISO(despExp.dataInicio) || 'Início'} a ${formatarDataISO(despExp.dataFim) || 'Fim'}`],
+                [`Filtros: Tipo: ${despExp.filtroTipo} | Categoria: ${despExp.filtroCategoria} | Status: ${despExp.filtroStatus}`],
+                [''],
+                ['BALANÇO COMPARATIVO FINANCEIRO'],
+                ['Faturamento Total (Vendas no Período)', `R$ ${despExp.totalFaturamento.toFixed(2)}`],
+                ['Despesas Pagas (Quitadas)', `R$ ${despExp.totalDespesasPagas.toFixed(2)}`],
+                ['Despesas Pendentes (A Pagar)', `R$ ${despExp.totalDespesasPendentes.toFixed(2)}`],
+                ['Total Geral de Despesas', `R$ ${despExp.totalDespesasGeral.toFixed(2)}`],
+                ['Resultado Operacional Líquido Realizado', `R$ ${despExp.saldoRealizado.toFixed(2)}`],
+                ['Margem Líquida Realizada', `${despExp.margemRealizada.toFixed(2)}%`],
+                [''],
+                ['DESPESAS POR CLASSIFICAÇÃO'],
+                ['Funcionários (Salários / Comissões)', `R$ ${despExp.totalFuncionarios.toFixed(2)}`],
+                ['Boletos de Fornecedores', `R$ ${despExp.totalBoletos.toFixed(2)}`],
+                ['Despesas Avulsas / Operacionais', `R$ ${despExp.totalAvulsas.toFixed(2)}`],
+                [''],
+                ['DETALHAMENTO DAS DESPESAS'],
+                ['Data', 'Descrição', 'Categoria', 'Classificação / Origem', 'Status', 'Valor (R$)']
+            ];
+            despExp.itens.forEach(item => {
+                dados.push([
+                    formatarDataISO(item.data),
+                    `"${(item.descricao || '').replace(/"/g, '""')}"`,
+                    item.categoria || '-',
+                    item.tipoLabel || '-',
+                    item.status === 'pago' ? 'Pago' : 'Pendente',
+                    `R$ ${item.valor.toFixed(2)}`
+                ]);
+            });
+            dados.push(['TOTAL GERAL', '', '', '', '', `R$ ${despExp.totalDespesasGeral.toFixed(2)}`]);
+            nomeArquivo = `relatorio_despesas_comparativo_${new Date().toISOString().split('T')[0]}`;
+            break;
             
         default:
             mostrarNotificacao('Tipo de exportação inválido', 'error');
@@ -1995,6 +2487,29 @@ function exportarPDF(tipo) {
                 const dData = dadosExportacao.descontos;
                 subtitulo = `Período: ${formatarDataISO(dData?.dataInicio) || 'Início'} a ${formatarDataISO(dData?.dataFim) || 'Fim'} | Origem: ${dData?.origemFiltro || 'Todas'}`;
             }
+            break;
+
+        case 'despesas':
+            if (!dadosCarregados.despesas) {
+                mostrarNotificacao('Carregue o relatório de despesas primeiro!', 'warning');
+                return;
+            }
+            const dreHtml = document.getElementById('dreResumoContainer')?.innerHTML || '';
+            const tabelaHtml = document.getElementById('despesasContainer')?.innerHTML || '';
+            container = {
+                innerHTML: `
+                    <div style="margin-bottom: 20px;">
+                        ${dreHtml}
+                    </div>
+                    <div>
+                        <h4 style="margin: 15px 0 10px 0; font-size: 14px;">Detalhamento de Todas as Despesas</h4>
+                        ${tabelaHtml}
+                    </div>
+                `
+            };
+            titulo = 'Relatório de Despesas & Balanço Financeiro';
+            const dExp = dadosExportacao.despesas;
+            subtitulo = `Período: ${formatarDataISO(dExp?.dataInicio) || 'Início'} a ${formatarDataISO(dExp?.dataFim) || 'Fim'} | Faturamento: R$ ${(dExp?.totalFaturamento || 0).toFixed(2)} | Despesas: R$ ${(dExp?.totalDespesasGeral || 0).toFixed(2)} | Saldo: R$ ${(dExp?.saldoRealizado || 0).toFixed(2)}`;
             break;
 
         default:
@@ -2275,6 +2790,7 @@ window.carregarFaturamento = carregarFaturamento;
 window.carregarVendasProduto = carregarVendasProduto;
 window.carregarRelatorioLucro = carregarRelatorioLucro;
 window.carregarRelatorioDescontos = carregarRelatorioDescontos;
+window.carregarRelatorioDespesas = carregarRelatorioDespesas;
 window.alternarVisaoDesconto = alternarVisaoDesconto;
 window.exportarExcel = exportarExcel;
 window.exportarPDF = exportarPDF;

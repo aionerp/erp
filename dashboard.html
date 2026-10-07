@@ -53,21 +53,27 @@
             color: var(--gray);
         }
 
-        /* ── GRID DE METRICAS (4 Cards como no modelo) ── */
+        /* ── GRID DE METRICAS (Cards com Faturamento, Despesas e Saldo) ── */
         .dashboard-metrics-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 20px;
             margin-bottom: 28px;
         }
 
-        @media (max-width: 1200px) {
+        @media (min-width: 1400px) {
             .dashboard-metrics-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(6, 1fr);
             }
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 1200px) and (min-width: 768px) {
+            .dashboard-metrics-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 767px) {
             .dashboard-metrics-grid {
                 grid-template-columns: 1fr;
             }
@@ -124,6 +130,28 @@
         .metric-icon-gray {
             background: #F1F5F9;
             color: #64748B;
+        }
+
+        .metric-icon-danger {
+            background: #FEE2E2;
+            color: #DC2626;
+        }
+
+        .metric-icon-success {
+            background: #D1FAE5;
+            color: #059669;
+        }
+
+        .metric-icon-info {
+            background: #DBEAFE;
+            color: #2563EB;
+        }
+
+        .metric-subtext {
+            font-size: 11.5px;
+            margin-top: 6px;
+            color: #64748B;
+            font-weight: 500;
         }
 
         .metric-value {
@@ -442,7 +470,7 @@
                 </div>
             </div>
 
-            <!-- ── Grid de Métricas (4 Cards Exatos do Modelo) ── -->
+            <!-- ── Grid de Métricas (Faturamento, Despesas e Saldo da Loja) ── -->
             <div class="dashboard-metrics-grid">
                 <!-- Card 1: Faturamento Diário -->
                 <div class="metric-card">
@@ -451,42 +479,131 @@
                         <div class="metric-icon-circle metric-icon-gold">$</div>
                     </div>
                     <div class="metric-value" id="kpiVendasHoje">R$ 0,00</div>
+                    <div class="metric-subtext">Vendas de hoje</div>
                 </div>
 
-                <!-- Card 2: Ticket Médio -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">Ticket Médio</span>
-                        <div class="metric-icon-circle metric-icon-gray">📚</div>
-                    </div>
-                    <div class="metric-value" id="kpiTicketMedio">R$ 0,00</div>
-                </div>
-
-                <!-- Card 3: Clientes Ativos -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">Clientes Ativos</span>
-                        <div class="metric-icon-circle metric-icon-gray">👥</div>
-                    </div>
-                    <div class="metric-value" id="kpiTotalClientes">0</div>
-                </div>
-
-                <!-- Card 4: Faturamento Mensal -->
+                <!-- Card 2: Faturamento Mensal -->
                 <div class="metric-card">
                     <div class="metric-header">
                         <span class="metric-title">Faturamento Mensal</span>
                         <div class="metric-icon-circle metric-icon-gold">📄</div>
                     </div>
                     <div class="metric-value" id="kpiVendasMes">R$ 0,00</div>
+                    <div class="metric-subtext">Mês atual</div>
+                </div>
+
+                <!-- Card 3: Despesas do Mês -->
+                <div class="metric-card" style="border-bottom: 3px solid #EF4444;">
+                    <div class="metric-header">
+                        <span class="metric-title">Despesas (Mês)</span>
+                        <div class="metric-icon-circle metric-icon-danger">💸</div>
+                    </div>
+                    <div class="metric-value" id="kpiDespesasMes" style="color: #DC2626;">R$ 0,00</div>
+                    <div class="metric-subtext" id="kpiDespesasMesSub">Pagas: R$ 0,00 | Pend: R$ 0,00</div>
+                </div>
+
+                <!-- Card 4: Saldo / Lucro Líquido do Mês -->
+                <div class="metric-card" id="cardSaldoMes" style="border-bottom: 3px solid #10B981;">
+                    <div class="metric-header">
+                        <span class="metric-title">Resultado Líquido (Mês)</span>
+                        <div class="metric-icon-circle metric-icon-success" id="iconSaldoMes">📈</div>
+                    </div>
+                    <div class="metric-value" id="kpiSaldoMes" style="color: #059669;">R$ 0,00</div>
+                    <div class="metric-subtext" id="kpiSaldoMesSub">Margem Líquida: 0.0%</div>
+                </div>
+
+                <!-- Card 5: Ticket Médio -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Ticket Médio</span>
+                        <div class="metric-icon-circle metric-icon-gray">📚</div>
+                    </div>
+                    <div class="metric-value" id="kpiTicketMedio">R$ 0,00</div>
+                    <div class="metric-subtext">Média por venda</div>
+                </div>
+
+                <!-- Card 6: Clientes Ativos -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Clientes Ativos</span>
+                        <div class="metric-icon-circle metric-icon-gray">👥</div>
+                    </div>
+                    <div class="metric-value" id="kpiTotalClientes">0</div>
+                    <div class="metric-subtext">Base cadastrada</div>
+                </div>
+            </div>
+
+            <!-- ── Widget Comparativo: Faturamento x Despesas da Loja ── -->
+            <div class="dashboard-finance-widget" style="background: #FFFFFF; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04); margin-bottom: 28px; padding: 22px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;">
+                            ⚖️ Balanço & Comparativo Operacional (Faturamento x Despesas)
+                        </h3>
+                        <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--gray);">
+                            Visão da saúde financeira da loja: vendas realizadas versus despesas fixas, variáveis, boletos e funcionários
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <a href="despesas.html" style="background: #FFFFFF; border: 1px solid var(--border); color: var(--dark); padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                            💸 Gerenciar Despesas
+                        </a>
+                        <a href="relatorios.html" onclick="sessionStorage.setItem('abrir_aba_relatorio', 'despesas')" style="background: var(--primary); color: #FFFFFF; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                            📈 Ver Relatório Completo ➔
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Grid de Indicadores Comparativos -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px;">
+                    <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 14px 16px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #166534; font-weight: 700; letter-spacing: 0.5px;">💰 Faturamento (Vendas)</div>
+                        <div id="dashCompFaturamento" style="font-size: 22px; font-weight: 800; color: #15803D; margin-top: 4px;">R$ 0,00</div>
+                        <small style="color: #166534; font-size: 11px;">Entradas de caixa acumuladas</small>
+                    </div>
+
+                    <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 14px 16px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #991B1B; font-weight: 700; letter-spacing: 0.5px;">💸 Despesas Pagas</div>
+                        <div id="dashCompDespesasPagas" style="font-size: 22px; font-weight: 800; color: #DC2626; margin-top: 4px;">R$ 0,00</div>
+                        <small style="color: #991B1B; font-size: 11px;">Saídas financeiras quitadas</small>
+                    </div>
+
+                    <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 14px 16px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #92400E; font-weight: 700; letter-spacing: 0.5px;">📄 Despesas Pendentes</div>
+                        <div id="dashCompDespesasPendentes" style="font-size: 22px; font-weight: 800; color: #D97706; margin-top: 4px;">R$ 0,00</div>
+                        <small style="color: #92400E; font-size: 11px;">Boletos e contas a pagar</small>
+                    </div>
+
+                    <div id="dashCompSaldoBox" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 14px 16px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #1E40AF; font-weight: 700; letter-spacing: 0.5px;">📊 Saldo Operacional Realizado</div>
+                        <div id="dashCompSaldo" style="font-size: 22px; font-weight: 800; color: #2563EB; margin-top: 4px;">R$ 0,00</div>
+                        <small id="dashCompMargem" style="color: #1E40AF; font-size: 11px; font-weight: 600;">Margem Operacional: 0.0%</small>
+                    </div>
+                </div>
+
+                <!-- Barra Visual de Comprometimento da Receita -->
+                <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12.5px;">
+                        <span style="color: #475569; font-weight: 600;">Índice de Comprometimento das Despesas sobre o Faturamento:</span>
+                        <strong id="dashComprometimentoPercent" style="color: #0F172A; font-size: 13.5px;">0.0%</strong>
+                    </div>
+                    <div style="width: 100%; height: 9px; background: #E2E8F0; border-radius: 5px; overflow: hidden;">
+                        <div id="dashComprometimentoBar" style="height: 100%; width: 0%; background: #EF4444; border-radius: 5px; transition: width 0.6s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--gray);">
+                        <span>🟢 0% - 30% (Excelente)</span>
+                        <span>🟡 31% - 60% (Moderado)</span>
+                        <span>🔴 Acima de 61% (Atenção / Risco)</span>
+                    </div>
                 </div>
             </div>
 
             <!-- ── Grid de Gráficos ── -->
             <div class="dashboard-charts-grid">
-                <!-- Gráfico de Saídas / Faturamento Mensal (Barras Douradas) -->
+                <!-- Gráfico Comparativo: Faturamento x Despesas (Mensal) -->
                 <div class="dashboard-chart-box">
                     <div class="chart-box-header">
-                        <h3>Histórico de Saídas (Mensal)</h3>
+                        <h3>Comparativo Mensal (Faturamento x Despesas)</h3>
                     </div>
                     <div style="position: relative; height: 260px;">
                         <canvas id="chartTotalSaidas"></canvas>

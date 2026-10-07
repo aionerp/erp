@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GLOBALS E ELEMENTOS DO DOM
     // =====================================================
     let vendas = [];
+    let despesas = [];
     let chartSaidasAcumuladas = null;
     let chartMovDiario = null;
 
@@ -126,6 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await Promise.allSettled([
                 carregarTotalClientes(),
                 carregarSaidasDashboard(),
+                carregarDespesasDashboard(),
                 carregarEntradasRecentes(),
                 carregarMonitorRecorrenciasDashboard()
             ]);
@@ -186,7 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Processar métricas e gráficos imediatamente assim que as saídas chegam
-        processarMetricasFaturamento();
+        processarMetricasFinanceiras();
         inicializarGraficoSaidas();
         inicializarGraficoMovimentoDiario();
 
@@ -195,31 +197,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =====================================================
-    // PROCESSAR KPIs (Faturamentos & Ticket Médio)
+    // 3. CARREGAR DESPESAS DO DASHBOARD (DESPESAS E BOLETOS)
     // =====================================================
-    function processarMetricasFaturamento() {
+    async function carregarDespesasDashboard() {
+        try {
+            const dataMinima = new Date();
+            dataMinima.setFullYear(dataMinima.getFullYear() - 1, 0, 1);
+            const dataMinimaStr = dataMinima.toISOString().split('T')[0];
+
+            // 1. Despesas registradas
+            const { data: despesasData, error: errDesp } = await supabaseClient
+                .from('despesas')
+                .select('*')
+                .gte('data', dataMinimaStr)
+                .order('data', { ascending: false });
+
+            // 2. Boletos pendentes em boletos_pagar (para não deixar nenhum boleto de fora)
+            const { data: boletosData, error: errBoletos } = await supabaseClient
+                .from('boletos_pagar')
+                .select('id, data_vencimento, valor, confirmado, clientes:fornecedor_id(nome), entradas(observacao)')
+                .eq('confirmado', false);
+
+            let listaDespesas = (!errDesp && despesasData) ? [...despesasData] : [];
+
+            // Incorporar boletos pendentes caso não estejam duplicados
+            if (!errBoletos && boletosData) {
+                boletosData.forEach(b => {
+                    listaDespesas.push({
+                        id: `boleto-${b.id}`,
+                        descricao: `Boleto a Pagar - ${b.clientes?.nome || 'Fornecedor'}`,
+                        valor: parseFloat(b.valor || 0),
+                        data: b.data_vencimento,
+                        categoria: 'Boleto Fornecedor',
+                        status: 'pendente'
+                    });
+                });
+            }
+
+            despesas = listaDespesas;
+        } catch (e) {
+            console.warn('Erro ao carregar despesas no dashboard:', e);
+            despesas = [];
+        }
+
+        // Atualizar métricas financeiras e gráfico comparativo com dados de despesas
+        processarMetricasFinanceiras();
+        inicializarGraficoSaidas();
+    }
+
+    // =====================================================
+    // PROCESSAR KPIs FINANCEIROS (FATURAMENTO, DESPESAS E SALDO)
+    // =====================================================
+    function processarMetricasFinanceiras() {
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        // Início da semana (Domingo)
         const inicioSemana = new Date();
         inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
         inicioSemana.setHours(0, 0, 0, 0);
 
-        // Início do mês
         const inicioMes = new Date();
         inicioMes.setDate(1);
         inicioMes.setHours(0, 0, 0, 0);
 
-        // Início do ano
         const inicioAno = new Date();
         inicioAno.setMonth(0, 1);
         inicioAno.setHours(0, 0, 0, 0);
 
-        let totalHoje = 0;
-        let totalSemana = 0;
-        let totalMes = 0;
-        let totalAno = 0;
+        // 1. Processar Vendas
+        let totalHojeVendas = 0;
+        let totalSemanaVendas = 0;
+        let totalMesVendas = 0;
+        let totalAnoVendas = 0;
         let somaFaturamentoTotal = 0;
 
         vendas.forEach(v => {
@@ -228,70 +277,179 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             somaFaturamentoTotal += valor;
 
-            if (dataVenda >= hoje) {
-                totalHoje += valor;
-            }
-            if (dataVenda >= inicioSemana) {
-                totalSemana += valor;
-            }
-            if (dataVenda >= inicioMes) {
-                totalMes += valor;
-            }
-            if (dataVenda >= inicioAno) {
-                totalAno += valor;
-            }
+            if (dataVenda >= hoje) totalHojeVendas += valor;
+            if (dataVenda >= inicioSemana) totalSemanaVendas += valor;
+            if (dataVenda >= inicioMes) totalMesVendas += valor;
+            if (dataVenda >= inicioAno) totalAnoVendas += valor;
         });
 
-        // Ticket Médio = Faturamento Total / Quantidade de Vendas Válidas
         const vendasValidas = vendas.filter(v => Number(v.total) > 0);
         const ticketMedio = vendasValidas.length > 0 ? (somaFaturamentoTotal / vendasValidas.length) : 0;
 
-        const elHoje = document.getElementById('kpiVendasHoje');
-        const elSemana = document.getElementById('kpiVendasSemana');
-        const elMes = document.getElementById('kpiVendasMes');
-        const elAno = document.getElementById('kpiVendasAno');
-        const elTicket = document.getElementById('kpiTicketMedio');
+        // 2. Processar Despesas
+        let totalDespesasHoje = 0;
+        let totalDespesasMes = 0;
+        let despesasPagasMes = 0;
+        let despesasPendentesMes = 0;
+        let totalGeralDespesas = 0;
+        let totalDespesasPagasGeral = 0;
+        let totalDespesasPendentesGeral = 0;
 
-        if (elHoje) elHoje.textContent = fmt(totalHoje);
-        if (elSemana) elSemana.textContent = fmt(totalSemana);
-        if (elMes) elMes.textContent = fmt(totalMes);
-        if (elAno) elAno.textContent = fmt(totalAno);
+        despesas.forEach(d => {
+            const valor = Number(d.valor) || 0;
+            const dataDesp = parseDateLocal(d.data);
+            const isPago = d.status === 'pago';
+
+            totalGeralDespesas += valor;
+            if (isPago) totalDespesasPagasGeral += valor;
+            else totalDespesasPendentesGeral += valor;
+
+            if (dataDesp >= hoje) {
+                totalDespesasHoje += valor;
+            }
+            if (dataDesp >= inicioMes) {
+                totalDespesasMes += valor;
+                if (isPago) despesasPagasMes += valor;
+                else despesasPendentesMes += valor;
+            }
+        });
+
+        // 3. Cálculos Comparativos (Mês Atual e Geral)
+        const saldoMes = totalMesVendas - totalDespesasMes;
+        const margemMes = totalMesVendas > 0 ? (saldoMes / totalMesVendas) * 100 : 0;
+
+        const saldoGeralRealizado = somaFaturamentoTotal - totalDespesasPagasGeral;
+        const margemGeral = somaFaturamentoTotal > 0 ? (saldoGeralRealizado / somaFaturamentoTotal) * 100 : 0;
+        const taxaComprometimento = somaFaturamentoTotal > 0 ? (totalGeralDespesas / somaFaturamentoTotal) * 100 : 0;
+
+        // 4. Atualizar Elementos do DOM (Grid de Métricas)
+        const elHoje = document.getElementById('kpiVendasHoje');
+        const elMes = document.getElementById('kpiVendasMes');
+        const elTicket = document.getElementById('kpiTicketMedio');
+        const elDespesasMes = document.getElementById('kpiDespesasMes');
+        const elDespesasMesSub = document.getElementById('kpiDespesasMesSub');
+        const elSaldoMes = document.getElementById('kpiSaldoMes');
+        const elSaldoMesSub = document.getElementById('kpiSaldoMesSub');
+        const cardSaldoMes = document.getElementById('cardSaldoMes');
+        const iconSaldoMes = document.getElementById('iconSaldoMes');
+
+        if (elHoje) elHoje.textContent = fmt(totalHojeVendas);
+        if (elMes) elMes.textContent = fmt(totalMesVendas);
         if (elTicket) elTicket.textContent = fmt(ticketMedio);
+
+        if (elDespesasMes) elDespesasMes.textContent = fmt(totalDespesasMes);
+        if (elDespesasMesSub) {
+            elDespesasMesSub.textContent = `Pagas: ${fmt(despesasPagasMes)} | Pend: ${fmt(despesasPendentesMes)}`;
+        }
+
+        if (elSaldoMes) {
+            elSaldoMes.textContent = fmt(saldoMes);
+            if (saldoMes >= 0) {
+                elSaldoMes.style.color = '#059669';
+                if (cardSaldoMes) cardSaldoMes.style.borderBottomColor = '#10B981';
+                if (iconSaldoMes) {
+                    iconSaldoMes.textContent = '📈';
+                    iconSaldoMes.className = 'metric-icon-circle metric-icon-success';
+                }
+            } else {
+                elSaldoMes.style.color = '#DC2626';
+                if (cardSaldoMes) cardSaldoMes.style.borderBottomColor = '#EF4444';
+                if (iconSaldoMes) {
+                    iconSaldoMes.textContent = '📉';
+                    iconSaldoMes.className = 'metric-icon-circle metric-icon-danger';
+                }
+            }
+        }
+        if (elSaldoMesSub) {
+            elSaldoMesSub.textContent = `Margem Líquida: ${margemMes.toFixed(1)}%`;
+            elSaldoMesSub.style.color = saldoMes >= 0 ? '#059669' : '#DC2626';
+        }
+
+        // 5. Atualizar Elementos do Widget Comparativo
+        const elDashCompFat = document.getElementById('dashCompFaturamento');
+        const elDashCompPagas = document.getElementById('dashCompDespesasPagas');
+        const elDashCompPend = document.getElementById('dashCompDespesasPendentes');
+        const elDashCompSaldo = document.getElementById('dashCompSaldo');
+        const elDashCompMargem = document.getElementById('dashCompMargem');
+        const elDashCompPercent = document.getElementById('dashComprometimentoPercent');
+        const elDashCompBar = document.getElementById('dashComprometimentoBar');
+
+        if (elDashCompFat) elDashCompFat.textContent = fmt(somaFaturamentoTotal);
+        if (elDashCompPagas) elDashCompPagas.textContent = fmt(totalDespesasPagasGeral);
+        if (elDashCompPend) elDashCompPend.textContent = fmt(totalDespesasPendentesGeral);
+        if (elDashCompSaldo) {
+            elDashCompSaldo.textContent = fmt(saldoGeralRealizado);
+            elDashCompSaldo.style.color = saldoGeralRealizado >= 0 ? '#2563EB' : '#DC2626';
+        }
+        if (elDashCompMargem) {
+            elDashCompMargem.textContent = saldoGeralRealizado >= 0
+                ? `Margem Operacional: ${margemGeral.toFixed(1)}%`
+                : `Déficit Operacional: ${margemGeral.toFixed(1)}%`;
+            elDashCompMargem.style.color = saldoGeralRealizado >= 0 ? '#1E40AF' : '#991B1B';
+        }
+
+        if (elDashCompPercent) {
+            elDashCompPercent.textContent = `${taxaComprometimento.toFixed(1)}%`;
+        }
+        if (elDashCompBar) {
+            const barWidth = Math.min(Math.max(taxaComprometimento, 0), 100);
+            elDashCompBar.style.width = `${barWidth}%`;
+            if (taxaComprometimento <= 35) {
+                elDashCompBar.style.backgroundColor = '#10B981'; // Verde
+            } else if (taxaComprometimento <= 65) {
+                elDashCompBar.style.backgroundColor = '#F59E0B'; // Amarelo/Laranja
+            } else {
+                elDashCompBar.style.backgroundColor = '#EF4444'; // Vermelho
+            }
+        }
     }
 
     // =====================================================
-    // RENDERIZAR GRÁFICO 1: HISTÓRICO DE SAÍDAS (MENSAL)
+    // RENDERIZAR GRÁFICO 1: COMPARATIVO MENSAL (FATURAMENTO X DESPESAS)
     // =====================================================
     function inicializarGraficoSaidas() {
         const canvas = document.getElementById('chartTotalSaidas');
         if (!canvas) return;
 
-        // Agrupar faturamento por mês
-        const faturamentoMensal = {};
-        
-        // Ordenar as vendas por data para garantir ordenação cronológica
-        const vendasOrdenadas = [...vendas].sort((a, b) => new Date(a.data) - new Date(b.data));
+        // Agrupar faturamento e despesas por mês
+        const mesesMap = {};
 
-        vendasOrdenadas.forEach(v => {
+        // Mapear vendas
+        vendas.forEach(v => {
             const dataObj = parseDateLocal(v.data);
-            const mesNome = dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-            faturamentoMensal[mesNome] = (faturamentoMensal[mesNome] || 0) + (v.total || 0);
+            const chave = `${dataObj.getFullYear()}-${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
+            const label = dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            if (!mesesMap[chave]) {
+                mesesMap[chave] = { label, faturamento: 0, despesas: 0 };
+            }
+            mesesMap[chave].faturamento += Number(v.total) || 0;
         });
 
-        const labels = Object.keys(faturamentoMensal);
-        const dataValues = Object.values(faturamentoMensal);
+        // Mapear despesas
+        despesas.forEach(d => {
+            const dataObj = parseDateLocal(d.data);
+            const chave = `${dataObj.getFullYear()}-${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
+            const label = dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            if (!mesesMap[chave]) {
+                mesesMap[chave] = { label, faturamento: 0, despesas: 0 };
+            }
+            mesesMap[chave].despesas += Number(d.valor) || 0;
+        });
 
-        // Se não houver dados, exibir placeholder elegante
-        if (labels.length === 0) {
-            const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-            labels.push(mesAtual);
-            dataValues.push(0);
+        const chavesOrdenadas = Object.keys(mesesMap).sort();
+
+        // Se não houver dados, exibir placeholder elegante do mês atual
+        if (chavesOrdenadas.length === 0) {
+            const hoje = new Date();
+            const chaveAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+            const labelAtual = hoje.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            chavesOrdenadas.push(chaveAtual);
+            mesesMap[chaveAtual] = { label: labelAtual, faturamento: 0, despesas: 0 };
         }
 
-        const ctx = canvas.getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, 240);
-        gradient.addColorStop(0, '#EAB308');
-        gradient.addColorStop(1, '#CA8A04');
+        const labels = chavesOrdenadas.map(c => mesesMap[c].label);
+        const dataVendas = chavesOrdenadas.map(c => mesesMap[c].faturamento);
+        const dataDespesas = chavesOrdenadas.map(c => mesesMap[c].despesas);
 
         if (chartSaidasAcumuladas) chartSaidasAcumuladas.destroy();
 
@@ -299,13 +457,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: 'Faturamento Mensal',
-                    data: dataValues,
-                    backgroundColor: gradient,
-                    borderRadius: 8,
-                    borderSkipped: false
-                }]
+                datasets: [
+                    {
+                        label: 'Faturamento (Vendas)',
+                        data: dataVendas,
+                        backgroundColor: '#10B981',
+                        borderRadius: 6,
+                        borderSkipped: false
+                    },
+                    {
+                        label: 'Despesas Totais',
+                        data: dataDespesas,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -316,10 +483,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                     easing: 'easeOutQuart'
                 },
                 plugins: {
-                    legend: { display: false },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: { size: 12, weight: '600' },
+                            padding: 12,
+                            usePointStyle: true
+                        }
+                    },
                     tooltip: {
                         callbacks: {
-                            label: context => ' ' + fmt(context.parsed.y)
+                            label: context => ` ${context.dataset.label}: ${fmt(context.parsed.y)}`,
+                            afterBody: (contextItems) => {
+                                const index = contextItems[0]?.dataIndex;
+                                if (index !== undefined) {
+                                    const fat = dataVendas[index] || 0;
+                                    const desp = dataDespesas[index] || 0;
+                                    const saldo = fat - desp;
+                                    return ` ⚖️ Resultado Líquido: ${fmt(saldo)}`;
+                                }
+                                return '';
+                            }
                         }
                     }
                 },
