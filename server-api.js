@@ -344,7 +344,8 @@ async function handleApiRequest(req, res) {
             }
 
             if (body.action === 'insert') {
-                const rows = Array.isArray(body.values) ? body.values : [body.values];
+                const rawRows = body.values !== undefined ? body.values : body.data;
+                const rows = Array.isArray(rawRows) ? rawRows : (rawRows ? [rawRows] : []);
                 if (rows.length === 0) {
                     sendJson(res, 200, { data: [], error: null });
                     return true;
@@ -380,7 +381,7 @@ async function handleApiRequest(req, res) {
             }
 
             if (body.action === 'update') {
-                const values = body.values || {};
+                const values = body.values !== undefined ? body.values : (body.data || {});
                 const cols = Object.keys(values).filter(c => c !== 'id');
                 const params = cols.map(c => {
                     const val = values[c];

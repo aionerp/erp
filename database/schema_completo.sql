@@ -192,6 +192,7 @@ CREATE TABLE public.produtos (
     estoque_total INTEGER DEFAULT 0,
     estoque_minimo INTEGER DEFAULT 5,
     garantia_dias INTEGER DEFAULT 0,
+    duracao_minutos INTEGER DEFAULT 45,
     imagem TEXT,
     ativo BOOLEAN DEFAULT true,
     ultima_movimentacao TIMESTAMP WITH TIME ZONE,

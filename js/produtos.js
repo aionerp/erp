@@ -640,6 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputComissaoValor = document.getElementById('comissao_valor');
         if (inputComissaoValor) inputComissaoValor.value = produto.comissao_valor || '';
         
+        const inputDuracaoMinutos = document.getElementById('duracao_minutos');
+        if (inputDuracaoMinutos) inputDuracaoMinutos.value = produto.duracao_minutos || 45;
+        
         // Carregar campos de assinatura recorrente
         const chkRecorrente = document.getElementById('is_recorrente');
         if (chkRecorrente) {
@@ -746,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (dadosProduto.tipo === 'servico') {
             dadosProduto.estoque_total = 0;
+            dadosProduto.duracao_minutos = parseInt(document.getElementById('duracao_minutos')?.value) || 45;
             const chkHabilitada = document.getElementById('comissao_habilitada');
             dadosProduto.comissao_habilitada = chkHabilitada ? chkHabilitada.checked : false;
             

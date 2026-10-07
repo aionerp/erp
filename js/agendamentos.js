@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [cliRes, prodRes, colabRes, userRes] = await Promise.all([
                 supabaseClient.from('clientes').select('id, nome, cpf_cnpj, telefone, email').eq('ativo', true).order('nome'),
-                supabaseClient.from('produtos').select('id, nome, codigo, tipo, valor_venda, duracao_minutos, categoria, estoque_total').order('nome'),
+                supabaseClient.from('produtos').select('*').order('nome'),
                 supabaseClient.from('colaboradores').select('id, nome, sobrenome, telefone, funcao, comissao, ativo').order('nome'),
                 supabaseClient.from('usuarios').select('id, nome, perfil').eq('ativo', true).order('nome')
             ]);
@@ -65,8 +65,14 @@ document.addEventListener('DOMContentLoaded', () => {
             clientes = cliRes.data || [];
             
             const todosProdutos = prodRes.data || [];
-            servicosCatalogo = todosProdutos.filter(p => p.tipo === 'servico');
-            produtosCatalogo = todosProdutos.filter(p => p.tipo !== 'servico');
+            const isServico = (p) => {
+                const tipo = (p.tipo || '').toLowerCase().trim();
+                const cat = (p.categoria || '').toLowerCase().trim();
+                return tipo === 'servico' || tipo === 'serviço' || cat.includes('serviço') || cat.includes('servico');
+            };
+            servicosCatalogo = todosProdutos.filter(p => isServico(p));
+            produtosCatalogo = todosProdutos.filter(p => !isServico(p));
+            console.log(`[Agendamentos] Carregados ${servicosCatalogo.length} serviços e ${produtosCatalogo.length} produtos do catálogo.`);
 
             // Profissionais: Colaboradores da loja ou usuários ativos
             const colabs = (colabRes.data || []).filter(c => c.ativo !== false);
@@ -124,8 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
             selectServ.innerHTML = '<option value="">Escolha um serviço para adicionar...</option>' +
                 servicosCatalogo.map(s => {
                     const dur = s.duracao_minutos || 40;
-                    return `<option value="${s.id}" data-nome="${s.nome}" data-valor="${s.valor_venda}" data-duracao="${dur}">
-                        ${s.nome} — ${formatarMoeda(s.valor_venda)} (${dur} min)
+                    const val = Number(s.valor_venda) || 0;
+                    return `<option value="${s.id}" data-nome="${s.nome}" data-valor="${val}" data-duracao="${dur}">
+                        ${s.nome} — ${formatarMoeda(val)} (${dur} min)
                     </option>`;
                 }).join('');
         }
@@ -1680,39 +1687,46 @@ document.addEventListener('DOMContentLoaded', () => {
         const nome = document.getElementById('qsNome').value.trim();
         const valor = parseFloat(document.getElementById('qsValor').value) || 0;
         const duracao = parseInt(document.getElementById('qsDuracao').value) || 45;
-        const categoria = document.getElementById('qsCategoria').value.trim();
+        const categoria = document.getElementById('qsCategoria').value.trim() || 'Serviços';
 
         if (!nome || valor <= 0) {
             mostrarNotificacao('Informe o nome e um valor válido para o serviço!', 'error');
             return;
         }
 
+        const btn = document.getElementById('btnSalvarQuickServico');
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+
         try {
+            const codigoGerado = 'SRV-' + Date.now().toString().slice(-6);
+            const payloadServico = {
+                loja_id: usuario.loja_id || 1,
+                codigo: codigoGerado,
+                nome: nome,
+                tipo: 'servico',
+                categoria: categoria,
+                valor_compra: 0,
+                valor_venda: valor,
+                duracao_minutos: duracao,
+                estoque: 0,
+                estoque_total: 0,
+                ativo: true
+            };
+
             const { data, error } = await supabaseClient
                 .from('produtos')
-                .insert([{
-                    loja_id: usuario.loja_id || 1,
-                    nome: nome,
-                    tipo: 'servico',
-                    valor_venda: valor,
-                    duracao_minutos: duracao,
-                    categoria: categoria || 'Serviços',
-                    ativo: true
-                }])
+                .insert([payloadServico])
                 .select();
 
             if (error) throw error;
-            const novoServ = (data && data[0]) ? data[0] : { id: Date.now(), nome: nome, valor_venda: valor, duracao_minutos: duracao };
+            const novoServ = (data && data[0]) ? data[0] : { id: Date.now(), ...payloadServico };
             servicosCatalogo.push(novoServ);
 
-            // Adicionar ao select do catálogo
+            // Atualizar select do catálogo e selecionar o novo serviço
+            popularSelectsFiltrosEForm();
             const selectServ = document.getElementById('selectAdicionarServico');
             if (selectServ) {
-                const opt = new Option(`${novoServ.nome} — ${formatarMoeda(novoServ.valor_venda)} (${novoServ.duracao_minutos} min)`, novoServ.id);
-                opt.setAttribute('data-nome', novoServ.nome);
-                opt.setAttribute('data-valor', novoServ.valor_venda);
-                opt.setAttribute('data-duracao', novoServ.duracao_minutos);
-                selectServ.add(opt);
                 selectServ.value = novoServ.id;
             }
 
@@ -1721,7 +1735,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (e) {
             console.error('Erro ao cadastrar serviço rápido:', e);
-            mostrarNotificacao('Erro ao cadastrar serviço', 'error');
+            mostrarNotificacao(`Erro ao cadastrar serviço: ${e.message || 'Verifique os dados'}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Salvar Serviço';
         }
     });
 
