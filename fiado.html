@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiado e Contas a Receber - Aion ERP</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="./assets/img/telefone.png">
+    <style>
+        /* ── Estilos Específicos do Módulo Fiado & Contas a Receber ── */
+        .fiado-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .fiado-title h1 {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--dark);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fiado-title p {
+            font-size: 13px;
+            color: var(--gray);
+            margin-top: 4px;
+        }
+
+        .fiado-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* ── Cards de Indicadores Financeiros (KPIs) ── */
+        .kpi-grid-fiado {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .fiado-kpi-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            border-top: 4px solid #CBD5E1;
+            transition: all 0.2s ease;
+        }
+
+        .fiado-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .fiado-kpi-card.devedor { border-top-color: #EF4444; }
+        .fiado-kpi-card.aberto { border-top-color: #F59E0B; }
+        .fiado-kpi-card.aver { border-top-color: #3B82F6; }
+        .fiado-kpi-card.recebido { border-top-color: #10B981; }
+        .fiado-kpi-card.quitadas { border-top-color: #6366F1; }
+        .fiado-kpi-card.vencidas { border-top-color: #DC2626; }
+
+        .fiado-kpi-label {
+            font-size: 12px;
+            color: var(--gray);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .fiado-kpi-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--dark);
+            line-height: 1.2;
+        }
+
+        .fiado-kpi-sub {
+            font-size: 11.5px;
+            color: var(--dust-grey);
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
+        /* ── Abas de Navegação do Módulo ── */
+        .tabs-fiado-container {
+            display: flex;
+            gap: 4px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .tab-fiado-btn {
+            padding: 10px 18px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--gray);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-fiado-btn:hover {
+            color: var(--dark);
+            border-bottom-color: #CBD5E1;
+        }
+
+        .tab-fiado-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--accent);
+            font-weight: 700;
+        }
+
+        .tab-fiado-badge {
+            background: #F1F5F9;
+            color: #475569;
+            padding: 2px 7px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .tab-fiado-btn.active .tab-fiado-badge {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .tab-fiado-content {
+            display: none;
+        }
+
+        .tab-fiado-content.active {
+            display: block;
+        }
+
+        /* ── Barra de Filtros ── */
+        .fiado-filters-bar {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            box-shadow: var(--shadow-xs);
+        }
+
+        .fiado-filters-bar input,
+        .fiado-filters-bar select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12.5px;
+            font-family: var(--font-family);
+            background: #FFFFFF;
+            color: var(--dark);
+            outline: none;
+        }
+
+        .fiado-filters-bar input:focus,
+        .fiado-filters-bar select:focus {
+            border-color: var(--accent);
+        }
+
+        .fiado-search-input {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .periodo-shortcuts {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-periodo-tag {
+            padding: 6px 10px;
+            background: #F8FAFC;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-periodo-tag:hover,
+        .btn-periodo-tag.active {
+            background: #111824;
+            color: #FFFFFF;
+            border-color: #111824;
+        }
+
+        /* ── Badges de Status ── */
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-aberto {
+            background: #FEF3C7;
+            color: #92400E;
+            border: 1px solid #FDE68A;
+        }
+
+        .badge-aver {
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border: 1px solid #BFDBFE;
+        }
+
+        .badge-pago {
+            background: #D1FAE5;
+            color: #065F46;
+            border: 1px solid #A7F3D0;
+        }
+
+        .badge-cancelado {
+            background: #FEE2E2;
+            color: #991B1B;
+            border: 1px solid #FECACA;
+        }
+
+        .badge-vencido {
+            background: #7F1D1D;
+            color: #FFFFFF;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            margin-left: 4px;
+        }
+
+        /* ── Botões de Ação na Tabela ── */
+        .btn-acao-tabela {
+            padding: 5px 9px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-acao-pagar {
+            background: #10B981;
+            color: #FFFFFF;
+        }
+        .btn-acao-pagar:hover { background: #059669; }
+
+        .btn-acao-detalhes {
+            background: #3B82F6;
+            color: #FFFFFF;
+        }
+        .btn-acao-detalhes:hover { background: #2563EB; }
+
+        .btn-acao-dav {
+            background: #111824;
+            color: #FFFFFF;
+        }
+        .btn-acao-dav:hover { background: #1F2937; }
+
+        .btn-acao-estornar {
+            background: #FEE2E2;
+            color: #DC2626;
+            border: 1px solid #FECACA;
+        }
+        .btn-acao-estornar:hover { background: #DC2626; color: #FFFFFF; }
+
+        /* ── Barra de Progresso de Amortização ── */
+        .progress-bar-container {
+            width: 100%;
+            height: 7px;
+            background: #E2E8F0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #3B82F6;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+
+        /* ── Box de Extrato do Cliente ── */
+        .cliente-extrato-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-xs);
+        }
+
+        .cliente-extrato-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .cliente-extrato-item {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .cliente-extrato-item span:first-child {
+            font-size: 11px;
+            color: var(--gray);
+            font-weight: 600;
+            display: block;
+            text-transform: uppercase;
+        }
+
+        .cliente-extrato-item span:last-child {
+            font-size: 18px;
+            color: var(--dark);
+            font-weight: 800;
+            margin-top: 4px;
+            display: block;
+        }
+
+        /* ── Comprovante Térmico / DAV Impressão ── */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #areaImpressaoRecibo, #areaImpressaoRecibo * {
+                visibility: visible;
+            }
+            #areaImpressaoRecibo {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body class="hold-transition">
+    <div class="dashboard">
+
+        <!-- ── Sidebar Oficial ──────────────────────────────── -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Aion ERP</h2>
+                <div class="subtitle">by AionLabs</div>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html"><span class="icon">📊</span> Dashboard</a></li>
+                <li class="nav-section">GERAL</li>
+                <li><a href="produtos.html"><span class="icon">📦</span> Serviços & Produtos</a></li>
+                <li><a href="categorias.html"><span class="icon">🏷️</span> Categorias</a></li>
+                <li><a href="estoque.html"><span class="icon">💾</span> Estoque</a></li>
+                <li><a href="entradas.html"><span class="icon">📥</span> Entradas</a></li>
+                <li><a href="saidas.html"><span class="icon">💳</span> PDV / Vendas</a></li>
+                <li><a href="assinaturas.html"><span class="icon">🔄</span> Serviços Recorrentes</a></li>
+                <li><a href="promocoes.html"><span class="icon">🎯</span> Ações Promocionais</a></li>
+                <li><a href="devolucoes.html"><span class="icon">🔄</span> Devoluções</a></li>
+                <li class="nav-section">FINANCEIRO</li>
+                <li><a href="fiado.html" class="active"><span class="icon">📋</span> Fiado & Receber</a></li>
+                <li><a href="fechamento.html"><span class="icon">💵</span> Fechamento Diário</a></li>
+                <li><a href="despesas.html"><span class="icon">💸</span> Despesas</a></li>
+                <li class="nav-section">CRM</li>
+                <li><a href="clientes.html"><span class="icon">👥</span> Clientes</a></li>
+                <li><a href="fornecedores.html"><span class="icon">🏭</span> Fornecedores</a></li>
+                <li class="nav-section">SISTEMA</li>
+                <li><a href="relatorios.html"><span class="icon">📈</span> Relatórios</a></li>
+                <li><a href="usuarios.html"><span class="icon">👤</span> Usuários</a></li>
+            </ul>
+        </aside>
+
+        <!-- ── Conteúdo Principal ───────────────────────────── -->
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="user-info">
+                    <div class="user-text-block">
+                        <div class="user-greeting" id="userName">Carregando...</div>
+                        <div class="user-subdate" id="userPerfil">Financeiro</div>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn" title="Sair do Sistema">Sair</button>
+                </div>
+            </header>
+
+            <div class="content">
+
+                <!-- ══ CABEÇALHO DO MÓDULO ══ -->
+                <div class="fiado-header">
+                    <div class="fiado-title">
+                        <h1><span>📋</span> Fiado e Contas a Receber</h1>
+                        <p>Gestão unificada de vendas a prazo, crediário, documentos DAV, recebimentos parciais e extrato por cliente</p>
+                    </div>
+                    <div class="fiado-actions">
+                        <button type="button" class="btn-excel" id="btnExportarExcel" title="Exportar dados para Excel">📥 Excel</button>
+                        <button type="button" class="btn-pdf" id="btnExportarPDF" title="Exportar dados para PDF">📄 PDF</button>
+                        <a href="saidas.html" class="btn-primary" style="text-decoration:none; display:flex; align-items:center; gap:6px;">
+                            <span>🛒</span> Nova Venda (PDV)
+                        </a>
+                        <button type="button" class="btn-warning" id="btnRecarregarDados" style="padding: 8px 14px; font-weight:600;" title="Atualizar dados agora">
+                            🔄 Atualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ══ 6 INDICADORES FINANCEIROS NO TOPO (KPIS) ══ -->
+                <div class="kpi-grid-fiado">
+                    <div class="fiado-kpi-card devedor">
+                        <span class="fiado-kpi-label">Saldo Devedor Total</span>
+                        <span class="fiado-kpi-value" id="kpiSaldoDevedorTotal" style="color: #EF4444;">R$ 0,00</span>
+                        <span class="fiado-kpi-sub" id="kpiSubDevedor">A receber no crediário</span>
+                    </div>
+                    <div class="fiado-kpi-card aberto">
+                        <span class="fiado-kpi-label">Contas em Aberto</span>
+                        <span class="fiado-kpi-value" id="kpiContasAberto" style="color: #F59E0B;">0</span>
+                        <span class="fiado-kpi-sub">Sem nenhum pagamento</span>
+                    </div>
+                    <div class="fiado-kpi-card aver">
+                        <span class="fiado-kpi-label">Aver na Conta (Parciais)</span>
+                        <span class="fiado-kpi-value" id="kpiContasAver" style="color: #3B82F6;">0</span>
+                        <span class="fiado-kpi-sub">Com amortização parcial</span>
+                    </div>
+                    <div class="fiado-kpi-card recebido">
+                        <span class="fiado-kpi-label">Recebido no Período</span>
+                        <span class="fiado-kpi-value" id="kpiTotalRecebidoPeriodo" style="color: #10B981;">R$ 0,00</span>
+                        <span class="fiado-kpi-sub" id="kpiSubPeriodo">Filtro ativo</span>
+                    </div>
+                    <div class="fiado-kpi-card quitadas">
+                        <span class="fiado-kpi-label">Contas Quitadas</span>
+                        <span class="fiado-kpi-value" id="kpiContasQuitadas" style="color: #6366F1;">0</span>
+                        <span class="fiado-kpi-sub">Saldo 100% liquidado</span>
+                    </div>
+                    <div class="fiado-kpi-card vencidas">
+                        <span class="fiado-kpi-label">Contas Vencidas</span>
+                        <span class="fiado-kpi-value" id="kpiContasVencidas" style="color: #DC2626;">0</span>
+                        <span class="fiado-kpi-sub" id="kpiValorVencidas">R$ 0,00 em atraso</span>
+                    </div>
+                </div>
+
+                <!-- ══ ABAS DE NAVEGAÇÃO DO MÓDULO (7 OPÇÕES EXIGIDAS) ══ -->
+                <div class="tabs-fiado-container">
+                    <button type="button" class="tab-fiado-btn active" data-tab="tabPainelGeral">
+                        <span>📊</span> Painel Geral <span class="tab-fiado-badge" id="badgeTotalGeral">0</span>
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabContasAberto">
+                        <span>⏳</span> Contas em Aberto <span class="tab-fiado-badge" id="badgeTotalAberto">0</span>
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabAverConta">
+                        <span>⚖️</span> Aver na Conta <span class="tab-fiado-badge" id="badgeTotalAver">0</span>
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabHistoricoPagamentos">
+                        <span>📜</span> Histórico de Pagamentos
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabContasQuitadas">
+                        <span>✅</span> Contas Quitadas <span class="tab-fiado-badge" id="badgeTotalQuitadas">0</span>
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabExtratoCliente">
+                        <span>👤</span> Extrato por Cliente
+                    </button>
+                    <button type="button" class="tab-fiado-btn" data-tab="tabRelatorios">
+                        <span>📈</span> Relatórios Financeiros
+                    </button>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 1: PAINEL GERAL (TODAS AS CONTAS COM FILTROS)
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabPainelGeral" class="tab-fiado-content active">
+                    
+                    <!-- Barra de Filtros Principais -->
+                    <div class="fiado-filters-bar">
+                        <input type="text" id="filtroTexto" class="fiado-search-input" placeholder="🔍 Buscar por cliente, CPF, venda nº ou DAV...">
+                        
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <label style="font-size: 12px; color: var(--gray); font-weight: 600;">Período:</label>
+                            <input type="date" id="filtroDataInicio" title="Data Inicial">
+                            <span style="font-size: 12px; color: var(--gray);">até</span>
+                            <input type="date" id="filtroDataFim" title="Data Final">
+                        </div>
+
+                        <div class="periodo-shortcuts">
+                            <button type="button" class="btn-periodo-tag" data-periodo="hoje">Hoje</button>
+                            <button type="button" class="btn-periodo-tag" data-periodo="7dias">7 Dias</button>
+                            <button type="button" class="btn-periodo-tag active" data-periodo="mes">Mês</button>
+                            <button type="button" class="btn-periodo-tag" data-periodo="todos">Todos</button>
+                        </div>
+
+                        <div>
+                            <select id="filtroStatus">
+                                <option value="todos">Todos os Status</option>
+                                <option value="aberto">Em Aberto</option>
+                                <option value="aver_na_conta">Aver na Conta</option>
+                                <option value="vencidas">Vencidas</option>
+                                <option value="pago">Quitadas</option>
+                                <option value="cancelado">Canceladas / Estornadas</option>
+                            </select>
+                        </div>
+
+                        <button type="button" class="btn-primary" id="btnFiltrar" style="padding: 8px 14px;">Filtrar</button>
+                        <button type="button" class="btn-warning" id="btnLimparFiltros" style="padding: 8px 12px;">Limpar</button>
+                    </div>
+
+                    <!-- Tabela Principal de Contas -->
+                    <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                        <table id="tabelaContasPrincipal">
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Venda</th>
+                                    <th>Cliente / Responsável</th>
+                                    <th>Data Venda</th>
+                                    <th>Vencimento</th>
+                                    <th style="text-align: right;">Valor Original</th>
+                                    <th style="text-align: right;">Total Pago</th>
+                                    <th style="text-align: right;">Saldo Faltante</th>
+                                    <th>Último Pgto</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyContasPrincipal">
+                                <tr><td colspan="11" style="text-align:center; padding:30px; color:var(--gray);">Carregando contas fiadas...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 2: CONTAS EM ABERTO
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabContasAberto" class="tab-fiado-content">
+                    <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; color: #92400E; font-weight: 600;">
+                            ⏳ <strong>Contas em Aberto:</strong> Clientes com compras fiadas sem nenhum pagamento efetuado até o momento.
+                        </span>
+                        <span id="resumoContasAberto" style="font-size: 14px; font-weight: 800; color: #92400E;">0 contas | R$ 0,00</span>
+                    </div>
+
+                    <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Venda</th>
+                                    <th>Cliente / Responsável</th>
+                                    <th>Data Venda</th>
+                                    <th>Vencimento</th>
+                                    <th style="text-align: right;">Valor a Pagar</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyContasAberto">
+                                <tr><td colspan="8" style="text-align:center; padding:30px; color:var(--gray);">Nenhuma conta em aberto localizada.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 3: AVER NA CONTA (PAGAMENTOS PARCIAIS)
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabAverConta" class="tab-fiado-content">
+                    <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; color: #1E40AF; font-weight: 600;">
+                            ⚖️ <strong>Aver na Conta:</strong> Contas com abatimento parcial já confirmado, restando saldo devedor a liquidar.
+                        </span>
+                        <span id="resumoContasAver" style="font-size: 14px; font-weight: 800; color: #1E40AF;">0 contas | Saldo Devedor: R$ 0,00</span>
+                    </div>
+
+                    <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Venda</th>
+                                    <th>Cliente / Responsável</th>
+                                    <th>Data Venda</th>
+                                    <th style="text-align: right;">Valor Original</th>
+                                    <th style="text-align: right;">Já Amortizado</th>
+                                    <th style="text-align: right;">Saldo Restante</th>
+                                    <th style="width: 140px;">Amortização (%)</th>
+                                    <th>Último Pgto</th>
+                                    <th style="text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyContasAver">
+                                <tr><td colspan="10" style="text-align:center; padding:30px; color:var(--gray);">Nenhuma conta com pagamento parcial.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 4: HISTÓRICO DE PAGAMENTOS
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabHistoricoPagamentos" class="tab-fiado-content">
+                    
+                    <div class="fiado-filters-bar">
+                        <input type="text" id="filtroHistoricoTexto" class="fiado-search-input" placeholder="🔍 Buscar no histórico por cliente, recibo, venda...">
+                        <select id="filtroHistoricoOperacao">
+                            <option value="todos">Todas as Operações</option>
+                            <option value="pagamento_inicial">Entrada Inicial</option>
+                            <option value="pagamento_parcial">Pagamento Parcial</option>
+                            <option value="pagamento_final">Quitação Final</option>
+                            <option value="venda_realizada">Venda Realizada</option>
+                            <option value="estorno">Estorno / Reversão</option>
+                        </select>
+                        <select id="filtroHistoricoForma">
+                            <option value="todos">Todas as Formas de Pgto</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Pix">Pix</option>
+                            <option value="Cartão Débito">Cartão Débito</option>
+                            <option value="Cartão Crédito">Cartão Crédito</option>
+                            <option value="Transferência">Transferência</option>
+                        </select>
+                        <button type="button" class="btn-primary" id="btnFiltrarHistorico" style="padding: 8px 14px;">Filtrar</button>
+                    </div>
+
+                    <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                        <table id="tabelaHistoricoPagamentos">
+                            <thead>
+                                <tr>
+                                    <th>Data & Hora</th>
+                                    <th>Recibo / Doc</th>
+                                    <th>Venda Orig.</th>
+                                    <th>Cliente</th>
+                                    <th>Operação</th>
+                                    <th style="text-align: right;">Valor Recebido</th>
+                                    <th>Forma Pagto</th>
+                                    <th style="text-align: right;">Saldo Ant.</th>
+                                    <th style="text-align: right;">Saldo Rest.</th>
+                                    <th>Operador</th>
+                                    <th>Caixa</th>
+                                    <th style="text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyHistoricoPagamentos">
+                                <tr><td colspan="12" style="text-align:center; padding:30px; color:var(--gray);">Carregando histórico financeiro...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 5: CONTAS QUITADAS
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabContasQuitadas" class="tab-fiado-content">
+                    <div style="background: #D1FAE5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; color: #065F46; font-weight: 600;">
+                            ✅ <strong>Contas Quitadas:</strong> Dívidas liquidadas integralmente (saldo devedor igual a R$ 0,00).
+                        </span>
+                        <span id="resumoContasQuitadas" style="font-size: 14px; font-weight: 800; color: #065F46;">0 contas liquidadas</span>
+                    </div>
+
+                    <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Venda</th>
+                                    <th>Cliente / Responsável</th>
+                                    <th>Data Venda</th>
+                                    <th>Data Quitação</th>
+                                    <th style="text-align: right;">Valor Liquidado</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="text-align: center;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyContasQuitadas">
+                                <tr><td colspan="8" style="text-align:center; padding:30px; color:var(--gray);">Nenhuma conta quitada localizada.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 6: EXTRATO POR CLIENTE
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabExtratoCliente" class="tab-fiado-content">
+                    
+                    <div class="fiado-filters-bar">
+                        <div style="flex: 1; min-width: 250px;">
+                            <label style="font-size: 12px; font-weight: 700; color: var(--dark); display: block; margin-bottom: 4px;">Selecione o Cliente para Visualizar Extrato:</label>
+                            <select id="selectClienteExtrato" style="width: 100%;">
+                                <option value="">-- Escolha um cliente --</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn-primary" id="btnImprimirExtratoCliente" style="margin-top: 18px; padding: 8px 16px;" disabled>
+                            🖨️ Imprimir Extrato do Cliente
+                        </button>
+                    </div>
+
+                    <div id="conteudoExtratoCliente" style="display: none;">
+                        <!-- Resumo Consolidado do Cliente -->
+                        <div class="cliente-extrato-card">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <h2 id="extratoClienteNome" style="margin: 0; font-size: 20px; color: var(--dark); font-weight: 800;">Nome do Cliente</h2>
+                                    <p id="extratoClienteDocs" style="margin: 4px 0 0 0; font-size: 13px; color: var(--gray);">CPF: - | Telefone: - | Endereço: -</p>
+                                </div>
+                                <span class="badge-status" id="extratoBadgeSituacao">Status</span>
+                            </div>
+
+                            <div class="cliente-extrato-grid">
+                                <div class="cliente-extrato-item" style="border-left: 4px solid #EF4444;">
+                                    <span>Total Geral Devedor</span>
+                                    <span id="extratoTotalDevedor" style="color: #EF4444;">R$ 0,00</span>
+                                </div>
+                                <div class="cliente-extrato-item" style="border-left: 4px solid #10B981;">
+                                    <span>Total Histórico Pago</span>
+                                    <span id="extratoTotalPago" style="color: #10B981;">R$ 0,00</span>
+                                </div>
+                                <div class="cliente-extrato-item" style="border-left: 4px solid #3B82F6;">
+                                    <span>Total de Vendas a Prazo</span>
+                                    <span id="extratoQtdVendas">0</span>
+                                </div>
+                                <div class="cliente-extrato-item" style="border-left: 4px solid #6366F1;">
+                                    <span>Último Recebimento</span>
+                                    <span id="extratoUltimoRecebimento" style="font-size: 14px; margin-top:8px;">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vendas Fiadas Individuais do Cliente -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 16px; font-weight: 700; color: var(--dark); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <span>📋</span> Vendas Fiadas Realizadas (Rastreabilidade Individual)
+                            </h3>
+                            <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Documento</th>
+                                            <th>Venda Original</th>
+                                            <th>Data da Venda</th>
+                                            <th>Vencimento</th>
+                                            <th style="text-align: right;">Valor Original</th>
+                                            <th style="text-align: right;">Total Pago</th>
+                                            <th style="text-align: right;">Saldo Devedor</th>
+                                            <th style="text-align: center;">Status</th>
+                                            <th style="text-align: center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyExtratoVendas">
+                                        <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--gray);">Carregando vendas do cliente...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Histórico de Pagamentos Efetuados pelo Cliente -->
+                        <div>
+                            <h3 style="font-size: 16px; font-weight: 700; color: var(--dark); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <span>💵</span> Histórico de Amortizações e Quitações
+                            </h3>
+                            <div class="table-container" style="background:#fff; border-radius:10px; border:1px solid var(--border); box-shadow:var(--shadow-xs);">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Data & Hora</th>
+                                            <th>Nº Recibo</th>
+                                            <th>Venda Ref.</th>
+                                            <th>Tipo de Operação</th>
+                                            <th style="text-align: right;">Valor Pago</th>
+                                            <th>Forma de Pagto</th>
+                                            <th style="text-align: right;">Saldo Após Pgto</th>
+                                            <th>Operador</th>
+                                            <th style="text-align: center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyExtratoPagamentos">
+                                        <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--gray);">Nenhum pagamento registrado para este cliente.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="avisoSelecioneCliente" style="text-align: center; padding: 60px 20px; color: var(--gray);">
+                        <span style="font-size: 40px; display: block; margin-bottom: 10px;">👤</span>
+                        <h3 style="font-size: 16px; font-weight: 600; color: var(--dark);">Nenhum cliente selecionado</h3>
+                        <p style="font-size: 13px;">Selecione um cliente no seletor acima para carregar o extrato completo de compras e amortizações.</p>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════
+                     ABA 7: RELATÓRIOS FINANCEIROS
+                ══════════════════════════════════════════════════════════ -->
+                <div id="tabRelatorios" class="tab-fiado-content">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px;">
+                        
+                        <!-- Painel: Top Maiores Devedores -->
+                        <div style="background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-xs);">
+                            <h3 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: var(--dark); display: flex; align-items: center; gap: 6px;">
+                                <span>👥</span> Maiores Clientes Devedores (Top Débito)
+                            </h3>
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Cliente</th>
+                                            <th style="text-align: center;">Qtd Vendas</th>
+                                            <th style="text-align: right;">Total Devedor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyTopDevedores">
+                                        <tr><td colspan="3" style="text-align:center; padding:20px; color:var(--gray);">Carregando ranking...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Painel: Arrecadação por Forma de Pagamento nos Recebimentos -->
+                        <div style="background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-xs);">
+                            <h3 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: var(--dark); display: flex; align-items: center; gap: 6px;">
+                                <span>💳</span> Arrecadação de Fiado por Forma de Pgto
+                            </h3>
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Forma de Pagamento</th>
+                                            <th style="text-align: center;">Operações</th>
+                                            <th style="text-align: right;">Total Recebido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyFormasRecebimento">
+                                        <tr><td colspan="3" style="text-align:center; padding:20px; color:var(--gray);">Carregando dados...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Painel: Previsão & Faixas de Vencimento -->
+                        <div style="background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-xs);">
+                            <h3 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: var(--dark); display: flex; align-items: center; gap: 6px;">
+                                <span>📅</span> Previsão por Faixas de Vencimento
+                            </h3>
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Faixa de Prazo</th>
+                                            <th style="text-align: center;">Contas</th>
+                                            <th style="text-align: right;">Saldo Devedor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyFaixasVencimento">
+                                        <tr><td colspan="3" style="text-align:center; padding:20px; color:var(--gray);">Carregando faixas...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div><!-- /content -->
+        </main>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MODAL 1: REGISTRAR PAGAMENTO DE PARCELA / QUITAÇÃO
+    ══════════════════════════════════════════════════════════════════ -->
+    <div id="modalRegistrarPagamento" class="modal" style="display: none; z-index: 10500;">
+        <div class="modal-content" style="max-width: 520px; width: 95%; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="background: #111824; color: #fff; padding: 14px 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">💳</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 16px; color: #fff; font-weight: 700;">Registrar Recebimento de Fiado</h2>
+                        <span style="font-size: 12px; color: #94a3b8;">Amortização parcial ou quitação total do saldo</span>
+                    </div>
+                </div>
+                <span class="close-modal" id="closePagamentoModal" style="cursor: pointer; font-size: 24px; color: #cbd5e1;">&times;</span>
+            </div>
+            
+            <div class="modal-body" style="padding: 18px 20px; max-height: 75vh; overflow-y: auto;">
+                <input type="hidden" id="pagamentoContaId">
+                <input type="hidden" id="pagamentoSaidaId">
+                <input type="hidden" id="pagamentoClienteId">
+
+                <!-- Resumo da Dívida -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 13px; font-weight: 700; color: #1e293b;" id="pagamentoDocVenda">DAV-000000 | Venda #000</span>
+                        <span class="badge-status" id="pagamentoStatusBadge">Status</span>
+                    </div>
+                    <div style="font-size: 13px; color: #334155; margin-bottom: 8px;" id="pagamentoClienteNome">Cliente: -</div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+                        <div>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 600; display:block;">Valor Original</span>
+                            <span style="font-size: 14px; font-weight: 700; color: #0f172a;" id="pagamentoValorOriginal">R$ 0,00</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 600; display:block;">Total Já Pago</span>
+                            <span style="font-size: 14px; font-weight: 700; color: #10b981;" id="pagamentoTotalPago">R$ 0,00</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; display:block;">Saldo Devedor</span>
+                            <span style="font-size: 15px; font-weight: 800; color: #dc2626;" id="pagamentoSaldoDevedor">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulário de Pagamento -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 13px; font-weight: 700; color: #1e293b; display: block; margin-bottom: 4px;">
+                        Valor a Pagar (R$) <span style="color:#ef4444;">*</span>
+                    </label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 12px; top: 9px; font-size: 14px; font-weight: 700; color: #64748b;">R$</span>
+                        <input type="number" id="pagamentoValor" min="0.01" step="0.01" style="width: 100%; padding: 9px 12px 9px 36px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 16px; font-weight: 800; color: #0f172a; box-sizing: border-box;">
+                    </div>
+                    
+                    <!-- Atalhos de valor rápido -->
+                    <div style="display: flex; gap: 6px; margin-top: 6px;">
+                        <button type="button" class="btn-periodo-tag" id="btnAtalhoQuitarTotal" style="background:#10B981; color:#fff; border-color:#10B981;">Quitar Total (100%)</button>
+                        <button type="button" class="btn-periodo-tag" id="btnAtalho50Pct">50%</button>
+                        <button type="button" class="btn-periodo-tag" id="btnAtalho50Reais">R$ 50</button>
+                        <button type="button" class="btn-periodo-tag" id="btnAtalho100Reais">R$ 100</button>
+                    </div>
+                </div>
+
+                <!-- Saldo Restante Resultante -->
+                <div style="background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 600; color: #92400E;">Saldo Restante após este pagamento:</span>
+                    <span id="pagamentoNovoSaldoResultante" style="font-size: 15px; font-weight: 800; color: #B45309;">R$ 0,00</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="font-size: 12px; font-weight: 600; color: #1e293b; display: block; margin-bottom: 4px;">Forma de Pagamento <span style="color:#ef4444;">*</span></label>
+                        <select id="pagamentoForma" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; background: #fff; box-sizing: border-box;">
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Pix">Pix</option>
+                            <option value="Cartão Débito">Cartão Débito</option>
+                            <option value="Cartão Crédito">Cartão Crédito</option>
+                            <option value="Transferência">Transferência</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; font-weight: 600; color: #1e293b; display: block; margin-bottom: 4px;">Data e Hora do Recebimento</label>
+                        <input type="datetime-local" id="pagamentoDataHora" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12.5px; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: 600; color: #1e293b; display: block; margin-bottom: 4px;">Observação do Recebimento (Opcional)</label>
+                    <input type="text" id="pagamentoObservacao" placeholder="Ex: Pago pelo filho, transferência confirmada..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div class="modal-footer" style="background: #f8fafc; padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn-warning" id="btnCancelarPagamento" style="padding: 9px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                <button type="button" class="btn-success" id="btnConfirmarPagamento" style="padding: 9px 20px; border-radius: 6px; font-weight: 700; background: #059669; color: #fff; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <span>✅ Confirmar Recebimento</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MODAL 2: DETALHES COMPLETOS DA CONTA & HISTÓRICO
+    ══════════════════════════════════════════════════════════════════ -->
+    <div id="modalDetalhesConta" class="modal" style="display: none; z-index: 10500;">
+        <div class="modal-content" style="max-width: 680px; width: 95%; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="background: #111824; color: #fff; padding: 14px 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🔍</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 16px; color: #fff; font-weight: 700;" id="detalheTitulo">Detalhes da Conta a Receber</h2>
+                        <span style="font-size: 12px; color: #94a3b8;" id="detalheSubtitulo">Rastreabilidade completa de itens e pagamentos</span>
+                    </div>
+                </div>
+                <span class="close-modal" id="closeDetalhesModal" style="cursor: pointer; font-size: 24px; color: #cbd5e1;">&times;</span>
+            </div>
+            
+            <div class="modal-body" style="padding: 18px 20px; max-height: 75vh; overflow-y: auto;">
+                <!-- Cabeçalho com dados da venda -->
+                <div id="detalheBoxResumo" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;"></div>
+
+                <!-- Itens Comprados na Venda Original -->
+                <div style="margin-bottom: 16px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 13.5px; font-weight: 700; color: #1e293b;">📦 Produtos Comprados na Venda de Origem</h4>
+                    <div class="table-container" style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+                        <table style="font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>Cód.</th>
+                                    <th>Produto</th>
+                                    <th style="text-align: center;">Qtd</th>
+                                    <th style="text-align: right;">Unitário</th>
+                                    <th style="text-align: right;">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyDetalhesItens">
+                                <tr><td colspan="5" style="text-align:center;">Carregando itens...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Histórico Cronológico de Pagamentos -->
+                <div>
+                    <h4 style="margin: 0 0 8px 0; font-size: 13.5px; font-weight: 700; color: #1e293b;">📜 Linha do Tempo de Movimentações Financeiras</h4>
+                    <div class="table-container" style="border: 1px solid #e2e8f0; border-radius: 6px;">
+                        <table style="font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Operação</th>
+                                    <th style="text-align: right;">Valor</th>
+                                    <th>Forma</th>
+                                    <th style="text-align: right;">Saldo Após</th>
+                                    <th>Doc / Recibo</th>
+                                    <th>Operador</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyDetalhesHistorico">
+                                <tr><td colspan="7" style="text-align:center;">Carregando histórico...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="background: #f8fafc; padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn-warning" id="btnFecharDetalhes" style="padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">Fechar</button>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-acao-dav" id="btnImprimirDavDetalhes" style="padding: 8px 16px; border-radius: 6px; font-weight: 700;">🖨️ Imprimir DAV</button>
+                    <button type="button" class="btn-acao-pagar" id="btnPagarPeloDetalhes" style="padding: 8px 16px; border-radius: 6px; font-weight: 700;">💳 Registrar Pagamento</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MODAL 3: RECIBO DE PAGAMENTO / DAV PARA IMPRESSÃO TÉRMICA OU A4
+    ══════════════════════════════════════════════════════════════════ -->
+    <div id="modalRecibo" class="modal" style="display: none; z-index: 10600;">
+        <div class="modal-content" style="max-width: 480px; width: 95%; border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: #111824; color: #fff; padding: 12px 18px;">
+                <h2 style="margin: 0; font-size: 15px; color: #fff; font-weight: 700;">📄 Recibo / Comprovante de Fiado</h2>
+                <span class="close-modal" id="closeReciboModal" style="cursor: pointer; font-size: 24px; color: #cbd5e1;">&times;</span>
+            </div>
+            <div class="modal-body" id="reciboBody" style="padding: 15px; max-height: 75vh; overflow-y: auto;">
+                <div id="areaImpressaoRecibo"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--border);">
+                <button type="button" class="btn-warning" id="btnFecharRecibo">Fechar</button>
+                <button type="button" class="btn-primary" id="btnImprimirRecibo" style="display:flex; align-items:center; gap:6px;">
+                    <span>🖨️</span> Imprimir Cupom
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MODAL 4: CONFIRMAÇÃO DE ESTORNO / AUDITORIA
+    ══════════════════════════════════════════════════════════════════ -->
+    <div id="modalEstorno" class="modal" style="display: none; z-index: 10600;">
+        <div class="modal-content" style="max-width: 460px; width: 95%; border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: #DC2626; color: #fff; padding: 14px 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">⚠️</span>
+                    <h2 style="margin: 0; font-size: 16px; color: #fff; font-weight: 700;">Confirmar Estorno de Operação</h2>
+                </div>
+                <span class="close-modal" id="closeEstornoModal" style="cursor: pointer; font-size: 24px; color: #fff;">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 18px 20px;">
+                <input type="hidden" id="estornoAlvoId">
+                <input type="hidden" id="estornoTipo">
+                <p id="estornoMensagemAviso" style="font-size: 13.5px; color: #1e293b; margin-bottom: 12px; line-height: 1.4;">
+                    Esta operação reverterá o lançamento financeiro, atualizando o saldo e mantendo o registro integral para fins de auditoria.
+                </p>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; font-weight: 700; color: #1e293b; display: block; margin-bottom: 4px;">Motivo do Estorno <span style="color:#ef4444;">*</span></label>
+                    <textarea id="estornoMotivo" rows="2" placeholder="Informe o motivo da reversão ou cancelamento..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; box-sizing: border-box;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--border);">
+                <button type="button" class="btn-warning" id="btnCancelarEstorno">Cancelar</button>
+                <button type="button" class="btn-acao-estornar" id="btnConfirmarEstorno" style="padding: 9px 18px; font-weight: 700; background: #DC2626; color: #fff; border:none; border-radius:6px; cursor:pointer;">
+                    Confirmar Estorno
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts do Sistema -->
+    <script src="js/security.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/export-helper.js"></script>
+    <script src="js/active-nav.js"></script>
+    <script src="js/fiado.js"></script>
+</body>
+</html>

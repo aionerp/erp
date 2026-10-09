@@ -109,6 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Botão visualizar (todos podem ver)
             acoesHtml += `<button class="btn-info" onclick="visualizarCliente(${c.id})" title="Visualizar">👁️</button>`;
             
+            // Botão Extrato Fiado / Contas a Receber
+            acoesHtml += `<a href="fiado.html?cliente_id=${c.id}" class="btn-info" style="background:#b45309;color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:4px;font-size:12px;margin:0 2px;" title="Ver Extrato de Fiado / Contas a Receber">📋</a>`;
+            
             // Botão editar (se tiver permissão)
             if (podeEditar) {
                 acoesHtml += `<button class="btn-warning" onclick="editarCliente(${c.id})" title="Editar">✏️</button>`;

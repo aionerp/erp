@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'saidas.html': 'saidas',
         'assinaturas.html': 'saidas',
         'fechamento.html': 'saidas',
+        'fiado.html': 'saidas',
         'despesas.html': 'financeiro',
         'devolucoes.html': 'saidas',
         'fornecedores.html': 'fornecedores',
@@ -225,11 +226,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     { label: labelVendas, href: 'saidas.html', modulo: 'saidas' },
                     { label: '🔄 Serviços Recorrentes', href: 'assinaturas.html', modulo: 'saidas' },
                     { label: '🎯 Ações Promocionais', href: 'promocoes.html', modulo: 'saidas' },
-                    { label: '💵 Fechamento de Caixa', href: 'fechamento.html', modulo: 'saidas' },
-                    { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },
-                    { label: '💸 Comissões a Pagar', href: 'comissoes.html', modulo: 'relatorios' },
                     { label: '📅 Agendamento', href: 'agendamentos.html', modulo: 'dashboard', condicao: config.habilitar_agendamentos },
                     { label: '📋 Comanda/Serviço', href: 'mesas.html', modulo: 'saidas', condicao: config.habilitar_mesas }
+                ]
+            },
+            {
+                type: 'group',
+                label: '💳 Financeiro',
+                items: [
+                    { label: '📋 Fiado e Contas a Receber', href: 'fiado.html', modulo: 'saidas' },
+                    { label: '💵 Fechamento de Caixa', href: 'fechamento.html', modulo: 'saidas' },
+                    { label: '💸 Despesas', href: 'despesas.html', modulo: 'financeiro' },
+                    { label: '💸 Comissões a Pagar', href: 'comissoes.html', modulo: 'relatorios' }
                 ]
             },
             {

@@ -29,6 +29,22 @@ let dadosExportacao = {
     despesas: null
 };
 
+// Helper: identifica se a venda foi na modalidade fiado
+function ehVendaFiado(formaPagamento) {
+    if (!formaPagamento) return false;
+    const fp = String(formaPagamento).toLowerCase();
+    return fp.includes('a pagar') || fp.includes('(f)');
+}
+
+// Helper: identifica de forma infalível se um registro foi cancelado/estornado
+function isRegistroCancelado(obj) {
+    if (!obj) return false;
+    if (obj.cancelado === true || obj.cancelado === 'true' || obj.cancelado === 't' || obj.cancelado === 1 || obj.cancelado === '1') return true;
+    if (obj.status === 'cancelado' || obj.status === 'cancelada') return true;
+    if (obj.cancelado_em) return true;
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const usuario = JSON.parse(sessionStorage.getItem('usuario'));
     if (!usuario) {
@@ -177,20 +193,23 @@ async function carregarDashboard() {
         const usuarioLogado = JSON.parse(sessionStorage.getItem('usuario'));
         const verOutros = temPermissao('saidas', 'ver_vendas_outros');
 
-        let qVendas = supabaseClient.from('saidas').select('total').eq('cancelado', false);
-        let qSaidasRes = supabaseClient.from('saidas').select('total, data').eq('cancelado', false);
-        let qVendasMes = supabaseClient.from('saidas').select('data, total').eq('cancelado', false).order('data', { ascending: true });
+        let qVendas = supabaseClient.from('saidas').select('id, total, forma_pagamento').eq('cancelado', false);
+        let qSaidasRes = supabaseClient.from('saidas').select('id, total, data, forma_pagamento').eq('cancelado', false);
+        let qVendasMes = supabaseClient.from('saidas').select('data, total, forma_pagamento').eq('cancelado', false).order('data', { ascending: true });
         let qSaidaItens = supabaseClient.from('saida_itens').select('quantidade, produtos(nome)');
+        let qFiadoPags = supabaseClient.from('contas_receber_pagamentos').select('id, saida_id, conta_receber_id, valor_pago, data_pagamento, cancelado, cancelado_em, tipo_operacao');
+        let qContas = supabaseClient.from('contas_receber').select('id, saida_id, status');
 
         if (!verOutros) {
             qVendas = qVendas.eq('usuario_id', usuarioLogado.id);
             qSaidasRes = qSaidasRes.eq('usuario_id', usuarioLogado.id);
             qVendasMes = qVendasMes.eq('usuario_id', usuarioLogado.id);
+            qFiadoPags = qFiadoPags.eq('usuario_id', usuarioLogado.id);
 
             // Obter os IDs de saídas do usuário logado
             const { data: saidasUsuario } = await supabaseClient
                 .from('saidas')
-                .select('id')
+                .select('id, cancelado, cancelado_em')
                 .eq('usuario_id', usuarioLogado.id)
                 .eq('cancelado', false);
             const ids = saidasUsuario ? saidasUsuario.map(s => s.id) : [];
@@ -201,23 +220,57 @@ async function carregarDashboard() {
             }
         }
 
-        const [vendasRes, entradasRes, despesasRes, saidasRes, clientesRes, produtosRes] = await Promise.all([
+        const [vendasRes, entradasRes, despesasRes, saidasRes, clientesRes, produtosRes, fiadoPagsRes, contasRes] = await Promise.all([
             qVendas,
             supabaseClient.from('entradas').select('total, observacao'),
             supabaseClient.from('despesas').select('valor'),
             qSaidasRes,
             supabaseClient.from('clientes').select('id', { count: 'exact' }).eq('ativo', true),
-            supabaseClient.from('produtos').select('id', { count: 'exact' }).eq('ativo', true)
+            supabaseClient.from('produtos').select('id', { count: 'exact' }).eq('ativo', true),
+            qFiadoPags,
+            qContas
         ]);
+
+        const idsSaidasCanceladas = new Set(
+            (saidasRes.data || []).concat(vendasRes.data || [])
+                .filter(s => isRegistroCancelado(s))
+                .map(s => s.id)
+        );
+        const idsContasCanceladas = new Set(
+            (contasRes.data || [])
+                .filter(c => isRegistroCancelado(c))
+                .map(c => {
+                    if (c.saida_id) idsSaidasCanceladas.add(c.saida_id);
+                    return c.id;
+                })
+        );
         
-        const totalVendas = vendasRes.data?.reduce((sum, v) => sum + (Number(v.total) || 0), 0) || 0;
+        // Vendas diretas (excluindo fiado e canceladas)
+        const totalVendasDiretas = (vendasRes.data || [])
+            .filter(v => !isRegistroCancelado(v) && !idsSaidasCanceladas.has(v.id) && !ehVendaFiado(v.forma_pagamento))
+            .reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+
+        const fiadoPagsValidos = (fiadoPagsRes.data || []).filter(p => {
+            if (isRegistroCancelado(p)) return false;
+            if (p.tipo_operacao === 'venda_realizada' || p.tipo_operacao === 'estorno') return false;
+            if (p.saida_id && idsSaidasCanceladas.has(p.saida_id)) return false;
+            const idConta = p.conta_receber_id || p.contas_receber_id;
+            if (idConta && idsContasCanceladas.has(idConta)) return false;
+            return true;
+        });
+
+        const totalBaixasFiado = fiadoPagsValidos.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
+
+        const totalVendas = totalVendasDiretas + totalBaixasFiado;
+
         // Filtrar eventuais devoluções legadas inseridas em entradas para não distorcer compras
         const totalEntradas = entradasRes.data
             ?.filter(e => !e.observacao?.includes('Série: Dev') && !e.observacao?.includes('Devolu'))
             .reduce((sum, e) => sum + (Number(e.total) || 0), 0) || 0;
         const totalDespesas = despesasRes.data?.reduce((sum, d) => sum + (Number(d.valor) || 0), 0) || 0;
-        const vendasValidas = saidasRes.data?.filter(s => (Number(s.total) || 0) > 0) || [];
-        const totalSaidas = vendasValidas.length;
+        
+        const vendasValidasDiretas = (saidasRes.data || []).filter(s => !ehVendaFiado(s.forma_pagamento) && (Number(s.total) || 0) > 0);
+        const totalSaidas = vendasValidasDiretas.length + fiadoPagsValidos.length;
         const totalClientes = clientesRes.count || 0;
         const totalProdutos = produtosRes.count || 0;
         
@@ -250,11 +303,16 @@ async function carregarDashboard() {
         // Gráfico de vendas por mês
         const { data: vendasMes } = await qVendasMes;
         
-        if (vendasMes) {
+        if (vendasMes || fiadoPagsValidos.length > 0) {
             const vendasPorMes = {};
-            vendasMes.forEach(v => {
+            (vendasMes || []).forEach(v => {
+                if (ehVendaFiado(v.forma_pagamento)) return;
                 const mes = new Date(v.data).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                vendasPorMes[mes] = (vendasPorMes[mes] || 0) + (v.total || 0);
+                vendasPorMes[mes] = (vendasPorMes[mes] || 0) + (Number(v.total) || 0);
+            });
+            fiadoPagsValidos.forEach(p => {
+                const mes = new Date(p.data_pagamento).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                vendasPorMes[mes] = (vendasPorMes[mes] || 0) + (Number(p.valor_pago) || 0);
             });
             
             const labels = Object.keys(vendasPorMes);
@@ -362,33 +420,48 @@ async function carregarMovimentoDiario() {
             clientes(nome)
         `).eq('data', data).eq('cancelado', false);
 
+        let qFiadoPags = supabaseClient.from('contas_receber_pagamentos').select(`
+            *,
+            clientes(nome)
+        `).gte('data_pagamento', `${data}T00:00:00`).lte('data_pagamento', `${data}T23:59:59`);
+
         if (!verOutros) {
             qSaidas = qSaidas.eq('usuario_id', usuarioLogado.id);
+            qFiadoPags = qFiadoPags.eq('usuario_id', usuarioLogado.id);
         } else {
             const userFiltro = document.getElementById('filtroUsuarioMovimento')?.value;
             if (userFiltro && userFiltro !== 'todos') {
                 qSaidas = qSaidas.eq('usuario_id', parseInt(userFiltro));
+                qFiadoPags = qFiadoPags.eq('usuario_id', parseInt(userFiltro));
             }
         }
         
-        const [entradasRes, saidasRes] = await Promise.all([
+        const [entradasRes, saidasRes, pagsRes] = await Promise.all([
             supabaseClient.from('entradas').select(`
                 *,
                 clientes:fornecedor_id(nome)
             `).eq('data', data),
-            qSaidas
+            qSaidas,
+            qFiadoPags
         ]);
         
         // Excluir eventuais devoluções legadas de entradas para não poluir compras de fornecedores
         const entradas = (entradasRes.data || []).filter(e => !e.observacao?.includes('Série: Dev') && !e.observacao?.includes('Devolu'));
-        const saidas = saidasRes.data || [];
+        const saidas = (saidasRes.data || []).filter(s => !isRegistroCancelado(s));
+        const fiadoPags = (pagsRes.data || []).filter(p => !isRegistroCancelado(p) && p.tipo_operacao !== 'venda_realizada' && p.tipo_operacao !== 'estorno');
         
         // Armazenar para exportação
-        dadosExportacao.movimento = { entradas, saidas, data };
+        dadosExportacao.movimento = { entradas, saidas, fiadoPags, data };
         
         const totalEntradas = entradas.reduce((sum, e) => sum + (Number(e.total) || 0), 0);
-        const totalSaidas = saidas.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
-        const saldo = totalSaidas - totalEntradas;
+        
+        // Faturamento do Dia: Saídas não fiadas + Baixas/pagamentos de fiado recebidos no dia
+        const totalSaidasDiretas = saidas
+            .filter(s => !ehVendaFiado(s.forma_pagamento))
+            .reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+        const totalBaixasFiado = fiadoPags.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
+        const totalFaturamentoDia = totalSaidasDiretas + totalBaixasFiado;
+        const saldo = totalFaturamentoDia - totalEntradas;
         
         let html = `
             <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
@@ -397,8 +470,8 @@ async function carregarMovimentoDiario() {
                     <div style="font-size: 20px; color: #155724;">R$ ${totalEntradas.toFixed(2)}</div>
                 </div>
                 <div style="flex:1; min-width:150px; background: #f8d7da; padding: 15px; border-radius: 8px; text-align: center;">
-                    <strong>Total Saidas (Líquido)</strong>
-                    <div style="font-size: 20px; color: #721c24;">R$ ${totalSaidas.toFixed(2)}</div>
+                    <strong>Faturamento do Dia (Líquido)</strong>
+                    <div style="font-size: 20px; color: #721c24;">R$ ${totalFaturamentoDia.toFixed(2)}</div>
                 </div>
                 <div style="flex:1; min-width:150px; background: ${saldo >= 0 ? '#cce5ff' : '#f8d7da'}; padding: 15px; border-radius: 8px; text-align: center;">
                     <strong>Saldo do Dia</strong>
@@ -428,7 +501,7 @@ async function carregarMovimentoDiario() {
                 </tbody>
             </table>
             
-            <h4 style="margin-top: 20px;">Saidas do Dia</h4>
+            <h4 style="margin-top: 20px;">Saídas / Vendas do Dia</h4>
             <table class="table-relatorio">
                 <thead>
                     <tr><th>N°</th><th>Cliente</th><th>Total</th><th>Forma Pagamento</th></tr>
@@ -436,24 +509,51 @@ async function carregarMovimentoDiario() {
                 <tbody>
                     ${saidas.length > 0 ? saidas.map(s => {
                         const isDevolucao = Number(s.total) < 0;
+                        const isFiado = ehVendaFiado(s.forma_pagamento);
                         const valorFmt = isDevolucao 
                             ? `<span style="color: #dc2626; font-weight: 700;">- R$ ${Math.abs(Number(s.total)).toFixed(2)}</span> <span style="background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; font-weight: 600;">🔄 Devolução</span>`
                             : `R$ ${(Number(s.total) || 0).toFixed(2)}`;
+                        const badgeFiado = isFiado ? ` <span style="background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">(A Receber - Fiado)</span>` : '';
                         return `
                         <tr>
                             <td>#${s.id}</td>
                             <td>${s.clientes?.nome || (isDevolucao ? 'Devolução de Venda' : '-')}</td>
                             <td>${valorFmt}</td>
-                            <td>${s.forma_pagamento || '-'}</td>
+                            <td>${s.forma_pagamento || '-'}${badgeFiado}</td>
                         </tr>`;
                     }).join('') : '<tr><td colspan="4">Nenhuma saída no dia</td></tr>'}
                     <tr class="total-row">
-                        <td colspan="2"><strong>Total Líquido</strong></td>
-                        <td><strong>R$ ${totalSaidas.toFixed(2)}</strong></td>
+                        <td colspan="2"><strong>Vendas Diretas Faturadas</strong></td>
+                        <td><strong>R$ ${totalSaidasDiretas.toFixed(2)}</strong></td>
                         <td></td>
                     </tr>
                 </tbody>
             </table>
+
+            ${fiadoPags.length > 0 ? `
+            <h4 style="margin-top: 20px;">Recebimentos / Baixas de Fiado no Dia</h4>
+            <table class="table-relatorio">
+                <thead>
+                    <tr><th>N°</th><th>Cliente</th><th>Valor Recebido</th><th>Forma Pagamento</th><th>Operação</th></tr>
+                </thead>
+                <tbody>
+                    ${fiadoPags.map(p => `
+                        <tr>
+                            <td>#${p.id}</td>
+                            <td>${p.clientes?.nome || p.cliente_nome || '-'}</td>
+                            <td style="color: #059669; font-weight: 700;">+ R$ ${(Number(p.valor_pago) || 0).toFixed(2)}</td>
+                            <td>${p.forma_pagamento || 'Dinheiro'}</td>
+                            <td><span style="background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">${p.tipo_operacao === 'pagamento_inicial' ? 'Entrada' : (p.tipo_operacao === 'pagamento_final' ? 'Quitação' : 'Amortização')}</span></td>
+                        </tr>
+                    `).join('')}
+                    <tr class="total-row">
+                        <td colspan="2"><strong>Total Recebido em Fiado</strong></td>
+                        <td style="color: #059669;"><strong>R$ ${totalBaixasFiado.toFixed(2)}</strong></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+            ` : ''}
         `;
         
         container.innerHTML = html;
@@ -490,54 +590,75 @@ async function carregarFaturamento() {
 
         let qVendas = supabaseClient
             .from('saidas')
-            .select('data, total')
+            .select('data, total, forma_pagamento')
             .eq('cancelado', false)
             .order('data', { ascending: true });
 
         if (dataInicio) qVendas = qVendas.gte('data', dataInicio);
         if (dataFim) qVendas = qVendas.lte('data', dataFim);
 
+        let qPags = supabaseClient
+            .from('contas_receber_pagamentos')
+            .select('data_pagamento, valor_pago, cancelado, tipo_operacao')
+            .order('data_pagamento', { ascending: true });
+
+        if (dataInicio) qPags = qPags.gte('data_pagamento', `${dataInicio}T00:00:00`);
+        if (dataFim) qPags = qPags.lte('data_pagamento', `${dataFim}T23:59:59`);
+
         if (!verOutros) {
             qVendas = qVendas.eq('usuario_id', usuarioLogado.id);
+            qPags = qPags.eq('usuario_id', usuarioLogado.id);
         } else {
             const userFiltro = document.getElementById('filtroUsuarioFaturamento')?.value;
             if (userFiltro && userFiltro !== 'todos') {
                 qVendas = qVendas.eq('usuario_id', parseInt(userFiltro));
+                qPags = qPags.eq('usuario_id', parseInt(userFiltro));
             }
         }
 
-        const { data: vendas } = await qVendas;
+        const [vendasRes, pagsRes] = await Promise.all([qVendas, qPags]);
+        const vendas = (vendasRes.data || []).filter(v => !isRegistroCancelado(v));
+        const pagamentosFiado = (pagsRes.data || []).filter(p => !isRegistroCancelado(p) && p.tipo_operacao !== 'venda_realizada' && p.tipo_operacao !== 'estorno');
         
-        if (!vendas || vendas.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma venda encontrada</div>';
+        if (vendas.length === 0 && pagamentosFiado.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhum faturamento encontrado</div>';
             dadosCarregados.faturamento = false;
             return;
         }
-        
-        const grupos = {};
-        vendas.forEach(v => {
-            const data = new Date(v.data);
-            let chave = '';
-            
+
+        const obterChavePeriodo = (dataObj) => {
             switch(plano) {
                 case 'diario':
-                    chave = data.toISOString().split('T')[0];
-                    break;
+                    return dataObj.toISOString().split('T')[0];
                 case 'semanal':
-                    const semana = data.getWeek();
-                    chave = `Semana ${semana} - ${data.getFullYear()}`;
-                    break;
+                    const semana = typeof dataObj.getWeek === 'function' ? dataObj.getWeek() : 1;
+                    return `Semana ${semana} - ${dataObj.getFullYear()}`;
                 case 'mensal':
-                    chave = data.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                    break;
+                    return dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
                 case 'anual':
-                    chave = data.getFullYear().toString();
-                    break;
+                    return dataObj.getFullYear().toString();
                 default:
-                    chave = data.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                    return dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
             }
-            
-            grupos[chave] = (grupos[chave] || 0) + (v.total || 0);
+        };
+        
+        const grupos = {};
+
+        // 1. Somar vendas diretas (excluindo fiado "A Pagar (F)")
+        vendas.forEach(v => {
+            if (ehVendaFiado(v.forma_pagamento)) return;
+            const data = new Date(v.data);
+            const chave = obterChavePeriodo(data);
+            grupos[chave] = (grupos[chave] || 0) + (Number(v.total) || 0);
+        });
+
+        // 2. Somar recebimentos / baixas de fiado realizadas no período
+        pagamentosFiado.forEach(p => {
+            const valor = Number(p.valor_pago) || 0;
+            if (valor <= 0) return;
+            const data = new Date(p.data_pagamento);
+            const chave = obterChavePeriodo(data);
+            grupos[chave] = (grupos[chave] || 0) + valor;
         });
         
         const labels = Object.keys(grupos);
@@ -1770,35 +1891,48 @@ async function carregarRelatorioDespesas() {
         // 3. Consultar saídas (faturamento e comissões) no período para o comparativo
         let qSaidas = supabaseClient
             .from('saidas')
-            .select('id, data, total, cancelado, colaborador_id, comissao_calculada, comissao_paga')
+            .select('id, data, total, cancelado, colaborador_id, comissao_calculada, comissao_paga, forma_pagamento')
             .eq('cancelado', false);
         if (dataInicio) qSaidas = qSaidas.gte('data', dataInicio);
         if (dataFim) qSaidas = qSaidas.lte('data', dataFim);
+
+        // 3.1 Consultar baixas/pagamentos de fiado recebidos no período
+        let qPags = supabaseClient
+            .from('contas_receber_pagamentos')
+            .select('valor_pago, cancelado, tipo_operacao');
+        if (dataInicio) qPags = qPags.gte('data_pagamento', `${dataInicio}T00:00:00`);
+        if (dataFim) qPags = qPags.lte('data_pagamento', `${dataFim}T23:59:59`);
 
         // 4. Consultar colaboradores para vincular nomes e taxas de comissão
         let qColabs = supabaseClient
             .from('colaboradores')
             .select('id, nome, sobrenome, comissao');
 
-        const [despRes, boletosRes, saidasRes, colabsRes] = await Promise.all([
+        const [despRes, boletosRes, saidasRes, colabsRes, pagsRes] = await Promise.all([
             qDesp.order('data', { ascending: false }),
             qBoletos.order('data_vencimento', { ascending: false }),
             qSaidas,
-            qColabs
+            qColabs,
+            qPags
         ]);
 
         const despesasRaw = despRes.data || [];
         const boletosPendentesRaw = boletosRes.data || [];
-        const saidasRaw = saidasRes.data || [];
+        const saidasRaw = (saidasRes.data || []).filter(s => !isRegistroCancelado(s));
         const colabsRaw = colabsRes.data || [];
+        const fiadoPagsRaw = (pagsRes.data || []).filter(p => !isRegistroCancelado(p) && p.tipo_operacao !== 'venda_realizada' && p.tipo_operacao !== 'estorno');
 
         const colabMap = {};
         colabsRaw.forEach(c => {
             colabMap[c.id] = c;
         });
 
-        // Faturamento Total no período
-        const totalFaturamento = saidasRaw.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+        // Faturamento Total no período (Vendas não fiadas + Baixas/pagamentos de fiado recebidos)
+        const totalVendasDiretas = saidasRaw
+            .filter(s => !ehVendaFiado(s.forma_pagamento))
+            .reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+        const totalBaixasFiado = fiadoPagsRaw.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
+        const totalFaturamento = totalVendasDiretas + totalBaixasFiado;
 
         // Normalizar e unificar despesas
         const todasDespesas = [];

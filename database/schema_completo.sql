@@ -503,6 +503,58 @@ CREATE TABLE public.servicos_recorrentes (
     updated_at TIMESTAMP WITH TIME ZONE
 );
 
+-- ============================================================================
+-- 20.1 TABELA DE CONTAS A RECEBER (FIADO / DAV)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.contas_receber (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    saida_id INTEGER REFERENCES public.saidas(id) ON DELETE CASCADE,
+    cliente_id INTEGER REFERENCES public.clientes(id) ON DELETE SET NULL,
+    cliente_nome VARCHAR(255) NOT NULL,
+    cliente_cpf VARCHAR(20),
+    cliente_telefone VARCHAR(50),
+    numero_documento VARCHAR(100),
+    data_venda DATE NOT NULL DEFAULT CURRENT_DATE,
+    data_vencimento DATE,
+    valor_original NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    valor_pago NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    saldo_devedor NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    status VARCHAR(50) NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto', 'aver_na_conta', 'pago', 'cancelado')),
+    data_quitacao TIMESTAMP WITH TIME ZONE,
+    data_ultimo_pagamento TIMESTAMP WITH TIME ZONE,
+    usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    observacao TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- ============================================================================
+-- 20.2 TABELA DE HISTÓRICO DE PAGAMENTOS / RECEBIMENTOS (CONTAS A RECEBER)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.contas_receber_pagamentos (
+    id SERIAL PRIMARY KEY,
+    loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
+    conta_receber_id INTEGER NOT NULL REFERENCES public.contas_receber(id) ON DELETE CASCADE,
+    saida_id INTEGER REFERENCES public.saidas(id) ON DELETE CASCADE,
+    cliente_id INTEGER REFERENCES public.clientes(id) ON DELETE SET NULL,
+    caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL,
+    usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    tipo_operacao VARCHAR(50) NOT NULL CHECK (tipo_operacao IN ('venda_realizada', 'pagamento_inicial', 'pagamento_parcial', 'pagamento_final', 'estorno')),
+    valor_pago NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    forma_pagamento VARCHAR(50) DEFAULT 'Dinheiro',
+    saldo_anterior NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    saldo_apos NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    numero_documento VARCHAR(100),
+    data_pagamento TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    observacao TEXT,
+    cancelado BOOLEAN DEFAULT false,
+    cancelado_em TIMESTAMP WITH TIME ZONE,
+    cancelado_por INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    motivo_cancelamento TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Foreign key de promocao_id em saida_itens
 DO $$
 BEGIN
@@ -643,6 +695,8 @@ CREATE POLICY tenant_mesas_comandas_policy ON public.mesas_comandas FOR ALL USIN
 CREATE POLICY tenant_promocoes_policy ON public.promocoes FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 CREATE POLICY tenant_promocao_produtos_policy ON public.promocao_produtos FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
 CREATE POLICY tenant_servicos_recorrentes_policy ON public.servicos_recorrentes FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
+CREATE POLICY tenant_contas_receber_policy ON public.contas_receber FOR ALL USING (loja_id = public.obter_loja_id_requisicao() OR public.obter_loja_id_requisicao() IS NULL);
+CREATE POLICY tenant_contas_receber_pagamentos_policy ON public.contas_receber_pagamentos FOR ALL USING (loja_id = public.obter_loja_id_requisicao() OR public.obter_loja_id_requisicao() IS NULL);
 
 CREATE POLICY tenant_produtos_seriais_policy ON public.produtos_seriais FOR ALL USING (
     EXISTS (SELECT 1 FROM public.produtos p WHERE p.id = produto_id AND p.loja_id = public.obter_loja_id_requisicao())

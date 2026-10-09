@@ -77,7 +77,7 @@
     },
     "features": {
       "habilitar_seriais": true,
-      "habilitar_agendamentos": true,
+      "habilitar_agendamentos": false,
       "habilitar_mesas": true,
       "habilitar_lotes": true,
       "habilitar_variacoes": true

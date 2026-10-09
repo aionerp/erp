@@ -15,6 +15,15 @@ function formatarDataHora(dataISO) {
     return date.toLocaleString('pt-BR');
 }
 
+// Helper: identifica de forma infalível se um registro foi cancelado/estornado
+function isRegistroCancelado(obj) {
+    if (!obj) return false;
+    if (obj.cancelado === true || obj.cancelado === 'true' || obj.cancelado === 't' || obj.cancelado === 1 || obj.cancelado === '1') return true;
+    if (obj.status === 'cancelado' || obj.status === 'cancelada') return true;
+    if (obj.cancelado_em) return true;
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (!usuario) {
         window.location.href = 'index.html';
@@ -307,7 +316,7 @@ async function carregarVendasCaixa(caixa) {
         const dataAberturaStr = caixa.data_abertura ? caixa.data_abertura.substring(0, 10) : '';
 
         const vendas = todasSaidas.filter(v => {
-            if (v.cancelado === true) return false;
+            if (isRegistroCancelado(v)) return false;
             
             // Vínculo explícito por caixa_id
             if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixa.id)) {
@@ -369,16 +378,64 @@ async function carregarVendasCaixa(caixa) {
         vendas.forEach(v => {
             const valTotal = Number(v.total) || 0;
             const valDesc = Number(v.desconto) || 0;
-            totalVendas += valTotal;
+            const fp = v.forma_pagamento || 'Outro / Não Informado';
+            const isFiado = fp.toLowerCase().includes('a pagar') || fp.includes('(F)');
+
+            // Só adiciona ao faturamento líquido do caixa se NÃO for venda fiada direta
+            if (!isFiado) {
+                totalVendas += valTotal;
+            }
             totalDescontos += valDesc;
             vendaIds.push(v.id);
             
             // Agrupar por forma de pagamento
-            const fp = v.forma_pagamento || 'Outro / Não Informado';
             formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
             
-            if (fp.toLowerCase().includes('dinheiro')) {
+            // Só adiciona a dinheiroVendas se for dinheiro e não for venda fiada
+            if (fp.toLowerCase().includes('dinheiro') && !isFiado) {
                 dinheiroVendas += valTotal;
+            }
+        });
+
+        // 4.1. Carregar pagamentos de Fiado / Contas a Receber realizados neste caixa
+        let pagamentosFiadoCaixa = [];
+        try {
+            const { data: crPags, error: crPagsErr } = await supabaseClient
+                .from('contas_receber_pagamentos')
+                .select('*')
+                .eq('caixa_id', caixa.id);
+            if (!crPagsErr && crPags) {
+                pagamentosFiadoCaixa = crPags.filter(p => !isRegistroCancelado(p) && p.tipo_operacao !== 'venda_realizada' && p.tipo_operacao !== 'estorno');
+            } else {
+                const { data: crPagsAll } = await supabaseClient
+                    .from('contas_receber_pagamentos')
+                    .select('*');
+                if (crPagsAll) {
+                    pagamentosFiadoCaixa = crPagsAll.filter(p => {
+                        if (isRegistroCancelado(p) || p.tipo_operacao === 'venda_realizada' || p.tipo_operacao === 'estorno') return false;
+                        if (p.caixa_id && String(p.caixa_id) === String(caixa.id)) return true;
+                        const dt = p.data_pagamento ? new Date(p.data_pagamento) : null;
+                        if (dt && !isNaN(dt.getTime())) {
+                            if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) return true;
+                        }
+                        return false;
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Aviso ao carregar pagamentos de contas a receber no caixa:', e);
+        }
+
+        pagamentosFiadoCaixa.forEach(p => {
+            const valPago = Number(p.valor_pago) || 0;
+            // Baixas e recebimentos de fiado realizados no caixa somam ao faturamento do dia do caixa!
+            totalVendas += valPago;
+
+            const fpKey = (p.forma_pagamento || 'Dinheiro') + ' (Receb. Fiado)';
+            formasPagamento[fpKey] = (formasPagamento[fpKey] || 0) + valPago;
+
+            if ((p.forma_pagamento || '').toLowerCase().includes('dinheiro')) {
+                dinheiroVendas += valPago;
             }
         });
         
@@ -973,6 +1030,24 @@ async function imprimirRelatorioPorCaixa(caixa) {
             const fp = v.forma_pagamento || 'Outro / Não Informado';
             formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
         });
+
+        // 3.1. Buscar pagamentos de Fiado realizados neste caixa para o comprovante impresso
+        try {
+            const { data: crPags } = await supabaseClient
+                .from('contas_receber_pagamentos')
+                .select('*')
+                .eq('caixa_id', caixa.id);
+            if (crPags) {
+                const pagamentosFiadoCaixa = crPags.filter(p => p.cancelado !== true && p.tipo_operacao !== 'venda_realizada');
+                pagamentosFiadoCaixa.forEach(p => {
+                    const valPago = Number(p.valor_pago) || 0;
+                    const fpKey = (p.forma_pagamento || 'Dinheiro') + ' (Receb. Fiado)';
+                    formasPagamento[fpKey] = (formasPagamento[fpKey] || 0) + valPago;
+                });
+            }
+        } catch (e) {
+            console.warn('Aviso ao buscar recebimentos fiado para impressão:', e);
+        }
 
         // 4. Buscar itens
         let itens = [];

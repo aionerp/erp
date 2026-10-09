@@ -88,9 +88,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GLOBALS E ELEMENTOS DO DOM
     // =====================================================
     let vendas = [];
+    let pagamentosFiado = [];
     let despesas = [];
     let chartSaidasAcumuladas = null;
     let chartMovDiario = null;
+
+    // Helper: identifica se a venda foi realizada na modalidade fiado
+    function ehVendaFiado(formaPagamento) {
+        if (!formaPagamento) return false;
+        const fp = String(formaPagamento).toLowerCase();
+        return fp.includes('a pagar') || fp.includes('(f)');
+    }
+
+    // Helper: identifica com precisão absoluta se um registro foi cancelado/estornado
+    function isRegistroCancelado(obj) {
+        if (!obj) return false;
+        if (obj.cancelado === true || obj.cancelado === 'true' || obj.cancelado === 't' || obj.cancelado === 1 || obj.cancelado === '1') return true;
+        if (obj.status === 'cancelado' || obj.status === 'cancelada') return true;
+        if (obj.cancelado_em) return true;
+        return false;
+    }
 
     const inputDataInicio = document.getElementById('filtroDataInicio');
     const inputDataFim = document.getElementById('filtroDataFim');
@@ -165,26 +182,64 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let querySaidas = supabaseClient
                 .from('saidas')
-                .select('id, data, total, cancelado, usuario_id')
+                .select('id, data, total, cancelado, cancelado_em, usuario_id, forma_pagamento')
                 .gte('data', dataMinimaStr)
                 .order('data', { ascending: false });
             
             if (!verOutros && usuario?.id) {
                 querySaidas = querySaidas.eq('usuario_id', usuario.id);
             }
-            
-            const { data: saidasData, error: errorSaidas } = await querySaidas;
 
-            if (!errorSaidas && saidasData) {
-                // Filtrar apenas vendas ativas
-                vendas = saidasData.filter(v => v.cancelado !== true);
-            } else {
-                console.warn('Aviso na busca de saídas:', errorSaidas);
-                vendas = [];
+            let queryPags = supabaseClient
+                .from('contas_receber_pagamentos')
+                .select('id, saida_id, conta_receber_id, data_pagamento, valor_pago, cancelado, cancelado_em, tipo_operacao, forma_pagamento, usuario_id')
+                .gte('data_pagamento', dataMinimaStr)
+                .order('data_pagamento', { ascending: false });
+
+            if (!verOutros && usuario?.id) {
+                queryPags = queryPags.eq('usuario_id', usuario.id);
             }
+
+            let queryCR = supabaseClient
+                .from('contas_receber')
+                .select('id, saida_id, status');
+
+            const [resSaidas, resPags, resCR] = await Promise.allSettled([querySaidas, queryPags, queryCR]);
+
+            const todasSaidas = (resSaidas.status === 'fulfilled' && !resSaidas.value.error && resSaidas.value.data) ? resSaidas.value.data : [];
+            const todasContas = (resCR.status === 'fulfilled' && !resCR.value.error && resCR.value.data) ? resCR.value.data : [];
+            const todosPags = (resPags.status === 'fulfilled' && !resPags.value.error && resPags.value.data) ? resPags.value.data : [];
+
+            // Conjunto de IDs de saídas e contas canceladas
+            const idsSaidasCanceladas = new Set();
+            const idsContasCanceladas = new Set();
+
+            todasSaidas.forEach(s => {
+                if (isRegistroCancelado(s)) idsSaidasCanceladas.add(s.id);
+            });
+            todasContas.forEach(c => {
+                if (isRegistroCancelado(c)) {
+                    idsContasCanceladas.add(c.id);
+                    if (c.saida_id) idsSaidasCanceladas.add(c.saida_id);
+                }
+            });
+
+            // Filtrar apenas vendas ativas (exclui vendas canceladas)
+            vendas = todasSaidas.filter(v => !isRegistroCancelado(v) && !idsSaidasCanceladas.has(v.id));
+
+            // Filtrar apenas baixas e recebimentos de fiado válidos de vendas e contas não canceladas
+            pagamentosFiado = todosPags.filter(p => {
+                if (isRegistroCancelado(p)) return false;
+                if (p.tipo_operacao === 'venda_realizada' || p.tipo_operacao === 'estorno') return false;
+                if (p.saida_id && idsSaidasCanceladas.has(p.saida_id)) return false;
+                const idConta = p.conta_receber_id || p.contas_receber_id;
+                if (idConta && idsContasCanceladas.has(idConta)) return false;
+                return true;
+            });
         } catch (e) {
-            console.warn('Erro ao carregar saídas:', e);
+            console.warn('Erro ao carregar saídas e pagamentos de fiado:', e);
             vendas = [];
+            pagamentosFiado = [];
         }
 
         // Processar métricas e gráficos imediatamente assim que as saídas chegam
@@ -264,14 +319,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         inicioAno.setMonth(0, 1);
         inicioAno.setHours(0, 0, 0, 0);
 
-        // 1. Processar Vendas
+        // 1. Processar Vendas (Vendas normais à vista/cartão/etc. + Baixas/pagamentos recebidos de fiado)
         let totalHojeVendas = 0;
         let totalSemanaVendas = 0;
         let totalMesVendas = 0;
         let totalAnoVendas = 0;
         let somaFaturamentoTotal = 0;
 
+        // Vendas diretas (excluindo fiado "A Pagar (F)")
         vendas.forEach(v => {
+            if (ehVendaFiado(v.forma_pagamento)) return;
             const valor = Number(v.total) || 0;
             const dataVenda = parseDateLocal(v.data);
 
@@ -283,8 +340,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (dataVenda >= inicioAno) totalAnoVendas += valor;
         });
 
-        const vendasValidas = vendas.filter(v => Number(v.total) > 0);
-        const ticketMedio = vendasValidas.length > 0 ? (somaFaturamentoTotal / vendasValidas.length) : 0;
+        // Baixas / Pagamentos de Fiado recebidos (entrada inicial, amortizações parciais ou quitações totais)
+        pagamentosFiado.forEach(p => {
+            const valor = Number(p.valor_pago) || 0;
+            if (valor <= 0) return;
+            const dataPag = parseDateLocal(p.data_pagamento);
+
+            somaFaturamentoTotal += valor;
+
+            if (dataPag >= hoje) totalHojeVendas += valor;
+            if (dataPag >= inicioSemana) totalSemanaVendas += valor;
+            if (dataPag >= inicioMes) totalMesVendas += valor;
+            if (dataPag >= inicioAno) totalAnoVendas += valor;
+        });
+
+        const qtdTransacoesValidas = vendas.filter(v => !ehVendaFiado(v.forma_pagamento) && Number(v.total) > 0).length + pagamentosFiado.filter(p => Number(p.valor_pago) > 0).length;
+        const ticketMedio = qtdTransacoesValidas > 0 ? (somaFaturamentoTotal / qtdTransacoesValidas) : 0;
 
         // 2. Processar Despesas
         let totalDespesasHoje = 0;
@@ -414,8 +485,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Agrupar faturamento e despesas por mês
         const mesesMap = {};
 
-        // Mapear vendas
+        // Mapear vendas diretas (excluindo fiado)
         vendas.forEach(v => {
+            if (ehVendaFiado(v.forma_pagamento)) return;
             const dataObj = parseDateLocal(v.data);
             const chave = `${dataObj.getFullYear()}-${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
             const label = dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
@@ -423,6 +495,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 mesesMap[chave] = { label, faturamento: 0, despesas: 0 };
             }
             mesesMap[chave].faturamento += Number(v.total) || 0;
+        });
+
+        // Mapear recebimentos / baixas de fiado
+        pagamentosFiado.forEach(p => {
+            const valor = Number(p.valor_pago) || 0;
+            if (valor <= 0) return;
+            const dataObj = parseDateLocal(p.data_pagamento);
+            const chave = `${dataObj.getFullYear()}-${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
+            const label = dataObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            if (!mesesMap[chave]) {
+                mesesMap[chave] = { label, faturamento: 0, despesas: 0 };
+            }
+            mesesMap[chave].faturamento += valor;
         });
 
         // Mapear despesas
@@ -556,11 +641,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             dataAux.setDate(dataAux.getDate() + 1);
         }
 
-        // Somar vendas do período
+        // Somar vendas do período (exceto fiado)
         vendas.forEach(v => {
-            const dataVendaStr = v.data.substring(0, 10);
+            if (ehVendaFiado(v.forma_pagamento)) return;
+            const dataVendaStr = String(v.data).substring(0, 10);
             if (datasIntervalo[dataVendaStr] !== undefined) {
-                datasIntervalo[dataVendaStr] += (v.total || 0);
+                datasIntervalo[dataVendaStr] += (Number(v.total) || 0);
+            }
+        });
+
+        // Somar baixas/pagamentos de fiado no período
+        pagamentosFiado.forEach(p => {
+            const valor = Number(p.valor_pago) || 0;
+            if (valor <= 0) return;
+            const dataPagStr = String(p.data_pagamento).substring(0, 10);
+            if (datasIntervalo[dataPagStr] !== undefined) {
+                datasIntervalo[dataPagStr] += valor;
             }
         });
 
@@ -1273,6 +1369,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnExpandir?.click();
         }
     });
+
+    // =====================================================
+    // ATUALIZAÇÃO REATIVA DO DASHBOARD (FOCO, VISIBILIDADE E INTERVALO)
+    // =====================================================
+    let carregandoDashboardEmAndamento = false;
+    async function recarregarDashboardSeguro() {
+        if (carregandoDashboardEmAndamento) return;
+        carregandoDashboardEmAndamento = true;
+        try {
+            await carregarDashboard();
+        } finally {
+            carregandoDashboardEmAndamento = false;
+        }
+    }
+
+    // Atualizar quando o usuário volta para a aba do Dashboard
+    window.addEventListener('focus', recarregarDashboardSeguro);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            recarregarDashboardSeguro();
+        }
+    });
+
+    // Auto-refresh a cada 45 segundos
+    setInterval(recarregarDashboardSeguro, 45000);
+
+    // Expor função global de recarregamento para botões manuais
+    window.atualizarDashboardManual = recarregarDashboardSeguro;
 
     // =====================================================
     // INICIALIZAÇÃO

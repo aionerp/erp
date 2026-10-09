@@ -297,7 +297,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 produtosPromocaoVigentes = [];
             }
 
-            renderizarVendas(vendasRes.data || [], novoIdDestaque);
+            // Carregar status de fiado/DAV para as vendas recentes
+            const contasReceberMap = new Map();
+            try {
+                const saidasIds = (vendasRes.data || []).map(v => v.id).filter(Boolean);
+                if (saidasIds.length > 0) {
+                    const { data: crList } = await supabaseClient
+                        .from('contas_receber')
+                        .select('id, saida_id, status, valor_original, valor_pago, saldo_devedor')
+                        .in('saida_id', saidasIds);
+                    (crList || []).forEach(c => {
+                        if (c.saida_id && c.status !== 'cancelado') {
+                            contasReceberMap.set(c.saida_id, c);
+                        }
+                    });
+                }
+            } catch (eCR) {
+                console.warn('Aviso ao carregar status de contas a receber no PDV:', eCR);
+            }
+
+            renderizarVendas(vendasRes.data || [], novoIdDestaque, contasReceberMap);
 
             // === VERIFICAR STATUS DO CAIXA DIÁRIO ===
             let caixaAtivo = null;
@@ -1177,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZAR VENDAS
     // =====================================================
 
-    function renderizarVendas(vendas, novoIdDestaque = null) {
+    function renderizarVendas(vendas, novoIdDestaque = null, contasReceberMap = new Map()) {
         const tbody = document.getElementById('vendasTableBody');
         const badgeTotal = document.getElementById('badgeVendasRecentes');
         
@@ -1199,7 +1218,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const cancelado = v.cancelado || false;
             const isDevolucao = Number(v.total) < 0;
             const jaDevolvido = v.observacao && v.observacao.includes('[Devolvido');
-            const podeCanc  = podeCancelar && !cancelado && !isDevolucao && !jaDevolvido && podeCancelarVenda(v.data_finalizacao);
+            const dentroPrazo = podeCancelarVenda(v.data_finalizacao);
+
+            // Verificar se possui vínculo com DAV / Fiado
+            const contaFiado = contasReceberMap?.get(v.id);
+            const isFiado = v.forma_pagamento === 'A Pagar (F)' || !!contaFiado;
+            const valPagoFiado = contaFiado ? (Number(contaFiado.valor_pago) || 0) : 0;
+            const saldoDevedorFiado = contaFiado ? (Number(contaFiado.saldo_devedor) || 0) : 0;
+            const isFiadoQuitado = isFiado && contaFiado && (contaFiado.status === 'pago' || (valPagoFiado > 0 && saldoDevedorFiado <= 0));
+            const isFiadoParcial = isFiado && contaFiado && (contaFiado.status === 'aver_na_conta' || (valPagoFiado > 0 && saldoDevedorFiado > 0));
+            const isFiadoAberto = isFiado && !isFiadoQuitado && !isFiadoParcial;
 
             let statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span>';
             if (cancelado) {
@@ -1208,6 +1236,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusHtml = '<span class="status-estoque" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;">🔄 Devolução</span>';
             } else if (jaDevolvido) {
                 statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span> <span class="status-estoque" style="background:#fee2e2; color:#991b1b; font-size:10px; margin-left:2px;">🔄 Devolvida</span>';
+            } else if (isFiadoQuitado) {
+                statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span> <span class="status-estoque" style="background:#d1fae5; color:#065f46; font-size:10px; margin-left:2px; font-weight:700;">🎉 Quitado</span>';
+            } else if (isFiadoParcial) {
+                statusHtml = `<span class="status-estoque status-normal">✅ Ativa</span> <span class="status-estoque" style="background:#fef3c7; color:#92400e; font-size:10px; margin-left:2px; font-weight:700;">💵 Parcial (${formatarMoeda(valPagoFiado)})</span>`;
+            } else if (isFiadoAberto) {
+                statusHtml = '<span class="status-estoque status-normal">✅ Ativa</span> <span class="status-estoque" style="background:#fee2e2; color:#991b1b; font-size:10px; margin-left:2px; font-weight:700;">📋 DAV Aberto</span>';
             }
 
             let nomeCli = v.cliente_nome || v.clientes?.nome;
@@ -1227,6 +1261,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<strong style="color:#dc2626;">- ${formatarMoeda(Math.abs(v.total))}</strong>`
                 : `<strong style="color:var(--primary)">${formatarMoeda(v.total)}</strong>`;
 
+            // Botão de cancelamento segundo as regras de negócio
+            let btnCancelarHtml = '';
+            if (podeCancelar && !cancelado && !isDevolucao && !jaDevolvido && dentroPrazo) {
+                if (isFiadoQuitado) {
+                    btnCancelarHtml = `<button class="btn-secondary" onclick="cancelarVenda(${v.id})" style="margin-left:4px; opacity:0.65; cursor:not-allowed;" title="Venda quitada no Fiado - Cancelamento bloqueado">🔒 Quitada</button>`;
+                } else if (isFiadoParcial) {
+                    btnCancelarHtml = `<button class="btn-danger" onclick="cancelarVenda(${v.id})" style="margin-left:4px;" title="Venda com pagamento parcial (Necessário estornar na DAV)">❌ Cancelar</button>`;
+                } else {
+                    btnCancelarHtml = `<button class="btn-danger" onclick="cancelarVenda(${v.id})" style="margin-left:4px;" title="${isFiadoAberto ? 'Cancelar Venda e DAV em aberto' : 'Cancelar Venda'}">❌ Cancelar</button>`;
+                }
+            }
+
             return `
                 <tr ${rowClass}>
                     <td>${idCol}</td>
@@ -1237,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${statusHtml}</td>
                     <td class="table-actions" style="white-space:nowrap;">
                         <button class="btn-info" onclick="verComprovante(${v.id})" title="${isDevolucao ? 'Ver Comprovante de Devolução' : 'Ver Comprovante'}">📄</button>
-                        ${podeCanc ? `<button class="btn-danger" onclick="cancelarVenda(${v.id})" style="margin-left:4px;" title="Cancelar Venda">❌ Cancelar</button>` : ''}
+                        ${btnCancelarHtml}
                         ${cancelado && v.cancelado_em ? `<small style="color:#999;font-size:10px;display:block;margin-top:3px;">Cancelado: ${new Date(v.cancelado_em).toLocaleString('pt-BR')}</small>` : ''}
                     </td>
                 </tr>`;
@@ -1335,11 +1381,236 @@ document.addEventListener('DOMContentLoaded', () => {
     // ✅ FIX: listener definido UMA VEZ fora do carregarDados
     // =====================================================
 
+    let dadosFiadoVenda = null;
+
+    function abrirModalFiadoVenda() {
+        const modal = document.getElementById('modalFiadoVenda');
+        if (!modal) return;
+
+        const subtotal = carrinho.reduce((acc, item) => acc + (parseFloat(item.subtotal) || 0), 0);
+        const descontoInput = parseFloat(document.getElementById('desconto')?.value || 0) || 0;
+        const acrescimoInput = parseFloat(document.getElementById('acrescimo')?.value || 0) || 0;
+        const totalVenda = Math.max(0, subtotal - descontoInput + acrescimoInput);
+
+        if (carrinho.length === 0 || totalVenda <= 0) {
+            mostrarNotificacao('Adicione itens ao carrinho antes de registrar venda fiada!', 'warning');
+            document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
+            formaPagamentoSelecionada = null;
+            return;
+        }
+
+        // Preencher select de clientes
+        const selCliente = document.getElementById('fiadoClienteSelect');
+        if (selCliente) {
+            selCliente.innerHTML = '<option value="">-- Selecione um Cliente Cadastrado --</option>' +
+                clientes.map(c => `<option value="${c.id}">${c.nome} ${c.cpf_cnpj ? `(${c.cpf_cnpj})` : ''}</option>`).join('');
+
+            // Se já havia cliente selecionado na tela de vendas
+            const clienteIdAtual = document.getElementById('clienteId')?.value;
+            if (clienteIdAtual) {
+                selCliente.value = clienteIdAtual;
+                const cObj = clientes.find(c => String(c.id) === String(clienteIdAtual));
+                if (cObj) {
+                    document.getElementById('fiadoResponsavel').value = cObj.nome || '';
+                    document.getElementById('fiadoCpf').value = cObj.cpf_cnpj || '';
+                    document.getElementById('fiadoTelefone').value = cObj.telefone || '';
+                }
+            } else {
+                const clienteNomeBusca = document.getElementById('searchCliente')?.value?.trim();
+                const clienteCpfBusca = document.getElementById('clienteVendaCpf')?.value?.trim();
+                if (clienteNomeBusca) document.getElementById('fiadoResponsavel').value = clienteNomeBusca;
+                if (clienteCpfBusca) document.getElementById('fiadoCpf').value = clienteCpfBusca;
+            }
+        }
+
+        // Data de vencimento padrão: 30 dias a partir de hoje
+        const dtVenc = new Date();
+        dtVenc.setDate(dtVenc.getDate() + 30);
+        const elVenc = document.getElementById('fiadoDataVencimento');
+        if (elVenc) elVenc.value = dtVenc.toISOString().split('T')[0];
+
+        // Valores
+        const elTotal = document.getElementById('fiadoTotalVenda');
+        if (elTotal) elTotal.textContent = formatarMoeda(totalVenda);
+
+        const elEntrada = document.getElementById('fiadoValorEntrada');
+        if (elEntrada) {
+            elEntrada.value = '0.00';
+            elEntrada.max = totalVenda.toFixed(2);
+        }
+
+        const elSaldo = document.getElementById('fiadoSaldoRestante');
+        if (elSaldo) elSaldo.textContent = formatarMoeda(totalVenda);
+
+        const selFormaEntrada = document.getElementById('fiadoFormaPagamentoEntrada');
+        const avisoEntrada = document.getElementById('fiadoAvisoEntrada');
+        if (selFormaEntrada) {
+            selFormaEntrada.disabled = true;
+            selFormaEntrada.style.background = '#f8fafc';
+        }
+        if (avisoEntrada) avisoEntrada.textContent = 'Habilita quando valor pago > 0';
+
+        document.getElementById('fiadoObservacao').value = '';
+        modal.style.display = 'flex';
+    }
+
+    function fecharModalFiado() {
+        const modal = document.getElementById('modalFiadoVenda');
+        if (modal) modal.style.display = 'none';
+        if (!dadosFiadoVenda) {
+            document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
+            formaPagamentoSelecionada = null;
+        }
+    }
+
+    document.getElementById('closeFiadoModal')?.addEventListener('click', fecharModalFiado);
+    document.getElementById('btnCancelarFiado')?.addEventListener('click', fecharModalFiado);
+
+    document.getElementById('fiadoClienteSelect')?.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val) {
+            const c = clientes.find(x => String(x.id) === String(val));
+            if (c) {
+                document.getElementById('fiadoResponsavel').value = c.nome || '';
+                document.getElementById('fiadoCpf').value = c.cpf_cnpj || '';
+                document.getElementById('fiadoTelefone').value = c.telefone || '';
+                selecionarCliente(c.id, c.nome, c.cpf_cnpj);
+            }
+        }
+    });
+
+    document.getElementById('fiadoValorEntrada')?.addEventListener('input', (e) => {
+        const subtotal = carrinho.reduce((acc, item) => acc + (parseFloat(item.subtotal) || 0), 0);
+        const descontoInput = parseFloat(document.getElementById('desconto')?.value || 0) || 0;
+        const acrescimoInput = parseFloat(document.getElementById('acrescimo')?.value || 0) || 0;
+        const totalVenda = Math.max(0, subtotal - descontoInput + acrescimoInput);
+
+        let entrada = parseFloat(e.target.value) || 0;
+        if (entrada < 0) {
+            entrada = 0;
+            e.target.value = '0.00';
+        }
+        if (entrada > totalVenda) {
+            mostrarNotificacao('O valor da entrada não pode ser maior que o total da venda!', 'warning');
+            entrada = totalVenda;
+            e.target.value = totalVenda.toFixed(2);
+        }
+
+        const saldoRestante = Math.max(0, totalVenda - entrada);
+        const elSaldo = document.getElementById('fiadoSaldoRestante');
+        if (elSaldo) elSaldo.textContent = formatarMoeda(saldoRestante);
+
+        const selForma = document.getElementById('fiadoFormaPagamentoEntrada');
+        const aviso = document.getElementById('fiadoAvisoEntrada');
+        if (entrada > 0) {
+            if (selForma) {
+                selForma.disabled = false;
+                selForma.style.background = '#fff';
+            }
+            if (aviso) aviso.textContent = 'Selecione a forma do valor recebido';
+        } else {
+            if (selForma) {
+                selForma.disabled = true;
+                selForma.style.background = '#f8fafc';
+            }
+            if (aviso) aviso.textContent = 'Habilita quando valor pago > 0';
+        }
+    });
+
+    document.getElementById('btnNovoClienteFiado')?.addEventListener('click', () => {
+        const modalCli = document.getElementById('modalNovoCliente');
+        if (modalCli) {
+            document.getElementById('novoClienteNome').value = '';
+            document.getElementById('novoClienteTelefone').value = '';
+            document.getElementById('novoClienteCpfCnpj').value = '';
+            document.getElementById('novoClienteEmail').value = '';
+            document.getElementById('novoClienteEndereco').value = '';
+            modalCli.style.display = 'flex';
+            document.getElementById('novoClienteNome').focus();
+        }
+    });
+
+    document.getElementById('btnConfirmarFiado')?.addEventListener('click', () => {
+        const subtotal = carrinho.reduce((acc, item) => acc + (parseFloat(item.subtotal) || 0), 0);
+        const descontoInput = parseFloat(document.getElementById('desconto')?.value || 0) || 0;
+        const acrescimoInput = parseFloat(document.getElementById('acrescimo')?.value || 0) || 0;
+        const totalVenda = Math.max(0, subtotal - descontoInput + acrescimoInput);
+
+        const clienteId = document.getElementById('fiadoClienteSelect')?.value ? parseInt(document.getElementById('fiadoClienteSelect').value) : null;
+        const responsavel = document.getElementById('fiadoResponsavel')?.value?.trim();
+        const cpf = document.getElementById('fiadoCpf')?.value?.trim() || null;
+        const telefone = document.getElementById('fiadoTelefone')?.value?.trim() || null;
+        const vencimento = document.getElementById('fiadoDataVencimento')?.value || null;
+        const observacao = document.getElementById('fiadoObservacao')?.value?.trim() || null;
+        const entrada = parseFloat(document.getElementById('fiadoValorEntrada')?.value) || 0;
+        const formaEntrada = document.getElementById('fiadoFormaPagamentoEntrada')?.value || 'Dinheiro';
+
+        if (!clienteId && !responsavel) {
+            mostrarNotificacao('Identificação do cliente ou responsável é obrigatória para venda fiada!', 'error');
+            document.getElementById('fiadoResponsavel')?.focus();
+            return;
+        }
+
+        if (entrada < 0) {
+            mostrarNotificacao('O valor da entrada não pode ser negativo!', 'error');
+            return;
+        }
+
+        if (entrada > totalVenda) {
+            mostrarNotificacao('O valor da entrada não pode ser maior que o total da venda!', 'error');
+            return;
+        }
+
+        if (entrada > 0 && !formaEntrada) {
+            mostrarNotificacao('Informe a forma de pagamento do valor recebido na entrada!', 'warning');
+            return;
+        }
+
+        const saldoRestante = Math.max(0, totalVenda - entrada);
+
+        dadosFiadoVenda = {
+            clienteId,
+            clienteNome: responsavel,
+            clienteCpf: cpf,
+            clienteTelefone: telefone,
+            dataVencimento: vencimento,
+            observacao,
+            valorEntrada: entrada,
+            saldoRestante,
+            formaPagamentoEntrada: entrada > 0 ? formaEntrada : null
+        };
+
+        if (clienteId) {
+            selecionarCliente(clienteId, responsavel, cpf);
+        } else {
+            const searchCli = document.getElementById('searchCliente');
+            if (searchCli) searchCli.value = responsavel;
+        }
+
+        document.getElementById('modalFiadoVenda').style.display = 'none';
+
+        // Dispara a finalização da venda
+        finalizarVenda();
+    });
+
     document.querySelectorAll('.btn-pagamento').forEach(btn => {
         btn.addEventListener('click', () => {
+            const fp = btn.getAttribute('data-pagamento');
+            if (fp === 'A Pagar (F)') {
+                if (carrinho.length === 0) {
+                    mostrarNotificacao('Adicione produtos ao carrinho antes de selecionar A Pagar (F)!', 'warning');
+                    return;
+                }
+                document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                formaPagamentoSelecionada = fp;
+                abrirModalFiadoVenda();
+                return;
+            }
             document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
-            formaPagamentoSelecionada = btn.getAttribute('data-pagamento');
+            formaPagamentoSelecionada = fp;
+            dadosFiadoVenda = null;
         });
     });
 
@@ -2032,6 +2303,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.btn-pagamento').forEach(b => b.classList.remove('selected'));
         formaPagamentoSelecionada = null;
+        dadosFiadoVenda = null;
 
         const suggestions = document.getElementById('produtoSuggestions');
         if (suggestions) suggestions.style.display = 'none';
@@ -2075,10 +2347,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (formaPagamentoSelecionada === 'A Pagar (F)') {
+            if (!dadosFiadoVenda || (!dadosFiadoVenda.clienteId && !dadosFiadoVenda.clienteNome)) {
+                mostrarNotificacao('Para venda fiada ("A Pagar F"), é obrigatório identificar o cliente e registrar as condições!', 'warning');
+                abrirModalFiadoVenda();
+                return;
+            }
+        }
+
         const clienteIdRaw  = document.getElementById('clienteId')?.value;
-        const clienteId     = clienteIdRaw ? parseInt(clienteIdRaw) : null;
-        const clienteNome   = document.getElementById('searchCliente')?.value.trim() || null;
-        const clienteCpf    = document.getElementById('clienteVendaCpf')?.value.trim() || null;
+        let clienteId     = clienteIdRaw ? parseInt(clienteIdRaw) : null;
+        let clienteNome   = document.getElementById('searchCliente')?.value.trim() || null;
+        let clienteCpf    = document.getElementById('clienteVendaCpf')?.value.trim() || null;
+
+        if (formaPagamentoSelecionada === 'A Pagar (F)' && dadosFiadoVenda) {
+            if (dadosFiadoVenda.clienteId) clienteId = dadosFiadoVenda.clienteId;
+            if (dadosFiadoVenda.clienteNome) clienteNome = dadosFiadoVenda.clienteNome;
+            if (dadosFiadoVenda.clienteCpf) clienteCpf = dadosFiadoVenda.clienteCpf;
+        }
+
         const desconto      = parseFloat(document.getElementById('desconto').value)  || 0;
         const acrescimo     = parseFloat(document.getElementById('acrescimo').value) || 0;
         const observacao    = document.getElementById('observacao').value;
@@ -2142,6 +2429,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let insertData = {
                 cliente_id:         clienteId || null,
+                cliente_nome:       clienteNome || null,
+                cliente_cpf:        clienteCpf || null,
                 data:               dataVenda,
                 total:              total,
                 desconto:           desconto,
@@ -2167,6 +2456,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 delete insertData.colaborador_id;
                 delete insertData.comissao_calculada;
                 delete insertData.comissao_paga;
+                delete insertData.cliente_nome;
+                delete insertData.cliente_cpf;
 
                 const retryResult = await supabaseClient
                     .from('saidas')
@@ -2382,6 +2673,95 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('Erro ao armazenar cache local de descontos:', e);
             }
 
+            // =====================================================
+            // INTEGRAÇÃO: FIADO E CONTAS A RECEBER
+            // =====================================================
+            if (formaPagamentoSelecionada === 'A Pagar (F)') {
+                try {
+                    const valorOriginal = total;
+                    const valorEntrada = Math.min(valorOriginal, Math.max(0, parseFloat(dadosFiadoVenda?.valorEntrada || 0)));
+                    const saldoDevedor = Math.max(0, valorOriginal - valorEntrada);
+                    const formaEntrada = dadosFiadoVenda?.formaPagamentoEntrada || 'Dinheiro';
+                    const docDAV = `DAV-${String(venda.id).padStart(6, '0')}`;
+
+                    let statusConta = 'aberto';
+                    if (saldoDevedor === 0) {
+                        statusConta = 'pago';
+                    } else if (valorEntrada > 0) {
+                        statusConta = 'aver_na_conta';
+                    }
+
+                    const dataVencimento = dadosFiadoVenda?.dataVencimento || null;
+                    const obsFiado = dadosFiadoVenda?.observacao ? dadosFiadoVenda.observacao.trim() : null;
+
+                    const payloadConta = {
+                        saida_id: venda.id,
+                        cliente_id: clienteId || null,
+                        cliente_nome: clienteNome || 'Cliente Fiado',
+                        cliente_cpf: clienteCpf || null,
+                        cliente_telefone: dadosFiadoVenda?.clienteTelefone || null,
+                        numero_documento: docDAV,
+                        data_venda: dataVenda,
+                        data_vencimento: dataVencimento,
+                        valor_original: valorOriginal,
+                        valor_pago: valorEntrada,
+                        saldo_devedor: saldoDevedor,
+                        status: statusConta,
+                        data_quitacao: (statusConta === 'pago') ? new Date().toISOString() : null,
+                        data_ultimo_pagamento: (valorEntrada > 0) ? new Date().toISOString() : null,
+                        usuario_id: usuario.id,
+                        observacao: obsFiado
+                    };
+
+                    const { data: contaCriada, error: errConta } = await supabaseClient
+                        .from('contas_receber')
+                        .insert([payloadConta])
+                        .select()
+                        .single();
+
+                    if (errConta) {
+                        console.error('Erro ao registrar conta a receber:', errConta);
+                    } else if (contaCriada) {
+                        // 1. Registro histórico da Venda realizada
+                        await supabaseClient.from('contas_receber_pagamentos').insert([{
+                            conta_receber_id: contaCriada.id,
+                            saida_id: venda.id,
+                            cliente_id: clienteId || null,
+                            caixa_id: caixaAtivo ? caixaAtivo.id : null,
+                            usuario_id: usuario.id,
+                            tipo_operacao: 'venda_realizada',
+                            valor_pago: 0,
+                            forma_pagamento: 'A Pagar (F)',
+                            saldo_anterior: valorOriginal,
+                            saldo_apos: valorOriginal,
+                            numero_documento: docDAV,
+                            observacao: `Venda fiada original gerada #${venda.id}. Total: R$ ${valorOriginal.toFixed(2)}`
+                        }]);
+
+                        // 2. Se houve pagamento na entrada (Cenário B ou C)
+                        if (valorEntrada > 0) {
+                            const tipoOp = (saldoDevedor === 0) ? 'pagamento_final' : 'pagamento_inicial';
+                            await supabaseClient.from('contas_receber_pagamentos').insert([{
+                                conta_receber_id: contaCriada.id,
+                                saida_id: venda.id,
+                                cliente_id: clienteId || null,
+                                caixa_id: caixaAtivo ? caixaAtivo.id : null,
+                                usuario_id: usuario.id,
+                                tipo_operacao: tipoOp,
+                                valor_pago: valorEntrada,
+                                forma_pagamento: formaEntrada,
+                                saldo_anterior: valorOriginal,
+                                saldo_apos: saldoDevedor,
+                                numero_documento: `REC-${String(venda.id).padStart(6, '0')}-01`,
+                                observacao: `Entrada recebida no momento da venda (${formaEntrada})`
+                            }]);
+                        }
+                    }
+                } catch (errFiado) {
+                    console.error('Erro ao integrar contas a receber no PDV:', errFiado);
+                }
+            }
+
             mostrarNotificacao(`✅ Venda #${venda.id} finalizada com sucesso!`, 'success');
 
             // Feedback de status na página
@@ -2495,6 +2875,88 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // =====================================================================
+            // REGRAS DE CANCELAMENTO PARA FIADO / DAV (CONTAS A RECEBER)
+            // =====================================================================
+            const { data: contasReceber } = await supabaseClient
+                .from('contas_receber')
+                .select('*')
+                .eq('saida_id', vendaId);
+
+            const contaFiado = (contasReceber || []).find(c => c.status !== 'cancelado');
+
+            if (contaFiado) {
+                const valorOriginal = Number(contaFiado.valor_original) || Number(venda.total) || 0;
+
+                // Buscar pagamentos ativos na tabela contas_receber_pagamentos
+                const { data: pagamentosFiado } = await supabaseClient
+                    .from('contas_receber_pagamentos')
+                    .select('*')
+                    .eq('conta_receber_id', contaFiado.id)
+                    .eq('cancelado', false);
+
+                const pagsEfetivos = (pagamentosFiado || []).filter(p =>
+                    p.tipo_operacao !== 'venda_realizada' &&
+                    p.tipo_operacao !== 'estorno'
+                );
+
+                const somaPagamentos = pagsEfetivos.reduce((soma, p) => soma + (Number(p.valor_pago) || 0), 0);
+                const totalPagoEfetivo = Math.max(Number(contaFiado.valor_pago) || 0, somaPagamentos);
+                const saldoDevedor = Number(contaFiado.saldo_devedor) !== undefined
+                    ? Number(contaFiado.saldo_devedor)
+                    : Math.max(0, valorOriginal - totalPagoEfetivo);
+
+                // REGRA C: Se recebido o valor total (quitada), NÃO DEIXAR MAIS CANCELAR
+                if (contaFiado.status === 'pago' || (totalPagoEfetivo > 0 && saldoDevedor <= 0) || (totalPagoEfetivo > 0 && totalPagoEfetivo >= valorOriginal)) {
+                    mostrarNotificacao(
+                        `⛔ Bloqueio de Cancelamento: Esta venda foi totalmente quitada/recebida (${formatarMoeda(totalPagoEfetivo)}) e não pode mais ser cancelada!`,
+                        'error'
+                    );
+                    return;
+                }
+
+                // REGRA B: Se houver pagamento parcial, BLOQUEAR o cancelamento da venda informando que precisa estornar/cancelar a DAV
+                if (totalPagoEfetivo > 0 && saldoDevedor > 0) {
+                    mostrarNotificacao(
+                        `⛔ Cancelamento Bloqueado: Esta venda possui pagamento parcial já recebido (${formatarMoeda(totalPagoEfetivo)} de ${formatarMoeda(valorOriginal)} | Saldo restante: ${formatarMoeda(saldoDevedor)}). Para cancelar a venda, é necessário primeiro estornar os pagamentos e cancelar a DAV no menu Financeiro → Fiado e Contas a Receber!`,
+                        'error'
+                    );
+                    return;
+                }
+            } else if (venda?.forma_pagamento === 'A Pagar (F)' || (venda?.observacao && venda.observacao.includes('A Pagar (F)'))) {
+                // Verificação de segurança via pagamentos direto por saida_id
+                const { data: pagsSaida } = await supabaseClient
+                    .from('contas_receber_pagamentos')
+                    .select('*')
+                    .eq('saida_id', vendaId)
+                    .eq('cancelado', false);
+
+                const pagsEfetivos = (pagsSaida || []).filter(p =>
+                    p.tipo_operacao !== 'venda_realizada' &&
+                    p.tipo_operacao !== 'estorno'
+                );
+
+                const somaPags = pagsEfetivos.reduce((s, p) => s + (Number(p.valor_pago) || 0), 0);
+                const valorTotalVenda = Number(venda.total) || 0;
+
+                if (somaPags >= valorTotalVenda && valorTotalVenda > 0) {
+                    mostrarNotificacao(
+                        `⛔ Bloqueio de Cancelamento: Esta venda fiada foi totalmente quitada (${formatarMoeda(somaPags)}) e não pode mais ser cancelada!`,
+                        'error'
+                    );
+                    return;
+                }
+
+                if (somaPags > 0) {
+                    mostrarNotificacao(
+                        `⛔ Cancelamento Bloqueado: Esta venda possui recebimentos parciais confirmados (${formatarMoeda(somaPags)}). Para cancelar a venda, é necessário primeiro estornar os pagamentos no módulo Financeiro!`,
+                        'error'
+                    );
+                    return;
+                }
+            }
+
+            // REGRA A: Venda com DAV em aberto com valor fiado (0 recebido) -> Prossegue com o cancelamento e cancela a DAV vinculada
             const infoText = `Cancelar Venda #${vendaId} - Cliente: ${venda?.clientes?.nome || '—'} - Total: ${formatarMoeda(venda?.total)}`;
             const motivo = await obterMotivoCancelamento(vendaId, infoText);
             if (motivo === null) return;
@@ -2538,7 +3000,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 motivo_cancelamento: motivo
             }).eq('id', vendaId);
 
-            mostrarNotificacao(`✅ Venda #${vendaId} cancelada! Estoque estornado.`, 'success');
+            // REGRA A: Cancelar automaticamente a DAV em aberto vinculada
+            try {
+                const targetContaId = contaFiado ? contaFiado.id : null;
+                if (targetContaId) {
+                    await supabaseClient.from('contas_receber').update({
+                        status: 'cancelado',
+                        saldo_devedor: 0,
+                        observacao: `DAV cancelada automaticamente pelo PDV (Cancelamento da Venda #${vendaId}): ${motivo}`,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', targetContaId);
+
+                    await supabaseClient.from('contas_receber_pagamentos').update({
+                        cancelado: true,
+                        cancelado_em: new Date().toISOString(),
+                        cancelado_por: usuario.id,
+                        motivo_cancelamento: `Venda #${vendaId} cancelada no PDV: ${motivo}`
+                    }).eq('conta_receber_id', targetContaId);
+
+                    await supabaseClient.from('contas_receber_pagamentos').insert([{
+                        loja_id: usuario.loja_id || 1,
+                        conta_receber_id: targetContaId,
+                        saida_id: vendaId,
+                        cliente_id: contaFiado.cliente_id || null,
+                        caixa_id: caixaAtivo ? caixaAtivo.id : null,
+                        usuario_id: usuario.id,
+                        tipo_operacao: 'estorno',
+                        valor_pago: 0,
+                        forma_pagamento: 'Cancelamento PDV',
+                        saldo_anterior: contaFiado.saldo_devedor,
+                        saldo_apos: 0,
+                        numero_documento: `CANC-${vendaId}`,
+                        observacao: `DAV cancelada junto com a Venda #${vendaId}: ${motivo}`,
+                        data_pagamento: new Date().toISOString()
+                    }]);
+                } else {
+                    await supabaseClient.from('contas_receber').update({
+                        status: 'cancelado',
+                        saldo_devedor: 0,
+                        observacao: `Cancelada via PDV (Venda #${vendaId}): ${motivo}`,
+                        updated_at: new Date().toISOString()
+                    }).eq('saida_id', vendaId);
+
+                    await supabaseClient.from('contas_receber_pagamentos').update({
+                        cancelado: true,
+                        cancelado_em: new Date().toISOString(),
+                        cancelado_por: usuario.id,
+                        motivo_cancelamento: `Venda #${vendaId} cancelada no PDV: ${motivo}`
+                    }).eq('saida_id', vendaId);
+                }
+            } catch (errCR) {
+                console.warn('Aviso ao sincronizar cancelamento com contas a receber:', errCR);
+            }
+
+            const msgDAV = contaFiado ? ' e DAV em aberto cancelada' : '';
+            mostrarNotificacao(`✅ Venda #${vendaId}${msgDAV} com sucesso! Estoque estornado.`, 'success');
             await carregarDados();
 
         } catch (error) {
@@ -2654,6 +3170,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const cancelada = venda?.cancelado;
             const horaVenda = new Date().toLocaleTimeString('pt-BR');
 
+            // Buscar conta a receber vinculada (DAV) se for venda fiada
+            let contaReceber = null;
+            try {
+                const resCR = await supabaseClient
+                    .from('contas_receber')
+                    .select('*')
+                    .eq('saida_id', vendaId)
+                    .maybeSingle();
+                contaReceber = resCR?.data || null;
+            } catch (e) {
+                console.warn('Erro ao carregar conta a receber para comprovante:', e);
+            }
+            const isFiado = (venda?.forma_pagamento === 'A Pagar (F)') || !!contaReceber;
+
             document.getElementById('comprovanteBody').innerHTML = `
                 <div id="comprovante" style="padding:15px 5px;font-family:'Courier New',monospace;max-width:400px;margin:0 auto;font-size:16px;line-height:1.3;color:#000;box-sizing:border-box;font-weight:bold;">
 
@@ -2756,6 +3286,56 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <p style="margin:2px 0;">${isDevolucao ? 'Forma de estorno' : 'Forma de pagamento'}: ${venda.forma_pagamento || '-'}</p>
                         <p style="margin:2px 0;">Valor Líquido: ${isDevolucao ? `- ${formatarMoeda(Math.abs(total))}` : formatarMoeda(total)}</p>
+                        
+                        ${isFiado ? `
+                        <div style="margin-top:14px;border:2px dashed #b45309;background:#fffbeb;padding:12px 10px;border-radius:4px;font-size:13px;line-height:1.4;">
+                            <div style="text-align:center;font-weight:bold;font-size:14px;color:#92400e;margin-bottom:8px;text-transform:uppercase;">
+                                📋 DOCUMENTO AUXILIAR DE VENDA (DAV)<br><span style="font-size:11px;">CONTAS A RECEBER / FIADO</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span>Documento DAV:</span>
+                                <strong>${contaReceber?.numero_documento || ('DAV-' + String(venda?.id || vendaId).padStart(6, '0'))}</strong>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span>Situação:</span>
+                                <strong style="color:${contaReceber?.status === 'pago' ? '#16a34a' : (contaReceber?.valor_pago > 0 ? '#2563eb' : '#dc2626')};">
+                                    ${contaReceber?.status === 'pago' ? 'QUITADO' : (contaReceber?.valor_pago > 0 ? 'AVER NA CONTA' : 'EM ABERTO')}
+                                </strong>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span>Valor Original:</span>
+                                <span>${formatarMoeda(contaReceber?.valor_original || total)}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;color:#16a34a;">
+                                <span>(-) Entrada / Pago no Ato:</span>
+                                <span>- ${formatarMoeda(contaReceber?.valor_pago || 0)}</span>
+                            </div>
+                            <div style="border-top:1px dashed #b45309;margin:6px 0;"></div>
+                            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;color:#dc2626;">
+                                <span>SALDO RESTANTE:</span>
+                                <span>${formatarMoeda(contaReceber ? contaReceber.saldo_devedor : (total - (contaReceber?.valor_pago || 0)))}</span>
+                            </div>
+                            ${contaReceber?.data_vencimento ? `
+                            <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px;color:#374151;">
+                                <span>Vencimento Acordado:</span>
+                                <strong>${formatarData(contaReceber.data_vencimento)}</strong>
+                            </div>` : ''}
+                            ${contaReceber?.observacao ? `
+                            <div style="margin-top:4px;font-size:11px;color:#6b7280;">
+                                Obs: ${contaReceber.observacao}
+                            </div>` : ''}
+
+                            <div style="margin-top:14px;padding-top:8px;border-top:1px dashed #b45309;font-size:11px;color:#1f2937;text-align:justify;line-height:1.3;">
+                                <strong>CONFISSÃO DE DÍVIDA:</strong> Reconheço(emos) a exatidão desta compra a prazo ("A Pagar F") e assumo(imos) a responsabilidade integral pelo pagamento do saldo devedor acima demonstrado.
+                            </div>
+                            <div style="text-align:center;margin-top:28px;">
+                                <div style="border-bottom:1px solid #000;width:85%;margin:0 auto 4px auto;"></div>
+                                <div style="font-size:11px;font-weight:bold;text-transform:uppercase;">
+                                    ${venda.cliente_nome || cliente.nome || 'Assinatura do Cliente / Responsável'}
+                                </div>
+                                ${(venda.cliente_cpf || cliente.cpf_cnpj) ? `<div style="font-size:10px;color:#4b5563;">CPF/CNPJ: ${venda.cliente_cpf || cliente.cpf_cnpj}</div>` : ''}
+                            </div>
+                        </div>` : ''}
                     </div>
 
                     <!-- TERMOS DE GARANTIA E TROCAS -->
@@ -2997,6 +3577,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Selecionar no PDV
             selecionarCliente(data.id, data.nome, data.cpf_cnpj);
+
+            // Sincronizar com o modal de fiado se estiver em uso
+            const selFiado = document.getElementById('fiadoClienteSelect');
+            if (selFiado) {
+                const opt = document.createElement('option');
+                opt.value = data.id;
+                opt.textContent = `${data.nome} ${data.cpf_cnpj ? `(${data.cpf_cnpj})` : ''}`;
+                selFiado.appendChild(opt);
+                selFiado.value = data.id;
+                const respEl = document.getElementById('fiadoResponsavel');
+                const cpfEl = document.getElementById('fiadoCpf');
+                const telEl = document.getElementById('fiadoTelefone');
+                if (respEl) respEl.value = data.nome || '';
+                if (cpfEl) cpfEl.value = data.cpf_cnpj || '';
+                if (telEl) telEl.value = data.telefone || '';
+            }
 
             mostrarNotificacao('Cliente cadastrado e selecionado com sucesso!', 'success');
             fecharModalCliente();

@@ -240,7 +240,7 @@ function criarClienteSupabase(url, anonKey) {
         const tablesWithLojaField = [
             'usuarios', 'clientes', 'produtos', 'categorias', 'entradas', 'saidas',
             'movimentos_estoque', 'config_loja', 'agendamentos', 'mesas_comandas', 'caixas', 'colaboradores', 'despesas', 'boletos_pagar',
-            'promocoes', 'promocao_produtos'
+            'promocoes', 'promocao_produtos', 'contas_receber', 'contas_receber_pagamentos'
         ];
         
         if (tablesWithLojaField.includes(tableName)) {

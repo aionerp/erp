@@ -82,7 +82,7 @@ const TABLES_WITH_LOJA_ID = new Set([
     'clientes', 'colaboradores', 'config_loja', 'despesas',
     'entradas', 'mesas_comandas', 'movimentos_estoque', 'produtos',
     'promocao_produtos', 'promocoes', 'saidas', 'usuarios',
-    'servicos_recorrentes'
+    'servicos_recorrentes', 'contas_receber', 'contas_receber_pagamentos'
 ]);
 
 // Helper para converter sintaxe de relações do Supabase / PostgREST em subqueries JSON do PostgreSQL
@@ -128,7 +128,9 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
         usuarios: { lojas: 'loja_id', config_loja: 'loja_id' },
         boletos_pagar: { fornecedores: 'fornecedor_id', clientes: 'fornecedor_id', entradas: 'entrada_id' },
         servicos_recorrentes: { clientes: 'cliente_id', produtos: 'produto_id' },
-        produtos: { clientes: 'plano_cliente_id' }
+        produtos: { clientes: 'plano_cliente_id' },
+        contas_receber: { clientes: 'cliente_id', saidas: 'saida_id', usuarios: 'usuario_id' },
+        contas_receber_pagamentos: { contas_receber: 'conta_receber_id', saidas: 'saida_id', clientes: 'cliente_id', caixas: 'caixa_id', usuarios: 'usuario_id' }
     };
 
     const resultColumns = [];
@@ -145,6 +147,9 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
 
             if (tableName === 'entradas' && targetTable === 'clientes' && !explicitFk) {
                 fkCol = 'fornecedor_id';
+            }
+            if (targetTable === 'contas_receber' && !explicitFk) {
+                fkCol = 'conta_receber_id';
             }
 
             if (targetTable === 'lojas') {
