@@ -3,10 +3,24 @@
 
 let entidadeSelecionada = '';
 let dadosCarregados = [];
+let linhasDesconsideradasGlobal = [];
 let colunasMapeadas = {};
 let usuarioLogado = null;
 let categoriasCache = [];
 let categoriasMetaMap = {};
+
+// Helper para converter números monetários com vírgula ou ponto
+function parseNumeroMoeda(val) {
+    if (val === undefined || val === null || val === '') return null;
+    let s = String(val).trim().replace('R$', '').trim();
+    if (s.includes(',') && s.includes('.')) {
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes(',')) {
+        s = s.replace(',', '.');
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+}
 
 // Aliases para mapeamento inteligente de colunas
 const camposMapeamento = {
@@ -33,13 +47,13 @@ const camposMapeamento = {
     },
     produtos: {
         codigo: ['codigo', 'cod', 'sku', 'id', 'referencia', 'codigoproduto'],
-        nome: ['nome', 'produto', 'descricao', 'titulo', 'nomeproduto'],
+        nome: ['nome', 'produto', 'titulo', 'nomeproduto'],
         tipo: ['tipo', 'classificacao', 'tiposervico'],
         categoria: ['categoria', 'grupo', 'secao'],
         marca: ['marca', 'fabricante'],
         modelo: ['modelo'],
-        descricao: ['descricaodetalhada', 'obs', 'detalhes', 'observacoes'],
-        valor_compra: ['valorcompra', 'precocompra', 'compra', 'custo', 'valor_compra'],
+        descricao: ['descricao', 'descricaodetalhada', 'obs', 'detalhes', 'observacoes', 'detalhe'],
+        valor_compra: ['valorcompra', 'precocompra', 'compra', 'custo', 'valor_compra', 'precocusto'],
         valor_venda: ['valorvenda', 'precovenda', 'venda', 'preco', 'valor_venda'],
         estoque_minimo: ['estoqueminimo', 'minimo', 'estoque_minimo'],
         estoque_total: ['estoquetotal', 'estoque', 'quantidade', 'qtd', 'estoque_total'],
@@ -171,17 +185,23 @@ function renderizarInfoColunas(tipo) {
     } else if (tipo === 'produtos') {
         html = `
             <strong>📌 Informações de Colunas para Produtos:</strong>
-            <ul style="margin-left: 20px; margin-top: 8px;">
+            <p style="margin-top: 6px; margin-bottom: 8px; color: #495057;">
+                <strong>⚠️ Trava de Validação:</strong> Para importar produtos, as seguintes 9 colunas são <strong>obrigatórias</strong> e devem estar preenchidas em todas as linhas. Se alguma linha tiver qualquer um desses 9 campos em branco, essa linha será desconsiderada e o sistema importará os demais produtos válidos:
+            </p>
+            <ul style="margin-left: 20px; margin-top: 4px;">
                 <li><strong>Codigo</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Código SKU interno único (letras e números).</li>
                 <li><strong>Nome</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Título descritivo do produto ou serviço.</li>
-                <li><strong>Tipo</strong>: Indicar <code>produto</code> ou <code>servico</code> (Padrão: produto).</li>
-                <li><strong>Categoria</strong>: Categoria do produto (Ex: Celulares, Acessórios). Se não existir, o sistema criará automaticamente.</li>
-                <li><strong>Marca / Modelo</strong>: Fabricante e identificador técnico do produto.</li>
-                <li><strong>Valor_Compra / Valor_Venda</strong>: Preço de custo e de venda. Valores numéricos (ex: 120.50).</li>
-                <li><strong>Estoque_Minimo / Estoque_Total</strong>: Estoque de segurança e estoque físico atual.</li>
-                <li><strong>Garantia_Dias</strong>: Tempo de garantia em dias.</li>
-                <li><strong>Codigos_Barras</strong>: Códigos de barras (EAN/GTIN). Para mais de um código, separe por vírgula.</li>
-                <li><strong>Numeros_Serie / IMEIs</strong>: Para categorias que exigem Serial/IMEI, liste-os separados por vírgula. A quantidade de seriais deve bater com o Estoque Total.</li>
+                <li><strong>Tipo</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Indicar <code>produto</code> ou <code>servico</code>.</li>
+                <li><strong>Categoria</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Categoria (Ex: Celulares, Acessórios). Se não existir, será criada automaticamente.</li>
+                <li><strong>Marca</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Fabricante ou marca do item.</li>
+                <li><strong>Modelo</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Modelo ou identificador técnico do produto.</li>
+                <li><strong>Descricao</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Descrição detalhada do produto ou serviço.</li>
+                <li><strong>Valor_Compra</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Preço de custo (ex: 120.50 ou 0 para serviços).</li>
+                <li><strong>Valor_Venda</strong> <span style="color: #dc3545; font-weight: bold;">(Obrigatório)</span>: Preço de venda comercial (mínimo R$ 0,01).</li>
+                <li style="margin-top: 6px; color: #6c757d;"><strong>Estoque_Minimo / Estoque_Total</strong> <em>(Opcionais)</em>: Estoque de segurança e estoque físico atual.</li>
+                <li style="color: #6c757d;"><strong>Garantia_Dias</strong> <em>(Opcional)</em>: Tempo de garantia em dias.</li>
+                <li style="color: #6c757d;"><strong>Codigos_Barras</strong> <em>(Opcional)</em>: Códigos de barras (EAN/GTIN) separados por vírgula.</li>
+                <li style="color: #6c757d;"><strong>Numeros_Serie / IMEIs</strong> <em>(Opcionais)</em>: Números de série ou IMEIs separados por vírgula para categorias serializadas.</li>
             </ul>
         `;
     }
@@ -286,6 +306,14 @@ function processarDadosPlanilha(rawRows) {
     const aliases = camposMapeamento[entidadeSelecionada];
     colunasMapeadas = {};
     const colunasFaltantes = [];
+    const indicesUsados = new Set();
+
+    // Obrigatoriedades de colunas no cabeçalho
+    const obrigatorios = {
+        clientes: ['nome', 'telefone'],
+        fornecedores: ['nome', 'telefone'],
+        produtos: ['codigo', 'nome', 'tipo', 'categoria', 'marca', 'modelo', 'descricao', 'valor_compra', 'valor_venda']
+    };
 
     // Checar quais campos foram mapeados
     for (let campo in aliases) {
@@ -293,6 +321,7 @@ function processarDadosPlanilha(rawRows) {
         
         // Procurar nas colunas
         for (let i = 0; i < headers.length; i++) {
+            if (indicesUsados.has(i)) continue;
             const headerNorm = normalizar(headers[i]);
             if (aliases[campo].includes(headerNorm)) {
                 index = i;
@@ -302,64 +331,152 @@ function processarDadosPlanilha(rawRows) {
         
         if (index !== -1) {
             colunasMapeadas[campo] = index;
+            indicesUsados.add(index);
         } else {
-            // Verificar obrigatoriedade
-            const obrigatorios = {
-                clientes: ['nome', 'telefone'],
-                fornecedores: ['nome', 'telefone'],
-                produtos: ['codigo', 'nome']
-            };
-            
-            if (obrigatorios[entidadeSelecionada].includes(campo)) {
+            // Verificar obrigatoriedade no cabeçalho
+            if (obrigatorios[entidadeSelecionada] && obrigatorios[entidadeSelecionada].includes(campo)) {
                 colunasFaltantes.push(campo.toUpperCase());
             }
         }
     }
 
     if (colunasFaltantes.length > 0) {
-        mostrarAlertaValidacao(`Erro: As colunas obrigatórias <strong>${colunasFaltantes.join(', ')}</strong> não foram encontradas na planilha. Corrija o cabeçalho e tente novamente.`, false);
+        mostrarAlertaValidacao(`Erro de Estrutura: As colunas obrigatórias <strong>${colunasFaltantes.join(', ')}</strong> não foram encontradas no cabeçalho da planilha. Corrija o cabeçalho e tente novamente.`, false);
         document.getElementById('preview-container').style.display = 'none';
         return;
     }
 
-    // Criar objetos de dados mapeados
-    dadosCarregados = dataRows.map((row, idx) => {
-        const item = { _linha: idx + 2 }; // Guardar número da linha física (1-indexed + cabeçalho)
+    // Criar objetos de dados mapeados e validar linha a linha
+    const todosItensMapeados = [];
+    const linhasValidas = [];
+    const linhasDesconsideradas = [];
+
+    dataRows.forEach((row, idx) => {
+        const item = { _linha: idx + 2, _rawRow: row };
         
         for (let campo in colunasMapeadas) {
             const val = row[colunasMapeadas[campo]];
             item[campo] = val !== undefined && val !== null ? String(val).trim() : '';
         }
-        return item;
+
+        const camposFaltando = [];
+
+        if (entidadeSelecionada === 'produtos') {
+            const camposObrigatoriosProdutos = [
+                { campo: 'codigo', nome: 'Codigo' },
+                { campo: 'nome', nome: 'Nome' },
+                { campo: 'tipo', nome: 'Tipo' },
+                { campo: 'categoria', nome: 'Categoria' },
+                { campo: 'marca', nome: 'Marca' },
+                { campo: 'modelo', nome: 'Modelo' },
+                { campo: 'descricao', nome: 'Descricao' },
+                { campo: 'valor_compra', nome: 'Valor_Compra' },
+                { campo: 'valor_venda', nome: 'Valor_Venda' }
+            ];
+
+            camposObrigatoriosProdutos.forEach(c => {
+                if (!item[c.campo] || item[c.campo] === '') {
+                    camposFaltando.push(c.nome);
+                }
+            });
+
+            // Validação numérica adicional dos valores
+            if (item.valor_compra !== '') {
+                const nCompra = parseNumeroMoeda(item.valor_compra);
+                if (nCompra === null || isNaN(nCompra)) {
+                    camposFaltando.push('Valor_Compra (numérico inválido)');
+                }
+            }
+
+            if (item.valor_venda !== '') {
+                const nVenda = parseNumeroMoeda(item.valor_venda);
+                if (nVenda === null || isNaN(nVenda) || nVenda < 0.01) {
+                    camposFaltando.push('Valor_Venda (numérico inválido ou menor que R$ 0,01)');
+                }
+            }
+        } else if (entidadeSelecionada === 'clientes' || entidadeSelecionada === 'fornecedores') {
+            if (!item.nome) camposFaltando.push('Nome');
+            if (!item.telefone) camposFaltando.push('Telefone');
+        }
+
+        if (camposFaltando.length > 0) {
+            item._desconsiderado = true;
+            item._motivoDesconsiderado = `Campo(s) em branco ou inválido(s): ${camposFaltando.join(', ')}`;
+            linhasDesconsideradas.push(item);
+        } else {
+            item._desconsiderado = false;
+            linhasValidas.push(item);
+        }
+
+        todosItensMapeados.push(item);
     });
 
-    // Exibir na tabela de preview
-    gerarTabelaPreview(headers, dataRows.slice(0, 10));
+    dadosCarregados = linhasValidas;
+    linhasDesconsideradasGlobal = linhasDesconsideradas;
+
+    // Exibir na tabela de preview os registros com status
+    gerarTabelaPreview(headers, todosItensMapeados.slice(0, 15));
     
-    // Validar logicamente os dados carregados
+    // Validar logicamente os dados carregados válidos
     const errosValida = realizarPreValidacao();
 
-    document.getElementById('txt-total-linhas').textContent = `Total encontrado: ${dadosCarregados.length} registro(s)`;
-    document.getElementById('preview-container').style.display = 'block';
-
     const btnConfirmar = document.getElementById('btn-iniciar-importacao');
-    if (errosValida.length > 0) {
-        mostrarAlertaValidacao(`Planilha mapeada com sucesso, mas foram encontrados <strong>${errosValida.length} avisos/erros</strong> na validação dos dados. Você ainda pode forçar a importação, e linhas com erros críticos serão ignoradas no processamento.`, true);
+    const totalLinhas = dataRows.length;
+    const totalValidas = linhasValidas.length;
+    const totalDesconsideradas = linhasDesconsideradas.length;
+
+    if (totalValidas === 0) {
+        document.getElementById('txt-total-linhas').innerHTML = 
+            `Planilha: <strong>${totalLinhas} linhas</strong> | ` +
+            `<span style="color: #dc3545; font-weight: bold;">0 válidas</span> | ` +
+            `<span style="color: #dc3545; font-weight: bold;">${totalDesconsideradas} desconsideradas</span>`;
+
+        mostrarAlertaValidacao(`Nenhuma linha atende aos requisitos obrigatórios. Todas as <strong>${totalDesconsideradas} linha(s)</strong> possuem campos obrigatórios em branco e foram desconsideradas.<br>Para produtos, é obrigatório preencher: <em>Codigo, Nome, Tipo, Categoria, Marca, Modelo, Descricao, Valor_Compra, Valor_Venda</em>. A importação não pode continuar até que as linhas sejam corrigidas.`, false);
+        btnConfirmar.disabled = true;
+    } else if (totalDesconsideradas > 0) {
+        document.getElementById('txt-total-linhas').innerHTML = 
+            `Planilha: <strong>${totalLinhas} linhas</strong> | ` +
+            `<span style="color: #28a745; font-weight: bold;">${totalValidas} válidas</span> | ` +
+            `<span style="color: #dc3545; font-weight: bold;">${totalDesconsideradas} desconsideradas</span>`;
+
+        let msg = `Foram encontrados <strong>${totalValidas} registro(s) válido(s)</strong> para importação. <br>⚠️ <strong>${totalDesconsideradas} registro(s) foram desconsiderados</strong> por conterem campos obrigatórios em branco. O sistema seguirá importando apenas os <strong>${totalValidas}</strong> registros válidos.`;
+        if (errosValida.length > 0) {
+            msg += `<br><br>⚠️ <strong>Avisos adicionais (${errosValida.length}):</strong><br><small>${errosValida.slice(0, 3).join('<br>')}</small>`;
+        }
+        mostrarAlertaValidacao(msg, true);
         btnConfirmar.disabled = false;
     } else {
-        mostrarAlertaValidacao('Validação de dados bem sucedida! Todas as linhas estão estruturadas perfeitamente.', true, true);
+        document.getElementById('txt-total-linhas').innerHTML = 
+            `Planilha: <strong>${totalLinhas} linhas</strong> | ` +
+            `<span style="color: #28a745; font-weight: bold;">${totalValidas} válidas</span> | ` +
+            `<span style="color: #6c757d;">0 desconsideradas</span>`;
+
+        if (errosValida.length > 0) {
+            mostrarAlertaValidacao(`Todas as <strong>${totalValidas} linhas</strong> possuem os campos obrigatórios preenchidos, porém foram identificados ${errosValida.length} avisos de seriais/estoque.<br><small>${errosValida.slice(0, 3).join('<br>')}</small>`, true);
+        } else {
+            mostrarAlertaValidacao(`Validação 100% concluída! Todas as <strong>${totalValidas} linhas</strong> atendem a todos os requisitos obrigatórios e serão importadas com sucesso.`, true, true);
+        }
         btnConfirmar.disabled = false;
     }
+
+    document.getElementById('preview-container').style.display = 'block';
 }
 
-// Exibir tabela de preview das primeiras 10 linhas
-function gerarTabelaPreview(headers, rows) {
+// Exibir tabela de preview das primeiras linhas com indicação de status
+function gerarTabelaPreview(headers, itensPreview) {
     const table = document.getElementById('tabela-preview');
     table.innerHTML = '';
 
     // Cabeçalho
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
+
+    const thStatus = document.createElement('th');
+    thStatus.textContent = 'Status da Linha';
+    thStatus.style.minWidth = '160px';
+    thStatus.style.textAlign = 'center';
+    trHead.appendChild(thStatus);
+
     headers.forEach(h => {
         const th = document.createElement('th');
         th.textContent = h;
@@ -370,11 +487,31 @@ function gerarTabelaPreview(headers, rows) {
 
     // Body
     const tbody = document.createElement('tbody');
-    rows.forEach(row => {
+    itensPreview.forEach(item => {
         const tr = document.createElement('tr');
+        
+        // Coluna Status
+        const tdStatus = document.createElement('td');
+        tdStatus.style.textAlign = 'center';
+        tdStatus.style.verticalAlign = 'middle';
+        
+        if (item._desconsiderado) {
+            tr.style.backgroundColor = '#fff5f5';
+            tdStatus.innerHTML = `<span style="background: #f8d7da; color: #721c24; padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; border: 1px solid #f5c6cb;">❌ Desconsiderado</span><br><small style="font-size: 10px; color: #dc3545; display: block; margin-top: 2px;">${item._motivoDesconsiderado}</small>`;
+        } else {
+            tdStatus.innerHTML = `<span style="background: #d4edda; color: #155724; padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; border: 1px solid #c3e6cb;">🟢 Válido</span>`;
+        }
+        tr.appendChild(tdStatus);
+
+        // Células de dados
+        const rawRow = item._rawRow || [];
         headers.forEach((_, idx) => {
             const td = document.createElement('td');
-            td.textContent = row[idx] !== undefined && row[idx] !== null ? String(row[idx]) : '';
+            const val = rawRow[idx] !== undefined && rawRow[idx] !== null ? String(rawRow[idx]).trim() : '';
+            td.textContent = val;
+            if (item._desconsiderado && val === '') {
+                td.style.backgroundColor = '#ffe3e6';
+            }
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -396,26 +533,6 @@ function realizarPreValidacao() {
                 erros.push(`Linha ${row._linha}: Telefone está em branco.`);
             }
         } else if (entidadeSelecionada === 'produtos') {
-            if (!row.codigo) {
-                erros.push(`Linha ${row._linha}: Código do Produto (SKU) está em branco.`);
-            }
-            if (!row.nome) {
-                erros.push(`Linha ${row._linha}: Nome do Produto está em branco.`);
-            }
-            
-            // Validações de números
-            if (row.valor_compra && isNaN(parseFloat(row.valor_compra))) {
-                erros.push(`Linha ${row._linha}: Valor de Compra "${row.valor_compra}" inválido (precisa ser numérico).`);
-            }
-            if (row.valor_venda && isNaN(parseFloat(row.valor_venda))) {
-                erros.push(`Linha ${row._linha}: Valor de Venda "${row.valor_venda}" inválido (precisa ser numérico).`);
-            } else if (!row.valor_venda || parseFloat(row.valor_venda) < 0.01) {
-                erros.push(`Linha ${row._linha}: Preço de Venda nunca pode ser zero (mínimo R$ 0,01).`);
-            }
-            if (row.estoque_total && isNaN(parseInt(row.estoque_total))) {
-                erros.push(`Linha ${row._linha}: Estoque Total "${row.estoque_total}" inválido (precisa ser um número inteiro).`);
-            }
-            
             // Validar seriais se aplicável
             if (row.categoria) {
                 const meta = categoriasMetaMap[row.categoria];
@@ -475,8 +592,13 @@ async function executarImportacao() {
     let sucessos = 0;
     let falhas = 0;
     const total = dadosCarregados.length;
+    const ignoradosPrevios = linhasDesconsideradasGlobal.length;
+    txtErro.textContent = ignoradosPrevios;
 
-    adicionarLinhaLog('🚀 Iniciando fila de processamento de dados...', 'info');
+    adicionarLinhaLog(`🚀 Iniciando fila de importação de ${total} registro(s) válido(s)...`, 'info');
+    if (ignoradosPrevios > 0) {
+        adicionarLinhaLog(`ℹ️ ${ignoradosPrevios} linha(s) da planilha foram desconsideradas previamente por conterem campos obrigatórios em branco e não serão processadas.`, 'warning');
+    }
     
     // Obter lista atualizada de categorias para criar se faltar
     await carregarMetadadosCategorias();
@@ -504,7 +626,7 @@ async function executarImportacao() {
         } catch (err) {
             console.error(`Erro na linha ${row._linha}:`, err);
             falhas++;
-            txtErro.textContent = falhas;
+            txtErro.textContent = falhas + ignoradosPrevios;
             adicionarLinhaLog(`❌ Linha ${row._linha}: Falha ao importar. Motivo: ${err.message || err}`, 'error');
         }
     }
@@ -513,7 +635,7 @@ async function executarImportacao() {
     progressFill.style.width = '100%';
     progressPercent.textContent = '100%';
     statusText.textContent = `Processamento concluído! total: ${total} registros analisados.`;
-    adicionarLinhaLog(`🏁 Processamento finalizado! Sucessos: ${sucessos}, Falhas/Ignorados: ${falhas}.`, 'success');
+    adicionarLinhaLog(`🏁 Processamento finalizado! Sucessos: ${sucessos}, Falhas na importação: ${falhas}, Linhas desconsideradas: ${ignoradosPrevios}.`, 'success');
     
     document.getElementById('progresso-acoes').style.display = 'flex';
 }
@@ -602,8 +724,21 @@ async function processarImportacaoFornecedor(row) {
 
 // Processar produto individual (com categorias e seriais)
 async function processarImportacaoProduto(row) {
-    if (!row.codigo || !row.nome) {
-        throw new Error("Código (SKU) e Nome do Produto são obrigatórios");
+    const obrigatorios = [
+        { key: 'codigo', label: 'Codigo' },
+        { key: 'nome', label: 'Nome' },
+        { key: 'tipo', label: 'Tipo' },
+        { key: 'categoria', label: 'Categoria' },
+        { key: 'marca', label: 'Marca' },
+        { key: 'modelo', label: 'Modelo' },
+        { key: 'descricao', label: 'Descricao' },
+        { key: 'valor_compra', label: 'Valor_Compra' },
+        { key: 'valor_venda', label: 'Valor_Venda' }
+    ];
+
+    const faltando = obrigatorios.filter(c => !row[c.key] || String(row[c.key]).trim() === '');
+    if (faltando.length > 0) {
+        throw new Error(`Campos obrigatórios em branco: ${faltando.map(f => f.label).join(', ')}`);
     }
 
     const sku = row.codigo.trim().toUpperCase();
@@ -643,24 +778,29 @@ async function processarImportacaoProduto(row) {
         barcodes = row.codigos_barras.split(',').map(b => b.trim()).filter(b => b);
     }
 
-    const valorCompra = parseFloat(row.valor_compra) || 0;
-    const valorVenda = parseFloat(row.valor_venda) || 0;
-    if (valorVenda < 0.01) {
-        throw new Error(`Preço de Venda do produto "${row.nome}" não pode ser zero (mínimo R$ 0,01)`);
+    const valorCompra = parseNumeroMoeda(row.valor_compra);
+    const valorVenda = parseNumeroMoeda(row.valor_venda);
+    if (valorCompra === null || isNaN(valorCompra)) {
+        throw new Error(`Valor de Compra inválido: "${row.valor_compra}"`);
     }
+    if (valorVenda === null || isNaN(valorVenda) || valorVenda < 0.01) {
+        throw new Error(`Preço de Venda do produto "${row.nome}" não pode ser zero ou negativo (mínimo R$ 0,01)`);
+    }
+
     const estoqueMinimo = parseInt(row.estoque_minimo) || 5;
     const estoqueTotal = parseInt(row.estoque_total) || 0;
     const garantiaDias = parseInt(row.garantia_dias) || 0;
-    const tipo = row.tipo ? row.tipo.trim().toLowerCase() : 'produto';
+    const tipoNorm = normalizar(row.tipo);
+    const tipo = (tipoNorm.includes('servico') || tipoNorm === 'servicos') ? 'servico' : 'produto';
 
     const dadosProduto = {
         codigo: sku,
-        nome: row.nome,
-        tipo: tipo === 'servico' ? 'servico' : 'produto',
+        nome: row.nome.trim(),
+        tipo: tipo,
         categoria: catName,
-        marca: row.marca || null,
-        modelo: row.modelo || null,
-        descricao: row.descricao || null,
+        marca: row.marca.trim(),
+        modelo: row.modelo.trim(),
+        descricao: row.descricao.trim(),
         valor_compra: valorCompra,
         valor_venda: valorVenda,
         estoque_minimo: tipo === 'servico' ? 0 : estoqueMinimo,

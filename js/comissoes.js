@@ -84,15 +84,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Calcular comissão de uma venda específica
     function calcularComissaoVenda(venda) {
-        if (venda.comissao_calculada !== undefined && venda.comissao_calculada !== null && parseFloat(venda.comissao_calculada) >= 0) {
-            return parseFloat(venda.comissao_calculada);
+        const itens = itensVendas.filter(item => item.saida_id === venda.id);
+        
+        // Se a venda não tem itens gravados (ex: lançamento manual de comissão)
+        if (itens.length === 0) {
+            if (venda.comissao_calculada !== undefined && venda.comissao_calculada !== null && parseFloat(venda.comissao_calculada) >= 0) {
+                return parseFloat(venda.comissao_calculada);
+            }
+            return 0;
         }
         
         const colab = colaboradores.find(c => c.id === venda.colaborador_id);
         if (!colab) return 0;
         
         const pctColab = parseFloat(colab.comissao || 0) / 100;
-        const itens = itensVendas.filter(item => item.saida_id === venda.id);
         let comissaoVal = 0;
         
         itens.forEach(item => {
@@ -106,10 +111,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else {
                         comissaoVal += subtotal * (parseFloat(item.produtos?.comissao_valor || 0) / 100);
                     }
+                } else {
+                    comissaoVal += subtotal * pctColab;
                 }
-            } else {
-                comissaoVal += subtotal * pctColab;
             }
+            // Produtos normais NÃO geram comissão
         });
         
         return comissaoVal;
@@ -199,26 +205,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             const statusBadgeClass = item.venda.comissao_paga === true ? 'badge-paid' : 'badge-pending';
             const statusText = item.venda.comissao_paga === true ? '🟢 Pago' : '🔴 Pendente';
             
+            const isManual = item.venda.observacao?.includes('[Comissão Manual]') || item.venda.forma_pagamento === 'Comissão Manual';
+            
             const btnPagar = item.venda.comissao_paga !== true
                 ? `<button class="btn-success" onclick="pagarComissao(${item.venda.id}, '${item.colabName.replace(/'/g, "\\'")}', ${item.comissao})" style="padding: 4px 8px; font-size: 12px; margin-left: 5px;">💰 Pagar</button>`
+                : '';
+                
+            const btnExcluirManual = (isManual && item.venda.comissao_paga !== true)
+                ? `<button class="btn-danger" onclick="cancelarComissaoManual(${item.venda.id})" style="padding: 4px 8px; font-size: 12px; margin-left: 5px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Excluir lançamento manual">🗑️ Excluir</button>`
                 : '';
                 
             const checkboxHtml = item.venda.comissao_paga !== true
                 ? `<td style="text-align: center;"><input type="checkbox" class="comissao-checkbox" data-id="${item.venda.id}" data-valor="${item.comissao}" data-colab="${item.colabName.replace(/"/g, '&quot;')}" onchange="atualizarSelecaoComissoes()" style="cursor: pointer;"></td>`
                 : `<td style="text-align: center;">-</td>`;
                 
+            const docBadge = isManual
+                ? `<strong>#${item.venda.id}</strong> <span style="background: #e0e7ff; color: #3730a3; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; display: inline-block;">✍️ Manual</span>`
+                : `<strong>Nº #${item.venda.id}</strong>`;
+                
+            const totalVendaFmt = isManual
+                ? `<span style="color: #64748b; font-style: italic;">Avulsa</span>`
+                : `R$ ${parseFloat(item.venda.total || 0).toFixed(2)}`;
+                
             return `
                 <tr>
                     ${checkboxHtml}
-                    <td><strong>Nº #${item.venda.id}</strong></td>
+                    <td>${docBadge}</td>
                     <td>${item.colabName}</td>
                     <td>${dataFmt}</td>
-                    <td style="text-align: right;">R$ ${parseFloat(item.venda.total || 0).toFixed(2)}</td>
+                    <td style="text-align: right;">${totalVendaFmt}</td>
                     <td style="text-align: right; font-weight: bold; color: var(--primary);">R$ ${item.comissao.toFixed(2)}</td>
                     <td style="text-align: center;"><span class="badge-status ${statusBadgeClass}">${statusText}</span></td>
-                    <td style="text-align: center;">
+                    <td style="text-align: center; white-space: nowrap;">
                         <button class="btn-primary" onclick="verDetalhesVenda(${item.venda.id})" style="padding: 4px 8px; font-size: 12px;">👁️ Detalhes</button>
                         ${btnPagar}
+                        ${btnExcluirManual}
                     </td>
                 </tr>
             `;
@@ -247,54 +268,97 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const dataFmt = v.data ? v.data.split('-').reverse().join('/') : '-';
         const statusText = v.comissao_paga === true ? '🟢 Pago' : '🔴 Pendente';
+        const isManual = v.observacao?.includes('[Comissão Manual]') || v.forma_pagamento === 'Comissão Manual' || itens.length === 0;
         
         let totalComissaoCalculada = 0;
+        let conteudoDetalhes = '';
         
-        const itensHtml = itens.map(item => {
-            const subtotal = item.subtotal || item.valor_unitario * item.quantidade || 0;
-            const isServico = item.produtos?.tipo === 'servico';
-            
-            let comissaoItem = 0;
-            let regraDesc = '';
-            
-            if (isServico) {
-                if (item.produtos?.comissao_habilitada === true) {
-                    if (item.produtos?.comissao_100_porcento === true) {
-                        comissaoItem = subtotal;
-                        regraDesc = 'Serviço com 100% comissão';
+        if (isManual) {
+            totalComissaoCalculada = parseFloat(v.comissao_calculada || 0);
+            conteudoDetalhes = `
+                <div style="background: #f0f7ff; border: 1px solid #bae6fd; padding: 18px; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+                        <span>✍️</span> Lançamento Manual de Comissão
+                    </h4>
+                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #1e293b;">
+                        <strong>Motivo / Observação:</strong> ${v.observacao ? v.observacao.replace('[Comissão Manual]', '').trim() : 'Comissão avulsa informada manualmente'}
+                    </p>
+                    <div style="font-size: 13px; color: #475569; display: flex; gap: 20px; flex-wrap: wrap;">
+                        <span>Valor da Comissão: <strong style="color: var(--primary); font-size: 15px;">R$ ${totalComissaoCalculada.toFixed(2)}</strong></span>
+                        <span>Tipo de Registro: <strong>${v.forma_pagamento || 'Manual'}</strong></span>
+                        ${v.comissao_paga_data ? `<span>Pago em: <strong>${new Date(v.comissao_paga_data).toLocaleDateString('pt-BR')}</strong></span>` : ''}
+                    </div>
+                </div>
+            `;
+        } else {
+            const itensHtml = itens.map(item => {
+                const subtotal = item.subtotal || item.valor_unitario * item.quantidade || 0;
+                const isServico = item.produtos?.tipo === 'servico';
+                
+                let comissaoItem = 0;
+                let regraDesc = '';
+                
+                if (isServico) {
+                    if (item.produtos?.comissao_habilitada === true) {
+                        if (item.produtos?.comissao_100_porcento === true) {
+                            comissaoItem = subtotal;
+                            regraDesc = 'Serviço com 100% comissão';
+                        } else {
+                            comissaoItem = subtotal * (parseFloat(item.produtos?.comissao_valor || 0) / 100);
+                            regraDesc = `Serviço com comissão de ${parseFloat(item.produtos?.comissao_valor || 0).toFixed(1)}%`;
+                        }
                     } else {
-                        comissaoItem = subtotal * (parseFloat(item.produtos?.comissao_valor || 0) / 100);
-                        regraDesc = `Serviço com comissão de ${parseFloat(item.produtos?.comissao_valor || 0).toFixed(1)}%`;
+                        comissaoItem = subtotal * (pctColab / 100);
+                        regraDesc = `Serviço com comissão base (${pctColab.toFixed(1)}%)`;
                     }
                 } else {
                     comissaoItem = 0;
-                    regraDesc = 'Serviço sem comissão';
+                    regraDesc = 'Produto físico não gera comissão';
                 }
-            } else {
-                comissaoItem = subtotal * (pctColab / 100);
-                regraDesc = `Produto com ${pctColab.toFixed(1)}% comissão`;
-            }
+                
+                totalComissaoCalculada += comissaoItem;
+                
+                return `
+                    <tr>
+                        <td>${item.produtos?.nome || 'Produto não encontrado'}</td>
+                        <td style="text-align: center;"><span class="badge-status" style="background:#e9ecef;">${isServico ? '🛠️ Serviço' : '📦 Produto'}</span></td>
+                        <td style="text-align: center;">${item.quantidade}</td>
+                        <td style="text-align: right;">R$ ${parseFloat(item.valor_unitario || 0).toFixed(2)}</td>
+                        <td style="text-align: right;">R$ ${subtotal.toFixed(2)}</td>
+                        <td style="font-size: 11px; color: var(--gray);">${regraDesc}</td>
+                        <td style="text-align: right; font-weight: bold; color: var(--primary);">R$ ${comissaoItem.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
             
-            totalComissaoCalculada += comissaoItem;
-            
-            return `
-                <tr>
-                    <td>${item.produtos?.nome || 'Produto não encontrado'}</td>
-                    <td style="text-align: center;"><span class="badge-status" style="background:#e9ecef;">${isServico ? '🛠️ Serviço' : '📦 Produto'}</span></td>
-                    <td style="text-align: center;">${item.quantidade}</td>
-                    <td style="text-align: right;">R$ ${parseFloat(item.valor_unitario || 0).toFixed(2)}</td>
-                    <td style="text-align: right;">R$ ${subtotal.toFixed(2)}</td>
-                    <td style="font-size: 11px; color: var(--gray);">${regraDesc}</td>
-                    <td style="text-align: right; font-weight: bold; color: var(--primary);">R$ ${comissaoItem.toFixed(2)}</td>
-                </tr>
+            conteudoDetalhes = `
+                <h4 style="margin-top: 15px;">🛒 Detalhes dos Itens da Venda</h4>
+                <div class="table-container" style="margin-top: 10px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item / Descrição</th>
+                                <th style="text-align: center;">Tipo</th>
+                                <th style="text-align: center;">Qtd</th>
+                                <th style="text-align: right;">Preço Unit.</th>
+                                <th style="text-align: right;">Subtotal</th>
+                                <th>Regra Comissão</th>
+                                <th style="text-align: right;">Comissão Item</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itensHtml}
+                        </tbody>
+                    </table>
+                </div>
             `;
-        }).join('');
+        }
         
         document.getElementById('modalVendaCorpo').innerHTML = `
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div>
-                    <strong>Documento Venda:</strong> Nº #${v.id}<br>
-                    <strong>Data da Venda:</strong> ${dataFmt}<br>
+                    <strong>Documento:</strong> ${isManual ? `Lançamento Manual #${v.id}` : `Venda Nº #${v.id}`}<br>
+                    <strong>Data:</strong> ${dataFmt}<br>
                     <strong>Forma de Pagamento:</strong> ${v.forma_pagamento || 'Não informada'}<br>
                 </div>
                 <div>
@@ -303,26 +367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <strong>Status da Comissão:</strong> <span class="badge-status ${v.comissao_paga === true ? 'badge-paid' : 'badge-pending'}">${statusText}</span>
                 </div>
             </div>
-            
-            <h4>🛒 Detalhes dos Itens da Venda</h4>
-            <div class="table-container" style="margin-top: 10px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Item / Descrição</th>
-                            <th style="text-align: center;">Tipo</th>
-                            <th style="text-align: center;">Qtd</th>
-                            <th style="text-align: right;">Preço Unit.</th>
-                            <th style="text-align: right;">Subtotal</th>
-                            <th>Regra Comissão</th>
-                            <th style="text-align: right;">Comissão Item</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itensHtml}
-                    </tbody>
-                </table>
-            </div>
+            ${conteudoDetalhes}
         `;
         
         document.getElementById('modalDetalhesVenda').style.display = 'flex';
@@ -480,5 +525,169 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filtroStatusComissao')?.addEventListener('change', processarEMostrarComissoes);
     document.getElementById('filtroColaboradorComissao')?.addEventListener('change', processarEMostrarComissoes);
     
+    // Cancelar comissão manual
+    window.cancelarComissaoManual = async (vendaId) => {
+        if (!confirm('Deseja realmente cancelar este lançamento manual de comissão?')) {
+            return;
+        }
+        
+        try {
+            const { error } = await supabaseClient
+                .from('saidas')
+                .update({
+                    cancelado: true,
+                    cancelado_em: new Date().toISOString(),
+                    cancelado_por: usuario ? usuario.id : null,
+                    motivo_cancelamento: 'Cancelado pelo usuário no Controle de Comissões'
+                })
+                .eq('id', vendaId);
+                
+            if (error) throw error;
+            
+            mostrarNotificacao('Lançamento manual cancelado com sucesso!', 'success');
+            await carregarDados();
+        } catch (error) {
+            console.error('Erro ao cancelar comissão manual:', error);
+            mostrarNotificacao('Erro ao cancelar comissão manual: ' + (error.message || error), 'error');
+        }
+    };
+
+    // Controle do Modal de Comissão Manual
+    const modalManual = document.getElementById('modalComissaoManual');
+    const btnNovoManual = document.getElementById('btnNovaComissaoManual');
+    const fecharManualBtn = document.getElementById('fecharModalManual');
+    const cancelarManualBtn = document.getElementById('btnCancelarManual');
+    const salvarManualBtn = document.getElementById('btnSalvarComissaoManual');
+    const selectStatusManual = document.getElementById('manualStatus');
+    const groupFormaPagto = document.getElementById('groupManualFormaPagto');
+    
+    function abrirModalComissaoManual() {
+        if (!modalManual) return;
+        
+        const selColab = document.getElementById('manualColaboradorId');
+        if (selColab) {
+            selColab.innerHTML = '<option value="">Selecione o colaborador...</option>' +
+                colaboradores.filter(c => c.ativo !== false).map(c => 
+                    `<option value="${c.id}">${c.nome} ${c.sobrenome || ''} (${c.funcao || 'Colaborador'} - Base: ${parseFloat(c.comissao || 0).toFixed(1)}%)</option>`
+                ).join('');
+        }
+        
+        const dataInput = document.getElementById('manualData');
+        if (dataInput) dataInput.value = new Date().toISOString().split('T')[0];
+        
+        const valorInput = document.getElementById('manualValor');
+        if (valorInput) valorInput.value = '';
+        
+        const descInput = document.getElementById('manualDescricao');
+        if (descInput) descInput.value = '';
+        
+        if (selectStatusManual) selectStatusManual.value = 'pendente';
+        if (groupFormaPagto) groupFormaPagto.style.display = 'none';
+        
+        modalManual.style.display = 'flex';
+    }
+    
+    function fecharModalComissaoManual() {
+        if (modalManual) modalManual.style.display = 'none';
+    }
+    
+    btnNovoManual?.addEventListener('click', abrirModalComissaoManual);
+    fecharManualBtn?.addEventListener('click', fecharModalComissaoManual);
+    cancelarManualBtn?.addEventListener('click', fecharModalComissaoManual);
+    
+    selectStatusManual?.addEventListener('change', (e) => {
+        if (groupFormaPagto) {
+            groupFormaPagto.style.display = e.target.value === 'pago' ? 'block' : 'none';
+        }
+    });
+    
+    salvarManualBtn?.addEventListener('click', async () => {
+        const colabId = document.getElementById('manualColaboradorId')?.value;
+        const valor = parseFloat(document.getElementById('manualValor')?.value || 0);
+        const data = document.getElementById('manualData')?.value;
+        const descricao = document.getElementById('manualDescricao')?.value?.trim();
+        const status = document.getElementById('manualStatus')?.value || 'pendente';
+        const formaPagamento = document.getElementById('manualFormaPagto')?.value || 'PIX';
+        
+        if (!colabId) {
+            mostrarNotificacao('Selecione o colaborador!', 'warning');
+            return;
+        }
+        if (!valor || valor <= 0) {
+            mostrarNotificacao('Informe um valor de comissão válido maior que zero!', 'warning');
+            return;
+        }
+        if (!data) {
+            mostrarNotificacao('Informe a data do lançamento!', 'warning');
+            return;
+        }
+        if (!descricao) {
+            mostrarNotificacao('Informe o motivo ou descrição da comissão!', 'warning');
+            return;
+        }
+        
+        const isPago = status === 'pago';
+        const colabObj = colaboradores.find(c => c.id === parseInt(colabId));
+        const colabNome = colabObj ? `${colabObj.nome} ${colabObj.sobrenome || ''}`.trim() : 'Colaborador';
+        
+        salvarManualBtn.disabled = true;
+        salvarManualBtn.textContent = 'Salvando...';
+        
+        try {
+            const insertSaida = {
+                colaborador_id: parseInt(colabId),
+                data: data,
+                total: 0,
+                desconto: 0,
+                forma_pagamento: isPago ? formaPagamento : 'Comissão Manual',
+                observacao: `[Comissão Manual] ${descricao}`,
+                comissao_calculada: valor,
+                comissao_paga: isPago,
+                comissao_paga_data: isPago ? new Date().toISOString() : null,
+                usuario_id: usuario ? usuario.id : null,
+                data_finalizacao: new Date().toISOString()
+            };
+            
+            if (usuario && usuario.loja_id) {
+                insertSaida.loja_id = usuario.loja_id;
+            }
+            
+            const { data: saidaCriada, error: erroSaida } = await supabaseClient
+                .from('saidas')
+                .insert([insertSaida])
+                .select()
+                .single();
+                
+            if (erroSaida) throw erroSaida;
+            
+            if (isPago) {
+                const insertDespesa = {
+                    descricao: `Comissao do vendedo paga - ${colabNome} | Lançamento Manual #${saidaCriada.id} - ${descricao}`,
+                    valor: valor,
+                    data: data,
+                    categoria: 'Comissão Vendedor',
+                    status: 'pago',
+                    loja_id: usuario.loja_id
+                };
+                
+                const { error: erroDesp } = await supabaseClient
+                    .from('despesas')
+                    .insert([insertDespesa]);
+                    
+                if (erroDesp) console.warn('Aviso: erro ao gerar registro em despesas:', erroDesp);
+            }
+            
+            mostrarNotificacao('✅ Comissão manual lançada com sucesso!', 'success');
+            fecharModalComissaoManual();
+            await carregarDados();
+        } catch (error) {
+            console.error('Erro ao lançar comissão manual:', error);
+            mostrarNotificacao('Erro ao lançar comissão manual: ' + (error.message || error), 'error');
+        } finally {
+            salvarManualBtn.disabled = false;
+            salvarManualBtn.textContent = '💾 Salvar Comissão';
+        }
+    });
+
     await carregarDados();
 });

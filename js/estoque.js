@@ -224,9 +224,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const filtrados = produtos.filter(p => {
             // 1. Pesquisa por texto
-            const matchSearch = p.nome?.toLowerCase().includes(search) || 
+            const matchSearch = (p.nome || '').toLowerCase().includes(search) || 
                                 (p.codigo || '').toLowerCase().includes(search) ||
                                 (p.marca || '').toLowerCase().includes(search) ||
+                                (p.modelo || '').toLowerCase().includes(search) ||
                                 (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(search)));
                                 
             // 2. Filtro Categoria
@@ -265,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!tbody) return;
         
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Nenhum produto encontrado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Nenhum produto encontrado</td></tr>';
             return;
         }
         
@@ -330,9 +331,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <tr>
                     <td>${p.codigo || p.id}</td>
                     <td>
-                        <strong>${p.nome}</strong><br>
-                        <small class="serial-badge">${p.marca || ''} ${p.modelo || ''}</small>
+                        <strong>${p.nome}</strong>
+                        ${p.marca ? `<br><small class="serial-badge">${p.marca}</small>` : ''}
                     </td>
+                    <td>${p.modelo ? `<span style="font-weight: 500; color: #1e293b;">${p.modelo}</span>` : '<span style="color: #94a3b8;">-</span>'}</td>
                     <td>${p.categoria || '-'}</td>
                     <td>${loteValidadeText}</td>
                     <td>${custoFormatado}</td>
@@ -566,7 +568,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         document.getElementById('produtoId').value = produto.id;
-        document.getElementById('produtoNome').value = produto.nome;
+        document.getElementById('produtoNome').value = produto.nome + (produto.modelo ? ` - Modelo: ${produto.modelo}` : '');
         const estoqueAtual = produto.estoque_total || produto.estoque || 0;
         document.getElementById('estoqueAtual').value = estoqueAtual;
         document.getElementById('quantidade').value = '1';
@@ -948,7 +950,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalHistorico.innerHTML = `
                 <div class="modal-content" style="max-width: 900px;">
                     <div class="modal-header">
-                        <h2>Histórico de Movimentações - ${produto.nome}</h2>
+                        <h2>Histórico de Movimentações - ${produto.nome}${produto.modelo ? ` (${produto.modelo})` : ''}</h2>
                         <span class="close-historico" style="cursor:pointer;">&times;</span>
                     </div>
                     <div class="modal-body">
@@ -1525,6 +1527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             ${codBarras ? `<span>Barras: <strong>${codBarras}</strong></span>` : ''}
                             <span>Cat: <strong>${p.categoria || '-'}</strong></span>
                             ${p.marca ? `<span>Marca: <strong>${p.marca}</strong></span>` : ''}
+                            ${p.modelo ? `<span>Modelo: <strong>${p.modelo}</strong></span>` : ''}
                         </div>
                     </div>
                     <div style="text-align: right; white-space: nowrap;">

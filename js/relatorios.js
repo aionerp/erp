@@ -822,10 +822,12 @@ async function carregarComissoesColaborador() {
             colabSales.forEach(sale => {
                 faturamentoTotal += parseFloat(sale.total || 0);
 
-                if (sale.comissao_calculada !== undefined && sale.comissao_calculada !== null && parseFloat(sale.comissao_calculada) >= 0) {
-                    comissaoGerada += parseFloat(sale.comissao_calculada);
+                const items = (saleItems || []).filter(item => item.saida_id === sale.id);
+                if (items.length === 0) {
+                    if (sale.comissao_calculada !== undefined && sale.comissao_calculada !== null && parseFloat(sale.comissao_calculada) >= 0) {
+                        comissaoGerada += parseFloat(sale.comissao_calculada);
+                    }
                 } else {
-                    const items = (saleItems || []).filter(item => item.saida_id === sale.id);
                     items.forEach(item => {
                         const subtotalItem = parseFloat(item.subtotal || item.valor_unitario * item.quantidade || 0);
                         const isServico = item.produtos?.tipo === 'servico';
@@ -837,11 +839,12 @@ async function carregarComissoesColaborador() {
                                 } else {
                                     comissaoGerada += (parseFloat(item.produtos?.comissao_valor || 0) * item.quantidade);
                                 }
+                            } else {
+                                const pctComissao = parseFloat(colab.comissao || 0) / 100;
+                                comissaoGerada += subtotalItem * pctComissao;
                             }
-                        } else {
-                            const pctComissao = parseFloat(colab.comissao || 0) / 100;
-                            comissaoGerada += subtotalItem * pctComissao;
                         }
+                        // Produtos normais NÃO geram comissão
                     });
                 }
             });

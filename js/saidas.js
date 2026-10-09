@@ -2122,10 +2122,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else {
                                 comissaoCalculada += subtotalItem * (parseFloat(item.comissao_valor || 0) / 100);
                             }
+                        } else {
+                            // Se comissão específica não estiver ativa, aplica a taxa base do colaborador sobre o serviço
+                            comissaoCalculada += subtotalItem * pctColab;
                         }
-                    } else {
-                        comissaoCalculada += subtotalItem * pctColab;
                     }
+                    // Produtos normais (tipo !== 'servico') NÃO geram comissão
                 }
             }
 
