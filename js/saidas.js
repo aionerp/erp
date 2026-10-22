@@ -2366,11 +2366,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dadosFiadoVenda.clienteCpf) clienteCpf = dadosFiadoVenda.clienteCpf;
         }
 
-        const desconto      = parseFloat(document.getElementById('desconto').value)  || 0;
-        const acrescimo     = parseFloat(document.getElementById('acrescimo').value) || 0;
-        const observacao    = document.getElementById('observacao').value;
-        const subtotal      = carrinho.reduce((s, i) => s + i.subtotal, 0);
-        const total         = Math.max(0, subtotal - desconto + acrescimo);
+        const toCents = (val) => Math.round((parseFloat(val) || 0) * 100);
+        const fromCents = (cents) => Math.round(cents) / 100;
+
+        const desconto      = fromCents(toCents(document.getElementById('desconto')?.value));
+        const acrescimo     = fromCents(toCents(document.getElementById('acrescimo')?.value));
+        const observacao    = document.getElementById('observacao')?.value || '';
+        const subtotalCents = carrinho.reduce((s, i) => s + toCents(i.subtotal), 0);
+        const subtotal      = fromCents(subtotalCents);
+        const totalCents    = Math.max(0, subtotalCents - toCents(desconto) + toCents(acrescimo));
+        const total         = fromCents(totalCents);
 
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
         if (btnFinalizar) { btnFinalizar.disabled = true; btnFinalizar.textContent = '⏳ Processando...'; }
