@@ -34,8 +34,9 @@
          * @returns {string} string sanitizada
          */
         sanitizeHtml(str) {
-            if (typeof str !== 'string') return str;
-            return str
+            if (str === null || str === undefined) return '';
+            const s = String(str);
+            return s
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
@@ -100,15 +101,18 @@
         }
     };
 
-    window.Security = Security;
-
-    // Proteção de console em produção para não expor credenciais
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        const _warn = console.warn;
-        console.warn = function(...args) {
-            if (args[0] && typeof args[0] === 'string' && args[0].includes('KEY')) return;
-            _warn.apply(console, args);
-        };
+    if (typeof window !== 'undefined') {
+        window.Security = Security;
+        if (window.location && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            const _warn = console.warn;
+            console.warn = function(...args) {
+                if (args[0] && typeof args[0] === 'string' && args[0].includes('KEY')) return;
+                _warn.apply(console, args);
+            };
+        }
     }
 
-})(window);
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = Security;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);

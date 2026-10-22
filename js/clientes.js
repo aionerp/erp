@@ -122,13 +122,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 acoesHtml += `<button class="btn-danger" onclick="excluirCliente(${c.id})" title="Excluir">🗑️</button>`;
             }
             
+            const escapeHtml = (str) => (window.Security?.sanitizeHtml ? window.Security.sanitizeHtml(str) : String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[s])));
+
             return `
                 <tr>
-                    <td>${c.id}</td>
-                    <td><strong>${c.nome || '-'}</strong><br><small>${c.cpf_cnpj || ''}</small></td>
-                    <td>${c.telefone || '-'}</td>
-                    <td>${c.email || '-'}</td>
-                    <td>${c.cidade || '-'}/${c.estado || '-'}</td>
+                    <td>${Number(c.id)}</td>
+                    <td><strong>${escapeHtml(c.nome || '-')}</strong><br><small>${escapeHtml(c.cpf_cnpj || '')}</small></td>
+                    <td>${escapeHtml(c.telefone || '-')}</td>
+                    <td>${escapeHtml(c.email || '-')}</td>
+                    <td>${escapeHtml(c.cidade || '-')}/${escapeHtml(c.estado || '-')}</td>
                     <td class="table-actions">${acoesHtml}</td>
                 </tr>
             `;
