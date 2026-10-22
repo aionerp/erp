@@ -2963,11 +2963,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const { data: itens } = await supabaseClient
                 .from('saida_itens')
-                .select('*, produtos(id, nome, estoque_total)')
+                .select('*, produtos(id, nome, estoque_total, tipo)')
                 .eq('saida_id', vendaId);
 
-            // Estornar estoque
+            // Estornar estoque (apenas para produtos físicos; ignorar serviços)
             for (const item of (itens || [])) {
+                const isServico = item.tipo === 'servico' || item.produtos?.tipo === 'servico';
+                if (isServico) {
+                    continue; // Serviços não possuem controle de estoque físico
+                }
+
                 const estAtual = item.produtos?.estoque_total || 0;
                 const novoEst  = estAtual + item.quantidade;
 
