@@ -5,7 +5,6 @@ require('dotenv').config();
 const http = require('http');
 const { handleApiRequest } = require('../server-api');
 
-const targetClient = process.argv[2] || process.env.CLIENTE || 'cliente01';
 const TEST_PORT = 3099;
 
 function requestApi(method, path, body = null, headers = {}) {
@@ -41,8 +40,16 @@ function requestApi(method, path, body = null, headers = {}) {
 }
 
 async function run() {
+    if (!process.env.TEST_DATABASE_URL) {
+        console.warn('⚠️ [PULADO] TEST_DATABASE_URL não configurada no .env.');
+        console.warn('   Para proteger os bancos dos clientes reais, este teste de escrita foi cancelado.');
+        return;
+    }
+
+    const targetClient = 'test';
+
     console.log('================================================================');
-    console.log(`🧪 TESTE COMPLETO DE TODOS OS MÓDULOS NO NEON — ${targetClient.toUpperCase()}`);
+    console.log(`🧪 TESTE COMPLETO DE TODOS OS MÓDULOS NO NEON (ISOLADO TEST_DATABASE_URL)`);
     console.log('================================================================');
 
     // 1. Iniciar servidor de teste com a versão mais recente do server-api.js
@@ -62,6 +69,9 @@ async function run() {
     let createdSaleItemId = null;
     let createdPromoId = null;
     let createdPromoProdId = null;
+    let createdProductId = null;
+    let createdCustomerId = null;
+    let createdUserId = null;
 
     try {
         // --- TESTE 1: Healthcheck ---
@@ -73,8 +83,62 @@ async function run() {
             throw new Error(`Falha no Healthcheck: ${JSON.stringify(hRes.body)}`);
         }
 
+        // --- SETUP DE FIXTURES DINÂMICAS ---
+        console.log('--- Criando Fixtures Dinâmicas de Teste ---');
+        const prodFixture = await requestApi('POST', `/api/data/${targetClient}/produtos`, {
+            action: 'insert',
+            values: {
+                loja_id: 1,
+                nome: 'Produto Fixture Auditoria',
+                codigo: 'FIXT-PROD-' + Date.now(),
+                valor_venda: 100.00,
+                valor_compra: 50.00,
+                estoque_total: 10,
+                codigos_barras: '["TESTE-CODE"]',
+                ativo: true
+            }
+        });
+        if (prodFixture.status !== 201 || !prodFixture.body?.data?.length) {
+            throw new Error(`Falha ao criar produto fixture: ${JSON.stringify(prodFixture.body)}`);
+        }
+        createdProductId = prodFixture.body.data[0].id;
+        console.log(`   ✅ Produto fixture criado: ID ${createdProductId}`);
+
+        const cliFixture = await requestApi('POST', `/api/data/${targetClient}/clientes`, {
+            action: 'insert',
+            values: {
+                loja_id: 1,
+                nome: 'Cliente Fixture Auditoria',
+                telefone: '(11) 97777-6666',
+                cpf_cnpj: '123.456.789-00',
+                ativo: true
+            }
+        });
+        if (cliFixture.status !== 201 || !cliFixture.body?.data?.length) {
+            throw new Error(`Falha ao criar cliente fixture: ${JSON.stringify(cliFixture.body)}`);
+        }
+        createdCustomerId = cliFixture.body.data[0].id;
+        console.log(`   ✅ Cliente fixture criado: ID ${createdCustomerId}`);
+
+        const userFixture = await requestApi('POST', `/api/data/${targetClient}/usuarios`, {
+            action: 'insert',
+            values: {
+                loja_id: 1,
+                nome: 'Operador Fixture Auditoria',
+                email: `operador_${Date.now()}@teste.com`,
+                senha: 'teste_senha_123',
+                perfil: 'admin',
+                ativo: true
+            }
+        });
+        if (userFixture.status !== 201 || !userFixture.body?.data?.length) {
+            throw new Error(`Falha ao criar usuario fixture: ${JSON.stringify(userFixture.body)}`);
+        }
+        createdUserId = userFixture.body.data[0].id;
+        console.log(`   ✅ Usuário fixture criado: ID ${createdUserId}\n`);
+
         // --- TESTE 2: Operador JSONB Containment em Produtos ---
-        console.log('\n2. Testando Operador JSONB (@>) para Busca de Código de Barras...');
+        console.log('2. Testando Operador JSONB (@>) para Busca de Código de Barras...');
         const bRes = await requestApi('POST', `/api/data/${targetClient}/produtos`, {
             action: 'select',
             select: 'id, nome, codigo',
@@ -112,7 +176,7 @@ async function run() {
             values: {
                 loja_id: 1,
                 promocao_id: createdPromoId,
-                produto_id: 1,
+                produto_id: createdProductId,
                 tipo_desconto: 'porcentagem',
                 valor_desconto: 15.00,
                 ativo: true
@@ -142,14 +206,14 @@ async function run() {
         const saleRes = await requestApi('POST', `/api/data/${targetClient}/saidas`, {
             action: 'insert',
             values: {
-                cliente_id: 1,
+                cliente_id: createdCustomerId,
                 data: '2026-09-09',
                 total: 85.00,
                 desconto: 15.00,
                 origem_desconto: 'Promoção Auditoria Neon',
                 forma_pagamento: 'pix',
-                observacao: 'Venda Teste Auditoria | Cliente: 1',
-                usuario_id: 1,
+                observacao: 'Venda Teste Auditoria | Cliente Fixture',
+                usuario_id: createdUserId,
                 data_finalizacao: new Date().toISOString(),
                 cancelado: false
             }
@@ -166,7 +230,7 @@ async function run() {
             action: 'insert',
             values: {
                 saida_id: createdSaleId,
-                produto_id: 1,
+                produto_id: createdProductId,
                 quantidade: 1,
                 valor_unitario: 100.00,
                 subtotal: 85.00,
@@ -299,6 +363,15 @@ async function run() {
         if (createdPromoId) {
             await requestApi('POST', `/api/data/${targetClient}/promocoes`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdPromoId }] });
         }
+        if (createdProductId) {
+            await requestApi('POST', `/api/data/${targetClient}/produtos`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdProductId }] });
+        }
+        if (createdCustomerId) {
+            await requestApi('POST', `/api/data/${targetClient}/clientes`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdCustomerId }] });
+        }
+        if (createdUserId) {
+            await requestApi('POST', `/api/data/${targetClient}/usuarios`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdUserId }] });
+        }
         console.log('   ✅ Limpeza concluída com sucesso.');
 
         console.log('\n================================================================');
@@ -313,10 +386,14 @@ async function run() {
             if (createdSaleId) await requestApi('POST', `/api/data/${targetClient}/saidas`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdSaleId }] });
             if (createdPromoProdId) await requestApi('POST', `/api/data/${targetClient}/promocao_produtos`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdPromoProdId }] });
             if (createdPromoId) await requestApi('POST', `/api/data/${targetClient}/promocoes`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdPromoId }] });
+            if (createdProductId) await requestApi('POST', `/api/data/${targetClient}/produtos`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdProductId }] });
+            if (createdCustomerId) await requestApi('POST', `/api/data/${targetClient}/clientes`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdCustomerId }] });
+            if (createdUserId) await requestApi('POST', `/api/data/${targetClient}/usuarios`, { action: 'delete', filters: [{ column: 'id', operator: '=', value: createdUserId }] });
         } catch(err){}
         process.exit(1);
     } finally {
         server.close();
+        process.exit(0);
     }
 }
 

@@ -20,6 +20,7 @@
     "migrate:validate": "node scripts/migration/06_validate_data.js",
     "migrate:cutover": "node scripts/migration/cutover.js",
     "migrate:rollback": "node scripts/migration/rollback.js",
+    "test": "node --test scripts/test_*.js tests/*.test.js",
     "test:neon": "node scripts/test_neon_environment.js"
   },
   "keywords": [],

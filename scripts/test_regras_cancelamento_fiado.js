@@ -16,10 +16,11 @@ async function runTests() {
     console.log('🧪 TESTE DAS 3 REGRAS DE CANCELAMENTO DE VENDA FIADA / DAV');
     console.log('========================================================================\n');
 
-    const dbUrl = process.env.CLIENTE03_DATABASE_URL || process.env.CLIENTE01_DATABASE_URL;
+    const dbUrl = process.env.TEST_DATABASE_URL;
     if (!dbUrl) {
-        console.error('❌ DATABASE_URL não encontrada no .env');
-        process.exit(1);
+        console.warn('⚠️ [PULADO] TEST_DATABASE_URL não configurada no .env.');
+        console.warn('   Para proteger os bancos dos clientes reais, este teste de escrita foi cancelado.');
+        return;
     }
 
     const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
