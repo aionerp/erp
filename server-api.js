@@ -72,9 +72,57 @@ function sendJson(res, statusCode, data) {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-tenant-id',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
     });
     res.end(JSON.stringify(data));
+}
+
+const ALLOWED_TABLES = new Set([
+    'agendamentos', 'boletos_pagar', 'caixas', 'categorias',
+    'clientes', 'colaboradores', 'config_loja', 'contas_receber',
+    'contas_receber_pagamentos', 'despesas', 'entradas', 'entrada_itens',
+    'lojas', 'mesas_comandas', 'movimentos_estoque', 'produtos',
+    'produtos_seriais', 'promocoes', 'promocao_produtos', 'saidas',
+    'saida_itens', 'servicos_recorrentes', 'usuarios'
+]);
+
+const ALLOWED_OPERATORS = new Set([
+    '=', '!=', '<>', '>', '<', '>=', '<=',
+    'ILIKE', 'LIKE', 'IN', 'IS', 'NOT', '@>', '= ANY'
+]);
+
+const ALLOWED_RPC_FUNCTIONS = new Set([
+    'autenticar_usuario',
+    'login_usuario',
+    'verificar_loja',
+    'primeiro_acesso_loja',
+    'fn_obter_resumo_dashboard'
+]);
+
+function isValidIdentifier(ident) {
+    if (typeof ident !== 'string') return false;
+    return /^[a-zA-Z0-9_]+$/.test(ident.trim());
+}
+
+function validateAndQuoteColumn(col, defaultTableAlias = 'm') {
+    if (!col || typeof col !== 'string') throw new Error('Coluna inválida');
+    const trimmed = col.trim();
+    if (trimmed === '*') return defaultTableAlias ? `${defaultTableAlias}.*` : '*';
+
+    if (trimmed.includes('.')) {
+        const parts = trimmed.split('.');
+        if (parts.length !== 2 || !isValidIdentifier(parts[0]) || !isValidIdentifier(parts[1])) {
+            throw new Error(`Identificador de coluna inválido: ${col}`);
+        }
+        return `"${parts[0]}"."${parts[1]}"`;
+    }
+
+    if (!isValidIdentifier(trimmed)) {
+        throw new Error(`Identificador de coluna inválido: ${col}`);
+    }
+    return defaultTableAlias ? `${defaultTableAlias}."${trimmed}"` : `"${trimmed}"`;
 }
 
 const TABLES_WITH_LOJA_ID = new Set([
@@ -85,18 +133,10 @@ const TABLES_WITH_LOJA_ID = new Set([
     'servicos_recorrentes', 'contas_receber', 'contas_receber_pagamentos'
 ]);
 
-// Helper para converter sintaxe de relações do Supabase / PostgREST em subqueries JSON do PostgreSQL
+// Helper para converter sintaxe de relações do Supabase / PostgREST em subqueries JSON do PostgreSQL com validação
 function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
     if (!selectStr || selectStr.trim() === '*' || selectStr.trim() === '') {
         return `${mainAlias}.*`;
-    }
-
-    if (!selectStr.includes('(')) {
-        return selectStr.split(',').map(c => {
-            const col = c.trim();
-            if (!col) return '';
-            return col === '*' ? `${mainAlias}.*` : (col.includes('.') ? col : `${mainAlias}.${col}`);
-        }).filter(Boolean).join(', ');
     }
 
     const selectItems = [];
@@ -143,8 +183,11 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
             const aliasName = relKey;
 
             let targetTable = relKey;
-            let fkCol = explicitFk || FK_MAP[tableName]?.[targetTable] || `${targetTable.replace(/s$/, '')}_id`;
+            if (!ALLOWED_TABLES.has(targetTable)) {
+                throw new Error(`Tabela de relação não permitida: ${targetTable}`);
+            }
 
+            let fkCol = explicitFk || FK_MAP[tableName]?.[targetTable] || `${targetTable.replace(/s$/, '')}_id`;
             if (tableName === 'entradas' && targetTable === 'clientes' && !explicitFk) {
                 fkCol = 'fornecedor_id';
             }
@@ -152,21 +195,33 @@ function parsePostgrestSelect(tableName, selectStr, mainAlias = 'm') {
                 fkCol = 'conta_receber_id';
             }
 
+            if (!isValidIdentifier(fkCol)) {
+                throw new Error(`Coluna de chave estrangeira inválida: ${fkCol}`);
+            }
+
+            let validatedInnerCols = '*';
+            if (innerCols !== '*') {
+                const cols = innerCols.split(',').map(c => c.trim()).filter(Boolean);
+                for (const c of cols) {
+                    if (!isValidIdentifier(c)) {
+                        throw new Error(`Coluna de relação inválida: ${c}`);
+                    }
+                }
+                validatedInnerCols = cols.map(c => `"${c}"`).join(', ');
+            }
+
             if (targetTable === 'lojas') {
-                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${innerCols} FROM public.lojas WHERE id = ${mainAlias}.loja_id) rel) AS ${aliasName}`);
+                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${validatedInnerCols} FROM public."lojas" WHERE id = ${mainAlias}.loja_id) rel) AS "${aliasName}"`);
             } else if (targetTable === 'config_loja') {
-                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${innerCols} FROM public.config_loja WHERE loja_id = ${mainAlias}.loja_id) rel) AS ${aliasName}`);
+                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${validatedInnerCols} FROM public."config_loja" WHERE loja_id = ${mainAlias}.loja_id) rel) AS "${aliasName}"`);
             } else {
-                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${innerCols} FROM public.${targetTable} WHERE id = ${mainAlias}.${fkCol}) rel) AS ${aliasName}`);
+                resultColumns.push(`(SELECT to_jsonb(rel) FROM (SELECT ${validatedInnerCols} FROM public."${targetTable}" WHERE id = ${mainAlias}."${fkCol}") rel) AS "${aliasName}"`);
             }
         } else {
-            if (item === '*') {
-                resultColumns.push(`${mainAlias}.*`);
-            } else if (!item.includes('.')) {
-                resultColumns.push(`${mainAlias}.${item}`);
-            } else {
-                resultColumns.push(item);
+            if (item.includes('(') || item.includes(')') || item.includes(';') || item.includes('--')) {
+                throw new Error(`Expressão não permitida no select: ${item}`);
             }
+            resultColumns.push(validateAndQuoteColumn(item, mainAlias));
         }
     }
 
@@ -215,6 +270,15 @@ async function handleApiRequest(req, res) {
     if (dataMatch) {
         const clientId = dataMatch[1];
         const tableName = dataMatch[2];
+
+        // SEC-02: Validação estrita de tabela contra allowlist
+        if (!ALLOWED_TABLES.has(tableName)) {
+            sendJson(res, 400, {
+                error: { message: `Tabela '${tableName}' não permitida na API.` }
+            });
+            return true;
+        }
+
         const pool = getPool(clientId);
 
         if (!pool) {
@@ -233,7 +297,7 @@ async function handleApiRequest(req, res) {
 
             if (body.action === 'select') {
                 const selectClause = parsePostgrestSelect(tableName, body.select, 'm');
-                let queryStr = `SELECT ${selectClause} FROM public.${tableName} m`;
+                let queryStr = `SELECT ${selectClause} FROM public."${tableName}" m`;
                 const whereClauses = [];
                 const params = [];
 
@@ -244,27 +308,39 @@ async function handleApiRequest(req, res) {
 
                 if (Array.isArray(body.filters)) {
                     for (const f of body.filters) {
+                        if (!f) continue;
+
+                        if (f.operator && !ALLOWED_OPERATORS.has(f.operator)) {
+                            sendJson(res, 400, { error: { message: `Operador não permitido: ${f.operator}` } });
+                            return true;
+                        }
+
                         if (f.operator === 'OR' && f.raw) {
                             const parts = f.raw.split(',');
                             const orClauses = [];
                             for (const p of parts) {
                                 const m = p.trim().match(/^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\.(.*)$/);
                                 if (m) {
-                                    const colName = m[1].includes('.') ? m[1] : `m.${m[1]}`;
+                                    const colPart = m[1];
                                     const opName = m[2];
                                     let rawVal = m[3];
+                                    if (!isValidIdentifier(colPart)) {
+                                        sendJson(res, 400, { error: { message: `Coluna inválida em filtro OR: ${colPart}` } });
+                                        return true;
+                                    }
+                                    const colQuoted = `m."${colPart}"`;
                                     if (opName === 'eq') {
                                         params.push(rawVal);
-                                        orClauses.push(`${colName} = $${params.length}`);
+                                        orClauses.push(`${colQuoted} = $${params.length}`);
                                     } else if (opName === 'ilike') {
                                         params.push(rawVal);
-                                        orClauses.push(`${colName} ILIKE $${params.length}`);
+                                        orClauses.push(`${colQuoted} ILIKE $${params.length}`);
                                     } else if (opName === 'like') {
                                         params.push(rawVal);
-                                        orClauses.push(`${colName} LIKE $${params.length}`);
+                                        orClauses.push(`${colQuoted} LIKE $${params.length}`);
                                     } else if (opName === 'neq') {
                                         params.push(rawVal);
-                                        orClauses.push(`${colName} != $${params.length}`);
+                                        orClauses.push(`${colQuoted} != $${params.length}`);
                                     }
                                 }
                             }
@@ -274,46 +350,49 @@ async function handleApiRequest(req, res) {
                             continue;
                         }
 
+                        let colQuoted;
+                        try {
+                            colQuoted = validateAndQuoteColumn(f.column, 'm');
+                        } catch (e) {
+                            sendJson(res, 400, { error: { message: e.message } });
+                            return true;
+                        }
+
                         if (f.operator === 'NOT') {
-                            const col = f.column.includes('.') ? f.column : `m.${f.column}`;
                             if (f.subOperator === 'is' && (f.value === null || f.value === 'null')) {
-                                whereClauses.push(`${col} IS NOT NULL`);
+                                whereClauses.push(`${colQuoted} IS NOT NULL`);
                             } else {
                                 params.push(f.value);
-                                whereClauses.push(`${col} != $${params.length}`);
+                                whereClauses.push(`${colQuoted} != $${params.length}`);
                             }
                             continue;
                         }
 
                         if (f.operator === 'IN' || f.operator === '= ANY') {
-                            const col = f.column.includes('.') ? f.column : `m.${f.column}`;
                             const vals = Array.isArray(f.value) ? f.value : [f.value];
                             params.push(vals);
-                            whereClauses.push(`${col} = ANY($${params.length})`);
+                            whereClauses.push(`${colQuoted} = ANY($${params.length})`);
                             continue;
                         }
 
                         if (f.operator === '@>') {
-                            const col = f.column.includes('.') ? f.column : `m.${f.column}`;
                             params.push(typeof f.value === 'string' ? f.value : JSON.stringify(f.value));
-                            whereClauses.push(`${col} @> $${params.length}::jsonb`);
+                            whereClauses.push(`${colQuoted} @> $${params.length}::jsonb`);
                             continue;
                         }
 
                         if (f.operator === 'IS') {
-                            const col = f.column.includes('.') ? f.column : `m.${f.column}`;
                             if (f.value === null || f.value === 'null') {
-                                whereClauses.push(`${col} IS NULL`);
+                                whereClauses.push(`${colQuoted} IS NULL`);
                             } else {
                                 params.push(f.value);
-                                whereClauses.push(`${col} IS $${params.length}`);
+                                whereClauses.push(`${colQuoted} IS $${params.length}`);
                             }
                             continue;
                         }
 
                         params.push(f.value);
-                        const col = f.column.includes('.') ? f.column : `m.${f.column}`;
-                        whereClauses.push(`${col} ${f.operator || '='} $${params.length}`);
+                        whereClauses.push(`${colQuoted} ${f.operator || '='} $${params.length}`);
                     }
                 }
 
@@ -322,13 +401,20 @@ async function handleApiRequest(req, res) {
                 }
 
                 if (body.order && body.order.column) {
-                    const ordCol = body.order.column.includes('.') ? body.order.column : `m.${body.order.column}`;
-                    queryStr += ` ORDER BY ${ordCol} ${body.order.ascending ? 'ASC' : 'DESC'}`;
+                    let ordCol;
+                    try {
+                        ordCol = validateAndQuoteColumn(body.order.column, 'm');
+                    } catch (e) {
+                        sendJson(res, 400, { error: { message: `Coluna de ordenação inválida: ${body.order.column}` } });
+                        return true;
+                    }
+                    const isDesc = String(body.order.ascending) === 'false' || String(body.order.direction).toUpperCase() === 'DESC';
+                    queryStr += ` ORDER BY ${ordCol} ${isDesc ? 'DESC' : 'ASC'}`;
                 }
 
                 let totalCount = null;
                 if (body.countExact && body.limit) {
-                    let countQ = `SELECT count(*) as total FROM public.${tableName} m`;
+                    let countQ = `SELECT count(*) as total FROM public."${tableName}" m`;
                     if (whereClauses.length > 0) countQ += ` WHERE ${whereClauses.join(' AND ')}`;
                     const countRes = await pool.query(countQ, params);
                     totalCount = parseInt(countRes.rows[0].total, 10);
@@ -361,11 +447,16 @@ async function handleApiRequest(req, res) {
                     if (tenantId && !r.loja_id && TABLES_WITH_LOJA_ID.has(tableName)) {
                         r.loja_id = tenantId;
                     }
-                    // Remover id se for nulo, indefinido ou vazio para permitir o serial/autoincrement do banco
                     if (r.id === null || r.id === undefined || r.id === '') {
                         delete r.id;
                     }
                     const cols = Object.keys(r);
+                    for (const c of cols) {
+                        if (!isValidIdentifier(c)) {
+                            sendJson(res, 400, { error: { message: `Nome de coluna inválido: ${c}` } });
+                            return true;
+                        }
+                    }
                     const vals = cols.map(c => {
                         const val = r[c];
                         if (val === undefined) return null;
@@ -375,8 +466,9 @@ async function handleApiRequest(req, res) {
                         return val;
                     });
                     const placeholders = vals.map((_, idx) => `$${idx + 1}`);
+                    const quotedCols = cols.map(c => `"${c}"`);
 
-                    const q = `INSERT INTO public.${tableName} (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+                    const q = `INSERT INTO public."${tableName}" (${quotedCols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
                     const resIns = await pool.query(q, vals);
                     inserted.push(...resIns.rows);
                 }
@@ -388,6 +480,13 @@ async function handleApiRequest(req, res) {
             if (body.action === 'update') {
                 const values = body.values !== undefined ? body.values : (body.data || {});
                 const cols = Object.keys(values).filter(c => c !== 'id');
+                for (const c of cols) {
+                    if (!isValidIdentifier(c)) {
+                        sendJson(res, 400, { error: { message: `Nome de coluna inválido: ${c}` } });
+                        return true;
+                    }
+                }
+
                 const params = cols.map(c => {
                     const val = values[c];
                     if (val === undefined) return null;
@@ -405,26 +504,39 @@ async function handleApiRequest(req, res) {
 
                 if (Array.isArray(body.filters)) {
                     for (const f of body.filters) {
+                        if (!f) continue;
+                        if (f.operator && !ALLOWED_OPERATORS.has(f.operator)) {
+                            sendJson(res, 400, { error: { message: `Operador não permitido: ${f.operator}` } });
+                            return true;
+                        }
+                        let colQuoted;
+                        try {
+                            colQuoted = validateAndQuoteColumn(f.column, '');
+                        } catch (e) {
+                            sendJson(res, 400, { error: { message: e.message } });
+                            return true;
+                        }
+
                         if (f.operator === 'IN' || f.operator === '= ANY') {
                             const vals = Array.isArray(f.value) ? f.value : [f.value];
                             params.push(vals);
-                            whereClauses.push(`${f.column} = ANY($${params.length})`);
+                            whereClauses.push(`${colQuoted} = ANY($${params.length})`);
                         } else if (f.operator === 'IS') {
                             if (f.value === null || f.value === 'null') {
-                                whereClauses.push(`${f.column} IS NULL`);
+                                whereClauses.push(`${colQuoted} IS NULL`);
                             } else {
                                 params.push(f.value);
-                                whereClauses.push(`${f.column} IS $${params.length}`);
+                                whereClauses.push(`${colQuoted} IS $${params.length}`);
                             }
                         } else {
                             params.push(f.value);
-                            whereClauses.push(`${f.column} ${f.operator || '='} $${params.length}`);
+                            whereClauses.push(`${colQuoted} ${f.operator || '='} $${params.length}`);
                         }
                     }
                 }
 
-                const setStr = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
-                let q = `UPDATE public.${tableName} SET ${setStr}`;
+                const setStr = cols.map((c, i) => `"${c}" = $${i + 1}`).join(', ');
+                let q = `UPDATE public."${tableName}" SET ${setStr}`;
                 if (whereClauses.length > 0) q += ` WHERE ${whereClauses.join(' AND ')}`;
                 q += ` RETURNING *`;
 
@@ -444,18 +556,31 @@ async function handleApiRequest(req, res) {
 
                 if (Array.isArray(body.filters)) {
                     for (const f of body.filters) {
+                        if (!f) continue;
+                        if (f.operator && !ALLOWED_OPERATORS.has(f.operator)) {
+                            sendJson(res, 400, { error: { message: `Operador não permitido: ${f.operator}` } });
+                            return true;
+                        }
+                        let colQuoted;
+                        try {
+                            colQuoted = validateAndQuoteColumn(f.column, '');
+                        } catch (e) {
+                            sendJson(res, 400, { error: { message: e.message } });
+                            return true;
+                        }
+
                         if (f.operator === 'IN' || f.operator === '= ANY') {
                             const vals = Array.isArray(f.value) ? f.value : [f.value];
                             params.push(vals);
-                            whereClauses.push(`${f.column} = ANY($${params.length})`);
+                            whereClauses.push(`${colQuoted} = ANY($${params.length})`);
                         } else {
                             params.push(f.value);
-                            whereClauses.push(`${f.column} ${f.operator || '='} $${params.length}`);
+                            whereClauses.push(`${colQuoted} ${f.operator || '='} $${params.length}`);
                         }
                     }
                 }
 
-                let q = `DELETE FROM public.${tableName}`;
+                let q = `DELETE FROM public."${tableName}"`;
                 if (whereClauses.length > 0) q += ` WHERE ${whereClauses.join(' AND ')}`;
                 q += ` RETURNING *`;
 
@@ -467,8 +592,16 @@ async function handleApiRequest(req, res) {
             sendJson(res, 400, { error: { message: `Ação ${body.action} não suportada.` } });
             return true;
         } catch (err) {
-            console.error(`Erro na API /api/data/${clientId}/${tableName}:`, err);
-            sendJson(res, 500, { data: null, error: { message: err.message, detail: err.detail } });
+            console.error(`Erro na API /api/data/${clientId}/${tableName}:`, err.message);
+            const isClientError = err.message && (
+                err.message.includes('não permitid') ||
+                err.message.includes('inválid') ||
+                err.message.includes('não autorizad')
+            );
+            sendJson(res, isClientError ? 400 : 500, {
+                data: null,
+                error: { message: isClientError ? err.message : 'Erro ao processar consulta de dados.' }
+            });
             return true;
         }
     }
@@ -478,10 +611,17 @@ async function handleApiRequest(req, res) {
     if (rpcMatch) {
         const clientId = rpcMatch[1];
         const fnName = rpcMatch[2];
+
+        // SEC-05: Validação estrita de RPC contra allowlist
+        if (!ALLOWED_RPC_FUNCTIONS.has(fnName)) {
+            sendJson(res, 403, { error: { message: `Função RPC '${fnName}' não autorizada.` } });
+            return true;
+        }
+
         const pool = getPool(clientId);
 
         if (!pool) {
-            sendJson(res, 503, { error: `Banco Neon não configurado para ${clientId}.` });
+            sendJson(res, 503, { error: { message: `Banco Neon não configurado para ${clientId}.` } });
             return true;
         }
 
@@ -491,7 +631,7 @@ async function handleApiRequest(req, res) {
             const paramVals = paramKeys.map(k => body[k]);
             const placeholders = paramVals.map((_, idx) => `$${idx + 1}`).join(', ');
 
-            const q = `SELECT * FROM public.${fnName}(${placeholders})`;
+            const q = `SELECT * FROM public."${fnName}"(${placeholders})`;
             const result = await pool.query(q, paramVals);
 
             // Se retornar coluna única jsonb ou objeto, desembrulhar
@@ -507,8 +647,8 @@ async function handleApiRequest(req, res) {
             sendJson(res, 200, { data: outData, error: null });
             return true;
         } catch (err) {
-            console.error(`Erro na RPC /api/rpc/${clientId}/${fnName}:`, err);
-            sendJson(res, 500, { data: null, error: err.message });
+            console.error(`Erro na RPC /api/rpc/${clientId}/${fnName}:`, err.message);
+            sendJson(res, 500, { data: null, error: { message: 'Erro ao executar função RPC.' } });
             return true;
         }
     }
