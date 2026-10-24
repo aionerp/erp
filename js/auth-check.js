@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         storeBadge.id = 'topBarStoreBadge';
         storeBadge.className = 'topbar-store-badge';
         storeBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background: rgba(234, 179, 8, 0.14); color: #B45309; border: 1px solid rgba(234, 179, 8, 0.35); padding: 5px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; margin-right: 12px; white-space: nowrap;';
-        storeBadge.innerHTML = `🏢 <span class="badge-store-name">${currentCompanyName}</span>${currentCompanySubtitle ? ` <span style="font-size: 10.5px; opacity: 0.8; font-weight: 500;">(${currentCompanySubtitle})</span>` : ''}`;
+        storeBadge.innerHTML = `🏢 <span class="badge-store-name">${currentCompanyName}</span>${currentCompanySubtitle ? ` <span class="badge-store-subtitle" style="font-size: 10.5px; opacity: 0.8; font-weight: 500;">(${currentCompanySubtitle})</span>` : ''}`;
         storeBadge.title = `Loja Ativa: ${currentCompanyName} • ${currentCompanySubtitle}`;
         userInfoWrapper.prepend(storeBadge);
     }
@@ -512,15 +512,83 @@ document.addEventListener('DOMContentLoaded', () => {
         newLogoutBtn.addEventListener('click', window.executarLogout);
     }
     
-    // === MENU TOGGLE (mobile) ===
+    // === MENU TOGGLE & OVERLAY (mobile/tablet) ===
+    const sidebarEl = document.querySelector('.sidebar');
+    let sidebarOverlay = document.getElementById('sidebarOverlay');
+    if (sidebarEl && !sidebarOverlay) {
+        sidebarOverlay = document.createElement('div');
+        sidebarOverlay.id = 'sidebarOverlay';
+        sidebarOverlay.className = 'sidebar-overlay';
+        sidebarOverlay.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(sidebarOverlay);
+    }
+
+    const sincronizarEstadoOverlay = () => {
+        if (!sidebarEl) return;
+        const estaAberta = sidebarEl.classList.contains('open');
+        if (sidebarOverlay) sidebarOverlay.classList.toggle('active', estaAberta);
+        document.body.classList.toggle('sidebar-open', estaAberta);
+    };
+
+    if (sidebarEl) {
+        const obsSidebar = new MutationObserver(sincronizarEstadoOverlay);
+        obsSidebar.observe(sidebarEl, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    const fecharSidebarMobile = () => {
+        if (sidebarEl) sidebarEl.classList.remove('open');
+        sincronizarEstadoOverlay();
+    };
+
+    const alternarSidebarMobile = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+        if (!sidebarEl) return;
+        sidebarEl.classList.toggle('open');
+        sincronizarEstadoOverlay();
+    };
+
+    window.toggleSidebar = alternarSidebarMobile;
+    window.fecharSidebarMobile = fecharSidebarMobile;
+
     const menuToggle = document.getElementById('menuToggle');
     if (menuToggle) {
+        menuToggle.removeAttribute('onclick');
         const newMenuToggle = menuToggle.cloneNode(true);
+        newMenuToggle.removeAttribute('onclick');
+        newMenuToggle.setAttribute('aria-label', 'Abrir menu de navegação');
         menuToggle.parentNode.replaceChild(newMenuToggle, menuToggle);
-        newMenuToggle.addEventListener('click', () => {
-            document.querySelector('.sidebar').classList.toggle('open');
+        // Usa capture: true + stopImmediatePropagation para impedir que scripts de páginas específicas façam um segundo toggle no mesmo clique
+        newMenuToggle.addEventListener('click', alternarSidebarMobile, true);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', fecharSidebarMobile);
+    }
+
+    if (sidebarEl) {
+        sidebarEl.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 1023) {
+                    fecharSidebarMobile();
+                }
+            });
         });
     }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebarEl && sidebarEl.classList.contains('open')) {
+            fecharSidebarMobile();
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024 && sidebarEl && sidebarEl.classList.contains('open')) {
+            fecharSidebarMobile();
+        }
+    });
 });
 
 // =====================================================
@@ -563,7 +631,7 @@ async function executarAberturaModalConfigLoja() {
     modal = document.createElement('div');
     modal.id = 'modalGlobalConfigLoja';
     modal.className = 'modal';
-    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999;';
+    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999999; padding:12px; box-sizing:border-box;';
 
     const termosHtml = `
         <div class="form-group" style="margin-bottom:12px;">
@@ -577,12 +645,12 @@ async function executarAberturaModalConfigLoja() {
     `;
 
     modal.innerHTML = `
-        <div class="modal-content" style="background:#fff; padding:24px; border-radius:12px; width:100%; max-width:500px; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease; box-sizing:border-box; font-family:inherit;">
-            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #eee; padding-bottom:10px;">
-                <h2 style="font-size:18px; font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - ${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</h2>
-                <span class="close-config" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray);">&times;</span>
+        <div class="modal-content" style="background:#fff; padding:20px; border-radius:12px; width:100%; max-width:500px; max-height:92dvh; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); position:relative; animation:fadeInUp 0.3s ease; box-sizing:border-box; font-family:inherit;">
+            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid #eee; padding-bottom:10px; gap:8px;">
+                <h2 style="font-size:clamp(15px, 4vw, 18px); font-weight:700; color:var(--dark); margin:0;">🏢 Dados da Empresa - ${window.ENV?.COMPANY_NAME || usuario.loja_nome || 'Aion ERP'}</h2>
+                <span class="close-config close" style="cursor:pointer; font-size:24px; font-weight:bold; color:var(--gray); min-width:36px; min-height:36px; display:inline-flex; align-items:center; justify-content:center;">&times;</span>
             </div>
-            <div class="modal-body" style="max-height: 430px; overflow-y: auto; padding-right: 5px;">
+            <div class="modal-body" style="max-height: calc(90dvh - 150px); overflow-y: auto; padding-right: 5px; flex:1;">
                 <form id="formGlobalConfigLoja">
                     <div class="form-group" style="margin-bottom:12px;">
                         <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Nome (Razão Social)</label>
@@ -595,11 +663,11 @@ async function executarAberturaModalConfigLoja() {
                     <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
                         <div class="form-group">
                             <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">CNPJ</label>
-                            <input type="text" id="cfgCnpj" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                            <input type="text" id="cfgCnpj" inputmode="numeric" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
                         </div>
                         <div class="form-group">
                             <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151;">Telefone</label>
-                            <input type="text" id="cfgTelefone" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+                            <input type="tel" id="cfgTelefone" inputmode="tel" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
                         </div>
                     </div>
                     <div class="form-group" style="margin-bottom:12px;">
@@ -609,9 +677,9 @@ async function executarAberturaModalConfigLoja() {
                     ${termosHtml}
                 </form>
             </div>
-            <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:12px; margin-top:12px;">
-                <button class="btn-warning" id="btnFecharConfig" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:#f3f4f6; color:#4b5563;">Cancelar</button>
-                <button class="btn-primary" id="btnSalvarConfigLoja" style="padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:var(--primary); color:#fff;">Salvar</button>
+            <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:12px; margin-top:12px; flex-wrap:wrap;">
+                <button class="btn-warning" id="btnFecharConfig" style="padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:#f3f4f6; color:#4b5563;">Cancelar</button>
+                <button class="btn-primary" id="btnSalvarConfigLoja" style="padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; background:var(--primary); color:#fff;">Salvar</button>
             </div>
         </div>
     `;
