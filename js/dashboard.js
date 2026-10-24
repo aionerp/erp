@@ -1159,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        modalPagDash.style.display = 'block';
+        modalPagDash.style.display = 'flex';
         document.getElementById('dashPag_valor')?.focus();
     };
 

@@ -388,11 +388,11 @@
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
+            width: 100% !important;
+            height: 100dvh !important;
             z-index: 99999 !important;
             background: #f8fafc !important;
-            padding: 30px !important;
+            padding: 20px !important;
             box-sizing: border-box !important;
             overflow-y: auto !important;
             border-radius: 0 !important;
@@ -409,6 +409,32 @@
         .dash-cd-warn { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
         .dash-cd-urg { background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; }
         .dash-cd-dang { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+        .chart-filters {
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 639px) {
+            .dashboard-chart-box,
+            .dashboard-list-card,
+            .painel-recorrentes-box {
+                padding: 14px !important;
+            }
+            .chart-filters {
+                width: 100%;
+            }
+            .chart-filters input[type="date"] {
+                flex: 1 1 130px;
+                min-width: 0;
+            }
+            .btn-chart-filter {
+                width: 100%;
+                min-height: 42px;
+            }
+            .metric-value {
+                font-size: clamp(20px, 6vw, 26px) !important;
+            }
+        }
     </style>
 </head>
 <body class="hold-transition">
@@ -767,7 +793,7 @@
 
                 <!-- Card Resumo do Contrato -->
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
                         <div>
                             <span style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Cliente</span>
                             <div id="dashPag_clienteNome" style="font-size: 15px; font-weight: 800; color: #0F172A;">-</div>
@@ -777,7 +803,7 @@
                             <div id="dashPag_planoNome" style="font-size: 14px; font-weight: 700; color: #0284C7;">-</div>
                         </div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed #CBD5E1; padding-top: 8px; font-size: 12.5px;">
+                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed #CBD5E1; padding-top: 8px; font-size: 12.5px; flex-wrap: wrap; gap: 6px;">
                         <span>Vencimento do Ciclo: <strong id="dashPag_vencimentoAtual" style="color: #B91C1C;">-</strong></span>
                         <span>Frequência: <strong id="dashPag_frequenciaTexto" style="color: #334155; text-transform: capitalize;">-</strong></span>
                     </div>
@@ -819,8 +845,8 @@
                     <label style="color: #065F46; font-weight: 700; margin-bottom: 6px; display: block;">
                         📅 Próximo Vencimento da Assinatura (Renovação Automática)
                     </label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="date" id="dashPag_proximoVencimento" required style="flex: 1; height: 38px; border-radius: 6px; border: 1px solid #10B981; font-weight: 600; padding: 0 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="date" id="dashPag_proximoVencimento" required style="flex: 1 1 160px; height: 38px; border-radius: 6px; border: 1px solid #10B981; font-weight: 600; padding: 0 10px;">
                         <span id="dashPag_spanCicloDias" style="font-size: 12px; color: #047857; font-weight: 600;"></span>
                     </div>
                     <small style="color: #047857; font-size: 11.5px; margin-top: 4px; display: block;">

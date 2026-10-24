@@ -764,16 +764,220 @@
             animation: pulseNovaVenda 3s ease;
         }
 
+        /* ══ Barra Flutuante Mobile para Atalho ao Checkout ══ */
+        .pdv-mobile-sticky-bar {
+            display: none;
+        }
+
         /* ══ RESPONSIVO ══════════════════════════════════ */
         @media (max-width: 1200px) {
             .pdv-wrapper { grid-template-columns: 1.25fr 1fr; }
         }
 
-        @media (max-width: 992px) {
-            .pdv-busca-top { flex-direction: column; align-items: stretch; gap: 12px; }
-            .pdv-wrapper { grid-template-columns: 1fr; height: auto; }
-            #carrinhoItems { max-height: 400px; }
-            .formas-pagamento-grid { grid-template-columns: repeat(2, 1fr); }
+        @media (max-width: 1023px) {
+            html,
+            body.pagina-pdv {
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                height: auto !important;
+            }
+            body.pagina-pdv .dashboard {
+                height: auto !important;
+                min-height: 100dvh !important;
+                overflow: visible !important;
+            }
+            body.pagina-pdv .main-content {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding-bottom: 76px !important;
+            }
+            body.pagina-pdv .content {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding: 10px 12px !important;
+            }
+            .pdv-central-container {
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .pdv-view-pane.active {
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .pdv-header-bar {
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 8px 10px;
+            }
+            .pdv-header-left,
+            .pdv-header-right {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .btn-expandir-pdv {
+                display: none !important;
+            }
+            .pdv-busca-top {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .pdv-busca-top .top-search-box {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+            #btnLimparClienteRapido,
+            #btnAdicionarClienteRapido,
+            #btnAdicionarProdutoRapido {
+                min-width: 44px !important;
+                min-height: 44px !important;
+            }
+            .pdv-wrapper {
+                grid-template-columns: 1fr !important;
+                height: auto !important;
+                overflow: visible !important;
+                gap: 14px;
+            }
+            .carrinho-panel,
+            .checkout-panel {
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #carrinhoItems {
+                max-height: 420px;
+                min-height: 160px;
+            }
+            .formas-pagamento-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 6px;
+            }
+            .btn-pagamento-card {
+                min-height: 44px !important;
+                padding: 8px 6px !important;
+                font-size: 12px !important;
+            }
+            #vendaColaborador {
+                min-height: 44px !important;
+                font-size: 16px !important;
+            }
+            .btn-limpar-venda,
+            .btn-finalizar-venda {
+                min-height: 46px !important;
+                font-size: 14px !important;
+            }
+            #viewVendasRecentes {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+            }
+            #vendasRecentesBody,
+            #listaVendas {
+                max-height: 65dvh;
+                overflow-x: auto !important;
+                overflow-y: auto !important;
+            }
+
+            /* Barra fixa no rodapé para ir direto ao pagamento/finalização */
+            .pdv-mobile-sticky-bar {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 950;
+                background: #0A1628;
+                color: #fff;
+                padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+                border-top: 1px solid rgba(255, 255, 255, 0.12);
+            }
+            .pdv-mobile-sticky-info {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            .pdv-mobile-sticky-label {
+                font-size: 10.5px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #94A3B8;
+                font-weight: 600;
+            }
+            .pdv-mobile-sticky-total {
+                font-size: 18px;
+                font-weight: 800;
+                color: #FACC15;
+                white-space: nowrap;
+            }
+            .pdv-mobile-sticky-btn {
+                background: linear-gradient(135deg, #16a34a, #15803d);
+                color: #fff;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-size: 13.5px;
+                font-weight: 700;
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+            }
+        }
+
+        @media (max-width: 639px) {
+            .pdv-header-left {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .pdv-nav-tabs {
+                width: 100%;
+                display: flex;
+            }
+            .pdv-tab-btn {
+                flex: 1;
+                justify-content: center;
+                min-height: 40px;
+            }
+            .pdv-busca-top .search-cliente {
+                display: grid !important;
+                grid-template-columns: 1fr auto auto;
+                gap: 6px !important;
+            }
+            .pdv-busca-top .search-cliente > div:first-child {
+                grid-column: 1 / -1;
+            }
+            /* Carrinho Item responsivo em Card Compacto no Celular */
+            .carrinho-item {
+                grid-template-columns: 1fr auto !important;
+                gap: 8px !important;
+                padding: 10px !important;
+            }
+            .carrinho-item > div:first-child {
+                grid-column: 1 / -1;
+            }
+            .formas-pagamento-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+            .checkout-input-group {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            #viewVendasRecentes > div:first-child {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 8px;
+            }
+            #btnVoltarNovaVenda {
+                width: 100%;
+                min-height: 42px;
+            }
         }
     </style>
 </head>
@@ -895,7 +1099,7 @@
                         </div>
 
                         <!-- Coluna Checkout (Direita - Zero Scroll) -->
-                        <div class="checkout-panel">
+                        <div class="checkout-panel" id="checkoutPanelPDV">
                             <div class="pdv-panel-header">
                                 <span>💰 Resumo e Finalização</span>
                             </div>
@@ -1395,7 +1599,43 @@ document.addEventListener('DOMContentLoaded', () => {
         aplicarModoExpandido(!estaExpandido);
     });
 
-    // 4. Atalhos de Teclado Úteis para Caixa (F2 = Nova Venda, F4 = Vendas Recentes, Alt+E = Expandir)
+    // 4. Barra Flutuante Mobile/Tablet: sincronizar Total e rolar até o Checkout
+    const totalEl = document.getElementById('total');
+    const stickyBar = document.createElement('div');
+    stickyBar.className = 'pdv-mobile-sticky-bar';
+    stickyBar.id = 'pdvMobileStickyBar';
+    stickyBar.innerHTML = `
+        <div class="pdv-mobile-sticky-info">
+            <span class="pdv-mobile-sticky-label">Total a Pagar</span>
+            <span class="pdv-mobile-sticky-total" id="pdvMobileStickyTotal">R$ 0,00</span>
+        </div>
+        <button type="button" class="pdv-mobile-sticky-btn" id="btnIrParaPagamentoMobile">
+            <span>💰 Pagamento / Finalizar</span>
+        </button>
+    `;
+    document.body.appendChild(stickyBar);
+
+    const stickyTotalEl = document.getElementById('pdvMobileStickyTotal');
+    const btnIrPagMobile = document.getElementById('btnIrParaPagamentoMobile');
+    const checkoutPanelEl = document.getElementById('checkoutPanelPDV');
+
+    if (totalEl && stickyTotalEl) {
+        const syncTotalMobile = () => {
+            stickyTotalEl.textContent = totalEl.textContent || 'R$ 0,00';
+        };
+        const obsTotal = new MutationObserver(syncTotalMobile);
+        obsTotal.observe(totalEl, { childList: true, characterData: true, subtree: true });
+        syncTotalMobile();
+    }
+
+    btnIrPagMobile?.addEventListener('click', () => {
+        if (viewNovaVenda && !viewNovaVenda.classList.contains('active')) {
+            window.ativarAbaPDV('nova-venda');
+        }
+        checkoutPanelEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // 5. Atalhos de Teclado Úteis para Caixa (F2 = Nova Venda, F4 = Vendas Recentes, Alt+E = Expandir)
     window.addEventListener('keydown', (e) => {
         if (e.key === 'F2') {
             e.preventDefault();
