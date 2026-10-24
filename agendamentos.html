@@ -697,6 +697,26 @@
         }
 
         /* Responsive */
+        @media (max-width: 1023px) {
+            /* Em dispositivos touch/tablet, o botão "+ Agendar" no horário livre deve ficar visível sem precisar de hover */
+            .slot-add-btn {
+                display: inline-block !important;
+                opacity: 0.85;
+            }
+            .list-table-wrapper,
+            #detItensTabelaWrapper,
+            #cliHistoricoTabelaWrapper,
+            #relTabelaServicosWrapper,
+            #relTabelaProfissionaisWrapper,
+            #relTabelaProdutosWrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            #relMetricasGrid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+        }
+
         @media (max-width: 768px) {
             .page-header-actions {
                 flex-direction: column;
@@ -707,6 +727,7 @@
             }
             .header-btns button {
                 width: 100%;
+                justify-content: center;
             }
             .controls-top-row {
                 flex-direction: column;
@@ -716,9 +737,71 @@
                 width: 100%;
                 justify-content: space-around;
             }
+            .view-btn {
+                flex: 1;
+                justify-content: center;
+            }
             .date-navigator {
                 width: 100%;
                 justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .date-current-label {
+                min-width: 0;
+                font-size: 13.5px;
+            }
+            .month-calendar-wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .month-weekdays,
+            .month-grid {
+                min-width: 560px;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+            .timeline-slot-row {
+                grid-template-columns: 64px 1fr;
+            }
+            .timeline-hour-label {
+                padding: 10px 6px;
+                font-size: 11.5px;
+            }
+            .modal-tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                flex-wrap: nowrap;
+                padding: 0 12px !important;
+            }
+            .modal-tab-btn {
+                white-space: nowrap;
+                flex-shrink: 0;
+                padding: 8px 12px;
+                font-size: 12.5px;
+            }
+            #modalDetalhesAgendamento [style*="grid-template-columns"],
+            #relMetricasGrid {
+                grid-template-columns: 1fr !important;
+            }
+            #modalDetalhesAgendamento .modal-footer {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 8px;
+            }
+            #modalDetalhesAgendamento .modal-footer > div {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            #modalDetalhesAgendamento .modal-footer button {
+                flex: 1 1 calc(50% - 4px);
             }
         }
     </style>
@@ -1039,8 +1122,8 @@
                             </button>
                         </div>
 
-                        <div style="display:flex; gap:8px; margin-bottom:8px;">
-                            <select id="selectAdicionarServico" style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
+                        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                            <select id="selectAdicionarServico" style="flex:1 1 200px; min-width:0; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
                                 <option value="">Escolha um serviço para adicionar...</option>
                             </select>
                             <button type="button" id="btnAdicionarServicoLista" class="btn-secondary" style="padding:8px 14px; font-size:12.5px; border-radius:8px; font-weight:700;">
@@ -1048,21 +1131,23 @@
                             </button>
                         </div>
 
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Serviço</th>
-                                    <th style="width:90px;">Duração</th>
-                                    <th style="width:110px;">Valor (R$)</th>
-                                    <th style="width:50px; text-align:center;">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="listaServicosAgendamento">
-                                <tr>
-                                    <td colspan="4" style="text-align:center; color:var(--dust-grey); padding:14px;">Nenhum serviço selecionado</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Serviço</th>
+                                        <th style="width:90px;">Duração</th>
+                                        <th style="width:110px;">Valor (R$)</th>
+                                        <th style="width:50px; text-align:center;">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="listaServicosAgendamento">
+                                    <tr>
+                                        <td colspan="4" style="text-align:center; color:var(--dust-grey); padding:14px;">Nenhum serviço selecionado</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <!-- SEÇÃO: PRODUTOS UTILIZADOS / VENDIDOS -->
@@ -1072,8 +1157,8 @@
                             <span style="font-size:11.5px; color:var(--gray);">Opcional</span>
                         </div>
 
-                        <div style="display:flex; gap:8px; margin-bottom:8px;">
-                            <select id="selectAdicionarProduto" style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
+                        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                            <select id="selectAdicionarProduto" style="flex:1 1 180px; min-width:0; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
                                 <option value="">Selecione um produto do estoque...</option>
                             </select>
                             <input type="number" id="inputQtdProduto" value="1" min="1" style="width:70px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:13px;" title="Quantidade">
@@ -1082,22 +1167,24 @@
                             </button>
                         </div>
 
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Produto</th>
-                                    <th style="width:70px;">Qtd</th>
-                                    <th style="width:100px;">Unitário (R$)</th>
-                                    <th style="width:100px;">Total (R$)</th>
-                                    <th style="width:50px; text-align:center;">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="listaProdutosAgendamento">
-                                <tr>
-                                    <td colspan="5" style="text-align:center; color:var(--dust-grey); padding:14px;">Nenhum produto adicionado</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th style="width:70px;">Qtd</th>
+                                        <th style="width:100px;">Unitário (R$)</th>
+                                        <th style="width:100px;">Total (R$)</th>
+                                        <th style="width:50px; text-align:center;">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="listaProdutosAgendamento">
+                                    <tr>
+                                        <td colspan="5" style="text-align:center; color:var(--dust-grey); padding:14px;">Nenhum produto adicionado</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
 
                         <label style="display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:var(--dark-light); margin-top:8px; cursor:pointer;">
                             <input type="checkbox" id="chkBaixarEstoque" checked>

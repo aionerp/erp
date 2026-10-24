@@ -224,7 +224,7 @@
             </header>
             
             <div class="content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                     <h1>📥 Lançamento de Compras (Entradas)</h1>
                     <button class="btn-primary" id="btnNovaEntrada">+ Lançar Compra</button>
                 </div>
@@ -427,12 +427,12 @@
                         <label class="required-label">Nome</label>
                         <input type="text" id="rapidoNome" required placeholder="Nome do produto" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
                     </div>
-                    <div class="form-row" style="display:flex; gap:10px; margin-bottom:12px;">
-                        <div class="form-group" style="flex: 1;">
+                    <div class="form-row" style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+                        <div class="form-group" style="flex: 1 1 160px;">
                             <label>Valor Compra (R$)</label>
                             <input type="number" step="0.01" id="rapidoValorCompra" value="0.00" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
                         </div>
-                        <div class="form-group" style="flex: 1;">
+                        <div class="form-group" style="flex: 1 1 160px;">
                             <label>Valor Venda (R$)</label>
                             <input type="number" step="0.01" id="rapidoValorVenda" value="0.00" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
                         </div>

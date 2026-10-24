@@ -289,6 +289,73 @@
                 display: none !important;
             }
         }
+
+        /* ── Responsividade Relatórios & BI ── */
+        #movimentoContainer,
+        #faturamentoContainer,
+        #vendasProdutoContainer,
+        #colaboradorContainer,
+        #lucroContainer,
+        #descontosVendasContainer,
+        #descontosProdutosCampanhasContainer,
+        #dreResumoContainer,
+        #despesasContainer {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 1023px) {
+            #tab-dashboard .relatorio-container > div[style*="grid-template-columns: 1fr 1fr"],
+            #tab-despesas .relatorio-container > div[style*="grid-template-columns: 1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+            .relatorio-header {
+                flex-direction: column;
+                align-items: flex-start !important;
+            }
+            .filtros-relatorio {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .relatorio-container {
+                padding: 14px !important;
+            }
+            .filtros-relatorio input,
+            .filtros-relatorio select {
+                flex: 1 1 100%;
+                width: 100% !important;
+            }
+            .filtros-relatorio button {
+                flex: 1 1 calc(50% - 6px);
+                justify-content: center;
+            }
+            .dashboard-kpi,
+            #lucroKpis {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 10px !important;
+            }
+            .kpi-card .kpi-value {
+                font-size: clamp(16px, 4.5vw, 20px) !important;
+            }
+            #tab-descontos .relatorio-container > div[style*="display: flex; gap: 10px"] {
+                flex-direction: column;
+            }
+            #tab-descontos .relatorio-container > div[style*="display: flex; gap: 10px"] button {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .dashboard-kpi,
+            #lucroKpis {
+                grid-template-columns: 1fr !important;
+            }
+        }
     </style>
 </head>
 <body class="hold-transition">

@@ -312,6 +312,67 @@
                 color: #000;
             }
         }
+
+        /* ══ RESPONSIVIDADE MOBILE / TABLET ══════════════ */
+        @media (max-width: 1023px) {
+            .container {
+                margin: 20px 16px;
+                padding: 36px 32px;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .no-print-bar {
+                padding: 12px 16px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .no-print-bar h2 {
+                font-size: 16px;
+            }
+            .btn-print {
+                width: 100%;
+                justify-content: center;
+                min-height: 44px;
+            }
+            .container {
+                margin: 12px 8px;
+                padding: 20px 16px;
+            }
+            .cover-page {
+                padding: 40px 0 60px;
+                min-height: auto;
+            }
+            .cover-title {
+                font-size: clamp(24px, 7vw, 32px);
+            }
+            .cover-subtitle {
+                font-size: 15px;
+                margin-bottom: 40px;
+            }
+            .cover-footer {
+                flex-direction: column;
+                gap: 6px;
+                text-align: center;
+            }
+            h1 {
+                font-size: 20px;
+                margin-top: 28px;
+            }
+            h2 {
+                font-size: 16px;
+            }
+            p, ol, ul {
+                font-size: 14px;
+                text-align: left;
+            }
+            table {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
     </style>
 </head>
 <body>

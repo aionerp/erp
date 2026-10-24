@@ -65,14 +65,14 @@
             </header>
             
             <div class="content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                     <h1>👥 Clientes</h1>
                     <button class="btn-primary" id="btnNovo">+ Novo Cliente</button>
                 </div>
                 
-                <div class="filters" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <input type="text" id="searchInput" placeholder="🔍 Pesquisar por nome, telefone ou email..." style="flex: 1; margin-bottom: 0;">
-                    <div class="export-actions">
+                <div class="filters" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <input type="text" id="searchInput" placeholder="🔍 Pesquisar por nome, telefone ou email..." style="flex: 1 1 200px; min-width: 0; margin-bottom: 0;">
+                    <div class="export-actions" style="flex-wrap: wrap;">
                         <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
                         <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
                     </div>

@@ -201,15 +201,15 @@
                     </div>
                 </div>
                 
-                <div class="filters-container" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <div style="display: flex; gap: 10px; flex: 1; align-items: center;">
-                        <input type="text" id="searchProduto" placeholder="Pesquisar por código, nome, marca..." style="flex: 1; margin-bottom: 0;">
+                <div class="filters-container" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 10px; flex: 1 1 280px; align-items: center; flex-wrap: wrap; min-width: 0;">
+                        <input type="text" id="searchProduto" placeholder="Pesquisar por código, nome, marca..." style="flex: 1 1 180px; min-width: 0; margin-bottom: 0;">
                         <select id="filtroCategoria" style="width: auto; margin-bottom: 0;">
                             <option value="">Todas Categorias</option>
                         </select>
                         <button class="btn-primary" id="btnPesquisar" style="margin-bottom: 0;">🔍 Pesquisar</button>
                     </div>
-                    <div class="export-actions">
+                    <div class="export-actions" style="flex-wrap: wrap;">
                         <button class="btn-excel" id="btnExportExcel">📥 Excel</button>
                         <button class="btn-pdf" id="btnExportPDF">📄 PDF</button>
                     </div>

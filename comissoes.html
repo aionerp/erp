@@ -77,6 +77,15 @@
             font-weight: 700;
             color: var(--primary);
         }
+        .panel-comissao {
+            min-width: 0;
+            max-width: 100%;
+        }
+        @media (max-width: 1023px) {
+            .grid-layout {
+                grid-template-columns: 1fr !important;
+            }
+        }
     </style>
 </head>
 <body class="hold-transition">
@@ -133,11 +142,11 @@
                                 📋 Detalhamento de Vendas e Comissões
                             </h3>
                             <!-- Filtros rápidos -->
-                            <div style="display: flex; gap: 8px;">
-                                <select id="filtroColaboradorComissao" style="padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px;">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%; max-width: 420px;">
+                                <select id="filtroColaboradorComissao" style="flex: 1 1 160px; min-width: 0; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px;">
                                     <option value="todos">Todos os Colaboradores</option>
                                 </select>
-                                <select id="filtroStatusComissao" style="padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px;">
+                                <select id="filtroStatusComissao" style="flex: 1 1 130px; min-width: 0; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px;">
                                     <option value="todas">Todos os Status</option>
                                     <option value="pendente" selected>Pendentes</option>
                                     <option value="paga">Pagas</option>

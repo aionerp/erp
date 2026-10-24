@@ -74,7 +74,7 @@
         /* Clientes Ativos Grid */
         .clients-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
             gap: 20px;
         }
 
@@ -88,6 +88,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            min-width: 0;
         }
 
         .client-card:hover {
@@ -122,13 +123,35 @@
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
+            width: 100% !important;
+            height: 100dvh !important;
             z-index: 99999 !important;
             background: #f8fafc !important;
-            padding: 24px !important;
+            padding: 20px !important;
             box-sizing: border-box !important;
             overflow-y: auto !important;
+        }
+
+        @media (max-width: 1023px) {
+            .dashboard-metrics-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .dashboard-metrics-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .produtos-header .btn-group {
+                width: 100%;
+            }
+            .produtos-header .btn-group button {
+                flex: 1 1 calc(50% - 6px);
+                justify-content: center;
+            }
+            #btnExpandirMonitor {
+                display: none !important;
+            }
         }
     </style>
 </head>
