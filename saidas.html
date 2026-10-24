@@ -1579,19 +1579,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function aplicarModoExpandido(expandido) {
         if (!dashboard) return;
         if (expandido) {
-            dashboard.classList.add('pdv-modo-expandido');
+            dashboard.classList.add('pdv-modo-expandido', 'sidebar-collapsed');
+            document.body.classList.add('sidebar-collapsed');
             if (iconExpandir) iconExpandir.textContent = '🗗';
             if (txtExpandir) txtExpandir.textContent = 'Restaurar Menu';
             localStorage.setItem('aion_pdv_expandido', 'true');
+            localStorage.setItem('aion_sidebar_collapsed', 'true');
         } else {
-            dashboard.classList.remove('pdv-modo-expandido');
+            dashboard.classList.remove('pdv-modo-expandido', 'sidebar-collapsed');
+            document.body.classList.remove('sidebar-collapsed');
             if (iconExpandir) iconExpandir.textContent = '⛶';
             if (txtExpandir) txtExpandir.textContent = 'Expandir PDV';
             localStorage.setItem('aion_pdv_expandido', 'false');
+            localStorage.setItem('aion_sidebar_collapsed', 'false');
         }
     }
 
-    const estadoSalvo = localStorage.getItem('aion_pdv_expandido') === 'true';
+    const estadoSalvo = localStorage.getItem('aion_sidebar_collapsed') === 'true' || localStorage.getItem('aion_pdv_expandido') === 'true';
     aplicarModoExpandido(estadoSalvo);
 
     btnToggleExpandir?.addEventListener('click', () => {

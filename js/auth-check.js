@@ -512,8 +512,9 @@ document.addEventListener('DOMContentLoaded', () => {
         newLogoutBtn.addEventListener('click', window.executarLogout);
     }
     
-    // === MENU TOGGLE & OVERLAY (mobile/tablet) ===
+    // === MENU TOGGLE & OVERLAY (TV, Computador, Notebook, Tablet e Celular) ===
     const sidebarEl = document.querySelector('.sidebar');
+    const dashboardEl = document.querySelector('.dashboard');
     let sidebarOverlay = document.getElementById('sidebarOverlay');
     if (sidebarEl && !sidebarOverlay) {
         sidebarOverlay = document.createElement('div');
@@ -523,12 +524,38 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(sidebarOverlay);
     }
 
+    const isMobileOrTablet = () => window.innerWidth <= 1023;
+
+    const atualizarTituloBotaoMenu = () => {
+        const btn = document.getElementById('menuToggle');
+        if (!btn) return;
+        if (isMobileOrTablet()) {
+            const aberta = sidebarEl?.classList.contains('open');
+            btn.title = aberta ? 'Ocultar Menu Lateral' : 'Mostrar Menu Lateral';
+            btn.setAttribute('aria-expanded', aberta ? 'true' : 'false');
+        } else {
+            const oculta = document.body.classList.contains('sidebar-collapsed') || dashboardEl?.classList.contains('pdv-modo-expandido');
+            btn.title = oculta ? 'Mostrar Menu Lateral (Alt+M)' : 'Ocultar Menu Lateral para Ampliar Tela (Alt+M)';
+            btn.setAttribute('aria-expanded', oculta ? 'false' : 'true');
+        }
+    };
+
     const sincronizarEstadoOverlay = () => {
         if (!sidebarEl) return;
-        const estaAberta = sidebarEl.classList.contains('open');
+        const estaAberta = isMobileOrTablet() && sidebarEl.classList.contains('open');
         if (sidebarOverlay) sidebarOverlay.classList.toggle('active', estaAberta);
         document.body.classList.toggle('sidebar-open', estaAberta);
+        atualizarTituloBotaoMenu();
     };
+
+    // Restaurar preferência de menu recolhido em TV / Computador / Notebook
+    if (!isMobileOrTablet() && localStorage.getItem('aion_sidebar_collapsed') === 'true') {
+        document.body.classList.add('sidebar-collapsed');
+        dashboardEl?.classList.add('sidebar-collapsed');
+        if (document.body.classList.contains('pagina-pdv')) {
+            dashboardEl?.classList.add('pdv-modo-expandido');
+        }
+    }
 
     if (sidebarEl) {
         const obsSidebar = new MutationObserver(sincronizarEstadoOverlay);
@@ -540,17 +567,44 @@ document.addEventListener('DOMContentLoaded', () => {
         sincronizarEstadoOverlay();
     };
 
-    const alternarSidebarMobile = (e) => {
+    const alternarSidebarUniversal = (e) => {
         if (e) {
             e.preventDefault();
             e.stopImmediatePropagation();
         }
         if (!sidebarEl) return;
-        sidebarEl.classList.toggle('open');
-        sincronizarEstadoOverlay();
+
+        if (isMobileOrTablet()) {
+            // Comportamento Tablet e Celular: abre/fecha o menu retrátil com overlay
+            sidebarEl.classList.toggle('open');
+            sincronizarEstadoOverlay();
+        } else {
+            // Comportamento TV, Computador e Notebook: oculta/mostra a barra lateral e expande o conteúdo em 100% da tela
+            const vaiOcultar = !document.body.classList.contains('sidebar-collapsed');
+            document.body.classList.toggle('sidebar-collapsed', vaiOcultar);
+            dashboardEl?.classList.toggle('sidebar-collapsed', vaiOcultar);
+
+            // Compatibilidade com o modo expandido do PDV (saidas.html)
+            if (document.body.classList.contains('pagina-pdv') && dashboardEl) {
+                dashboardEl.classList.toggle('pdv-modo-expandido', vaiOcultar);
+                const iconExp = document.getElementById('iconExpandir');
+                const txtExp = document.getElementById('txtExpandir');
+                if (iconExp) iconExp.textContent = vaiOcultar ? '🗗' : '⛶';
+                if (txtExp) txtExp.textContent = vaiOcultar ? 'Restaurar Menu' : 'Expandir PDV';
+                try { localStorage.setItem('aion_pdv_expandido', vaiOcultar ? 'true' : 'false'); } catch (err) {}
+            }
+
+            try { localStorage.setItem('aion_sidebar_collapsed', vaiOcultar ? 'true' : 'false'); } catch (err) {}
+            atualizarTituloBotaoMenu();
+
+            // Dispara evento resize após a transição para que gráficos (Chart.js) se ajustem automaticamente
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 310);
+        }
     };
 
-    window.toggleSidebar = alternarSidebarMobile;
+    window.toggleSidebar = alternarSidebarUniversal;
     window.fecharSidebarMobile = fecharSidebarMobile;
 
     const menuToggle = document.getElementById('menuToggle');
@@ -558,10 +612,11 @@ document.addEventListener('DOMContentLoaded', () => {
         menuToggle.removeAttribute('onclick');
         const newMenuToggle = menuToggle.cloneNode(true);
         newMenuToggle.removeAttribute('onclick');
-        newMenuToggle.setAttribute('aria-label', 'Abrir menu de navegação');
+        newMenuToggle.setAttribute('aria-label', 'Alternar visibilidade do menu lateral');
         menuToggle.parentNode.replaceChild(newMenuToggle, menuToggle);
         // Usa capture: true + stopImmediatePropagation para impedir que scripts de páginas específicas façam um segundo toggle no mesmo clique
-        newMenuToggle.addEventListener('click', alternarSidebarMobile, true);
+        newMenuToggle.addEventListener('click', alternarSidebarUniversal, true);
+        atualizarTituloBotaoMenu();
     }
 
     if (sidebarOverlay) {
@@ -571,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sidebarEl) {
         sidebarEl.querySelectorAll('.sidebar-nav a').forEach(link => {
             link.addEventListener('click', () => {
-                if (window.innerWidth <= 1023) {
+                if (isMobileOrTablet()) {
                     fecharSidebarMobile();
                 }
             });
@@ -581,13 +636,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && sidebarEl && sidebarEl.classList.contains('open')) {
             fecharSidebarMobile();
+        } else if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+            e.preventDefault();
+            alternarSidebarUniversal();
         }
     });
 
     window.addEventListener('resize', () => {
-        if (window.innerWidth >= 1024 && sidebarEl && sidebarEl.classList.contains('open')) {
+        if (!isMobileOrTablet() && sidebarEl && sidebarEl.classList.contains('open')) {
             fecharSidebarMobile();
         }
+        atualizarTituloBotaoMenu();
     });
 });
 

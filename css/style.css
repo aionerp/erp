@@ -292,6 +292,19 @@ button {
     background: #F8FAFC;
     display: flex;
     flex-direction: column;
+    transition: margin-left var(--transition), width var(--transition);
+}
+
+/* Modo Ocultar Menu Lateral em Desktop / Notebook / TV */
+body.sidebar-collapsed .sidebar,
+.dashboard.sidebar-collapsed .sidebar {
+    transform: translateX(-100%);
+}
+
+body.sidebar-collapsed .main-content,
+.dashboard.sidebar-collapsed .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
 }
 
 /* =====================================================
@@ -302,7 +315,7 @@ button {
     padding: 14px 32px;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     position: sticky;
     top: 0;
@@ -310,6 +323,7 @@ button {
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     min-height: 64px;
+    gap: 12px;
 }
 
 .top-bar-left {
@@ -319,20 +333,35 @@ button {
 }
 
 .menu-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 22px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    background: #F8FAFC;
+    border: 1px solid var(--border);
+    font-size: 20px;
     cursor: pointer;
     color: var(--dark);
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
+    min-width: 42px;
+    min-height: 42px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-right: auto;
+    flex-shrink: 0;
     transition: all var(--transition-fast);
+    box-shadow: var(--shadow-xs);
 }
 
 .menu-toggle:hover {
-    background: var(--light);
-    transform: scale(1.05);
+    background: #F1F5F9;
+    border-color: #CBD5E1;
+    transform: scale(1.04);
+}
+
+[data-theme="dark"] .menu-toggle,
+body.dark-theme .menu-toggle {
+    background: #1E293B !important;
+    border-color: #334155 !important;
+    color: #F8FAFC !important;
 }
 
 .top-bar-title {
