@@ -159,9 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 .sidebar-subnav li a.active {
                     background: #FFFFFF !important;
-                    color: #0A1628 !important;
+                    color: #0D1728 !important;
                     font-weight: 700 !important;
-                    border-left: 4px solid #EAB308 !important;
+                    border-left: 4px solid #EB5E28 !important;
                     border-radius: 6px !important;
                     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
                 }
@@ -304,13 +304,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         sidebar.innerHTML = `
-            <div class="sidebar-header" style="padding: 22px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <h2 style="font-size: 17px; font-weight: 700; color: #FFFFFF; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: -0.2px;">
-                    <span style="background: #EAB308; color: #0A1628; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px;">ERP</span>
-                    <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" title="${currentCompanyName}">${currentCompanyName}</span>
-                </h2>
-                <div class="brand-subtitle" style="font-size: 11px; letter-spacing: 0.8px; color: #94A3B8; margin-top: 4px; font-weight: 500;">
-                    ${currentCompanySubtitle}
+            <div class="sidebar-header" style="padding: 20px 16px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <div style="display: flex; align-items: center; gap: 11px;">
+                    <div style="width: 38px; height: 38px; background: #0B0F14; border: 1px solid rgba(235, 94, 40, 0.45); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(235, 94, 40, 0.18);">
+                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#EB5E28" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 17L12 22L22 17" stroke="#FF8C61" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 12L12 17L22 12" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div style="min-width: 0; flex: 1;">
+                        <h2 style="font-size: 15.5px; font-weight: 800; color: #FFFFFF; margin: 0; display: flex; align-items: center; gap: 6px; letter-spacing: -0.2px;">
+                            <span class="brand-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 132px;" title="${currentCompanyName}">${currentCompanyName}</span>
+                            <span style="background: #EB5E28; color: #FFFFFF; font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; flex-shrink: 0;">ERP</span>
+                        </h2>
+                        <div class="brand-subtitle" style="font-size: 11px; letter-spacing: 0.5px; color: #94A3B8; margin-top: 2px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${currentCompanySubtitle}
+                        </div>
+                    </div>
                 </div>
             </div>
             <ul class="sidebar-nav" style="overflow-y: auto; max-height: calc(100vh - 120px);">
@@ -351,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const storeBadge = document.createElement('div');
         storeBadge.id = 'topBarStoreBadge';
         storeBadge.className = 'topbar-store-badge';
-        storeBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background: rgba(234, 179, 8, 0.14); color: #B45309; border: 1px solid rgba(234, 179, 8, 0.35); padding: 5px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; margin-right: 12px; white-space: nowrap;';
+        storeBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background: rgba(235, 94, 40, 0.12); color: #EB5E28; border: 1px solid rgba(235, 94, 40, 0.32); padding: 5px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; margin-right: 12px; white-space: nowrap;';
         storeBadge.innerHTML = `🏢 <span class="badge-store-name">${currentCompanyName}</span>${currentCompanySubtitle ? ` <span class="badge-store-subtitle" style="font-size: 10.5px; opacity: 0.8; font-weight: 500;">(${currentCompanySubtitle})</span>` : ''}`;
         storeBadge.title = `Loja Ativa: ${currentCompanyName} • ${currentCompanySubtitle}`;
         userInfoWrapper.prepend(storeBadge);

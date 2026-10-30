@@ -9,28 +9,28 @@
 }
 
 :root {
-    /* ── Paleta de Cores Oficial - Modern SaaS (Gold & Deep Navy) ── */
-    --primary: #111824;          /* Azul Profundo (Sidebar) */
-    --primary-dark: #0a1525;
-    --primary-light: #152031;
+    /* ── Paleta de Cores Oficial - Aion ERP (Laranja & Azul-Marinho) ── */
+    --primary: #0D1728;          /* Azul-Marinho Oficial (Sidebar & Destaques) */
+    --primary-dark: #0B0F14;     /* Fundo Escuro Oficial */
+    --primary-light: #16243D;
     
-    --accent: #EAB308;           /* Dourado / Âmbar */
-    --accent-gold: #D4AF37;
-    --accent-hover: #CA8A04;
-    --accent-gradient: #EAB308;
-    --accent-gradient-hover: #CA8A04;
-    --accent-gradient-subtle: rgba(234, 179, 8, 0.12);
+    --accent: #EB5E28;           /* Laranja Principal Oficial */
+    --accent-gold: #FF8C61;      /* Laranja Claro Oficial */
+    --accent-hover: #B83E15;     /* Laranja Escuro Oficial */
+    --accent-gradient: linear-gradient(135deg, #EB5E28 0%, #B83E15 100%);
+    --accent-gradient-hover: linear-gradient(135deg, #B83E15 0%, #9A3210 100%);
+    --accent-gradient-subtle: rgba(235, 94, 40, 0.12);
     
     --secondary: #FFFFFF;        /* Branco Puro */
     --floral-white: #FFFFFF;
-    --light: #F8FAFC;            /* Fundo Geral / Áreas Secundárias (Slate 50) */
-    --dark: #0F172A;             /* Texto Principal (Slate 900) */
-    --dark-light: #334155;       /* Texto Secundário Forte (Slate 700) */
-    --gray: #64748B;             /* Textos Neutros / Labels (Slate 500) */
-    --dust-grey: #94A3B8;        /* Cinza Neutro / Placeholders (Slate 400) */
-    --border: #E2E8F0;           /* Bordas Sutis (Slate 200) */
+    --light: #F3F5F7;            /* Cinza Claro Oficial */
+    --dark: #0B0F14;             /* Texto Principal */
+    --dark-light: #334155;       /* Texto Secundário Forte */
+    --gray: #64748B;             /* Textos Neutros / Labels */
+    --dust-grey: #94A3B8;        /* Cinza de Texto Oficial */
+    --border: #E2E8F0;           /* Bordas Sutis */
     --border-light: #F1F5F9;
-    --carbon-black: #0A1628;
+    --carbon-black: #0B0F14;
     
     /* Cores Funcionais de Status */
     --success: #10B981;          /* Verde Esmeralda */
@@ -39,7 +39,7 @@
     --warning-light: #FBBF24;
     --danger: #EF4444;           /* Vermelho */
     --danger-light: #F87171;
-    --info: #0A1628;
+    --info: #0D1728;
     
     /* Sombras Modernas e Limpas */
     --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
@@ -47,7 +47,7 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
     --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
-    --shadow-accent: 0 4px 14px 0 rgba(234, 179, 8, 0.3);
+    --shadow-accent: 0 4px 14px 0 rgba(235, 94, 40, 0.3);
     
     /* Bordas Arredondadas */
     --radius-sm: 6px;
@@ -140,7 +140,7 @@ button {
 }
 
 /* =====================================================
-   SIDEBAR (Modern SaaS - Azul Profundo #0A1628)
+   SIDEBAR (Aion ERP - Azul-Marinho Oficial #0D1728)
    ===================================================== */
 .sidebar {
     width: 260px;
@@ -230,19 +230,19 @@ button {
     text-decoration: none;
 }
 
-/* Item Ativo (Fundo Branco Puro com Borda Dourada/Âmbar na Esquerda) */
+/* Item Ativo (Fundo Branco Puro com Borda Laranja Oficial na Esquerda) */
 .sidebar-nav li a.active {
     background: #FFFFFF !important;
-    color: #0A1628 !important;
+    color: #0D1728 !important;
     font-weight: 700 !important;
-    border-left: 4px solid #EAB308 !important;
+    border-left: 4px solid #EB5E28 !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
     border-radius: 8px !important;
 }
 
 .sidebar-nav li a.active:hover {
     background: #FFFFFF !important;
-    color: #0A1628 !important;
+    color: #0D1728 !important;
 }
 
 .sidebar-nav li a .icon {
@@ -254,8 +254,8 @@ button {
 
 .sidebar-nav li a .badge {
     margin-left: auto;
-    background: #EAB308;
-    color: #0A1628;
+    background: #EB5E28;
+    color: #FFFFFF;
     font-size: 10px;
     padding: 2px 8px;
     border-radius: var(--radius-full);
@@ -289,7 +289,7 @@ button {
     flex: 1;
     margin-left: 260px;
     min-height: 100vh;
-    background: #F8FAFC;
+    background: #F3F5F7;
     display: flex;
     flex-direction: column;
     transition: margin-left var(--transition), width var(--transition);
@@ -703,7 +703,7 @@ tr:hover td {
    BOTÕES (Modern SaaS - Clean Dark & Gold)
    ===================================================== */
 .btn-primary {
-    background: #0A1628;
+    background: #EB5E28;
     color: #FFFFFF;
     border: none;
     padding: 10px 20px;
@@ -712,7 +712,7 @@ tr:hover td {
     font-size: 13.5px;
     font-weight: 600;
     transition: all var(--transition-fast);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 8px rgba(235, 94, 40, 0.25);
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -720,9 +720,9 @@ tr:hover td {
 }
 
 .btn-primary:hover {
-    background: #1E293B;
+    background: #B83E15;
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 14px rgba(235, 94, 40, 0.35);
 }
 
 .btn-primary:active {
@@ -796,26 +796,26 @@ tr:hover td {
 }
 
 .btn-warning {
-    background: #EAB308;
-    color: #0A1628;
+    background: #0D1728;
+    color: #FFFFFF;
     border: none;
     padding: 9px 18px;
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     transition: all var(--transition-fast);
-    box-shadow: 0 2px 6px rgba(234, 179, 8, 0.25);
+    box-shadow: 0 2px 6px rgba(13, 23, 40, 0.2);
 }
 
 .btn-warning:hover {
-    background: #CA8A04;
+    background: #16243D;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(234, 179, 8, 0.35);
+    box-shadow: 0 4px 12px rgba(13, 23, 40, 0.3);
 }
 
 .btn-info {
-    background: #0A1628;
+    background: #0D1728;
     color: #FFFFFF;
     border: none;
     padding: 9px 18px;
@@ -859,8 +859,8 @@ tr:hover td {
 .filters input:focus,
 .filters select:focus {
     outline: none;
-    border-color: #EAB308;
-    box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.2);
+    border-color: #EB5E28;
+    box-shadow: 0 0 0 3px rgba(235, 94, 40, 0.2);
 }
 
 .filters input::placeholder {
@@ -1010,8 +1010,8 @@ tr:hover td {
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(10, 22, 40, 0.1);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(235, 94, 40, 0.15);
 }
 
 .form-group input::placeholder,
@@ -1751,38 +1751,38 @@ body.dark-theme .commission-badge {
 :root[data-theme="dark"],
 [data-theme="dark"],
 body.dark-theme {
-    --primary: #0A1628;
-    --primary-dark: #040810;
-    --primary-light: #1E293B;
-    --secondary: #1E293B;
-    --floral-white: #1E293B;
+    --primary: #0D1728;
+    --primary-dark: #0B0F14;
+    --primary-light: #16243D;
+    --secondary: #0D1728;
+    --floral-white: #0D1728;
     --dust-grey: #64748B;
     --charcoal-brown: #94A3B8;
-    --carbon-black: #060D18;
-    --dark: #F8FAFC;
+    --carbon-black: #0B0F14;
+    --dark: #FFFFFF;
     --dark-light: #CBD5E1;
     --gray: #94A3B8;
-    --light: #0A1628;
+    --light: #0B0F14;
     --border: #1E293B;
     --border-light: #162235;
-    background-color: #0A1628 !important;
-    color: #F8FAFC !important;
+    background-color: #0B0F14 !important;
+    color: #FFFFFF !important;
 }
 
 [data-theme="dark"] body,
 body.dark-theme {
-    background-color: #0A1628 !important;
-    color: #F8FAFC !important;
+    background-color: #0B0F14 !important;
+    color: #FFFFFF !important;
 }
 
 [data-theme="dark"] .main-content,
 body.dark-theme .main-content {
-    background-color: #0A1628 !important;
+    background-color: #0B0F14 !important;
 }
 
 [data-theme="dark"] .top-bar,
 body.dark-theme .top-bar {
-    background-color: #111C30 !important;
+    background-color: #0D1728 !important;
     border-bottom: 1px solid #1E293B !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
@@ -1808,7 +1808,7 @@ body.dark-theme .top-bar-clock .clock-time {
 
 [data-theme="dark"] #painelHoraAtualCard,
 body.dark-theme #painelHoraAtualCard {
-    background: #111C30 !important;
+    background: #0D1728 !important;
     border-color: #1E293B !important;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3) !important;
 }
@@ -1822,13 +1822,13 @@ body.dark-theme #horaAtualDashboard {
 body.dark-theme .theme-toggle-btn {
     background: #1E293B !important;
     border-color: #334155 !important;
-    color: #FACC15 !important;
+    color: #FF8C61 !important;
 }
 
 [data-theme="dark"] .theme-toggle-btn:hover,
 body.dark-theme .theme-toggle-btn:hover {
     background: #334155 !important;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.35) !important;
+    box-shadow: 0 0 12px rgba(235, 94, 40, 0.35) !important;
 }
 
 [data-theme="dark"] .user-name,
@@ -1838,9 +1838,9 @@ body.dark-theme .user-name {
 
 [data-theme="dark"] .user-perfil,
 body.dark-theme .user-perfil {
-    background: rgba(234, 179, 8, 0.15) !important;
-    color: #FDE047 !important;
-    border-color: rgba(234, 179, 8, 0.3) !important;
+    background: rgba(235, 94, 40, 0.15) !important;
+    color: #FF8C61 !important;
+    border-color: rgba(235, 94, 40, 0.35) !important;
 }
 
 [data-theme="dark"] .content h1,
@@ -1881,6 +1881,8 @@ body.dark-theme .modal-header h2 {
 [data-theme="dark"] .carrinho-container,
 [data-theme="dark"] .historico-card,
 [data-theme="dark"] .dashboard-header-block,
+[data-theme="dark"] .dashboard-finance-widget,
+[data-theme="dark"] .painel-recorrentes-box,
 body.dark-theme .metric-card,
 body.dark-theme .card,
 body.dark-theme .stat-card,
@@ -1895,10 +1897,12 @@ body.dark-theme .summary-card,
 body.dark-theme .pdv-card,
 body.dark-theme .carrinho-container,
 body.dark-theme .historico-card,
-body.dark-theme .dashboard-header-block {
-    background-color: #111C30 !important;
+body.dark-theme .dashboard-header-block,
+body.dark-theme .dashboard-finance-widget,
+body.dark-theme .painel-recorrentes-box {
+    background-color: #0D1728 !important;
     border-color: #1E293B !important;
-    color: #F8FAFC !important;
+    color: #FFFFFF !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
 }
 
@@ -1920,9 +1924,9 @@ body.dark-theme input[type="date"],
 body.dark-theme input[type="search"],
 body.dark-theme .filters input,
 body.dark-theme .filters select {
-    background-color: #0A1628 !important;
+    background-color: #0B0F14 !important;
     border-color: #1E293B !important;
-    color: #F8FAFC !important;
+    color: #FFFFFF !important;
 }
 
 [data-theme="dark"] input:focus,
@@ -1932,7 +1936,7 @@ body.dark-theme input:focus,
 body.dark-theme select:focus,
 body.dark-theme textarea:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.25) !important;
+    box-shadow: 0 0 0 3px rgba(235, 94, 40, 0.25) !important;
 }
 
 [data-theme="dark"] table,
@@ -1960,7 +1964,7 @@ body.dark-theme tr:hover td {
 
 [data-theme="dark"] .serial-item,
 body.dark-theme .serial-item {
-    background-color: #0A1628 !important;
+    background-color: #0B0F14 !important;
     border-color: #1E293B !important;
 }
 

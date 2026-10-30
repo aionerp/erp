@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 align-items: center;
                 padding: 4px 10px;
                 border-radius: 20px;
-                background: rgba(234, 179, 8, 0.15);
-                color: #B45309;
+                background: rgba(235, 94, 40, 0.12);
+                color: #EB5E28;
                 font-size: 12px;
                 font-weight: 700;
                 margin-bottom: 12px;
@@ -113,8 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             .pa-form-group input:focus, .pa-form-group select:focus {
                 outline: none;
-                border-color: #0A1628;
-                box-shadow: 0 0 0 3px rgba(10, 22, 40, 0.1);
+                border-color: #EB5E28;
+                box-shadow: 0 0 0 3px rgba(235, 94, 40, 0.15);
             }
             .pa-alert {
                 padding: 12px;
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 line-height: 1.4;
                 margin-bottom: 16px;
             }
-            .pa-alert-info { background: #F8FAFC; color: #0A1628; border: 1px solid #CBD5E1; }
+            .pa-alert-info { background: #F3F5F7; color: #0D1728; border: 1px solid #CBD5E1; }
             .pa-alert-warning { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
             .pa-alert-error { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
             .pa-alert-success { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
@@ -132,19 +132,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 padding: 12px;
                 border-radius: 8px;
                 border: none;
-                background: #0A1628;
+                background: #EB5E28;
                 color: #FFFFFF;
                 font-weight: 700;
                 font-size: 14px;
                 cursor: pointer;
                 transition: all 0.2s ease;
                 margin-top: 8px;
-                box-shadow: 0 4px 14px rgba(10, 22, 40, 0.25);
+                box-shadow: 0 4px 14px rgba(235, 94, 40, 0.3);
             }
             .pa-btn:hover { 
-                background: #1E293B;
+                background: #B83E15;
                 transform: translateY(-1px);
-                box-shadow: 0 6px 18px rgba(10, 22, 40, 0.35);
+                box-shadow: 0 6px 18px rgba(235, 94, 40, 0.4);
             }
             .pa-btn:disabled { 
                 opacity: 0.6; 

@@ -136,11 +136,11 @@ if (activeClientObj) {
         delete activeClientObj.supabase;
     }
 
-    // Padronizar todas as lojas na cor original do sistema (Modern SaaS Gold & Deep Navy #111824)
+    // Padronizar todas as lojas na paleta oficial Aion ERP (Laranja #EB5E28 & Azul-Marinho #0D1728)
     if (activeClientObj.branding) {
-        activeClientObj.branding.primaryColor = '#111824';
-        activeClientObj.branding.primaryDarkColor = '#0a1525';
-        activeClientObj.branding.primaryLightColor = '#152031';
+        activeClientObj.branding.primaryColor = '#0D1728';
+        activeClientObj.branding.primaryDarkColor = '#0B0F14';
+        activeClientObj.branding.primaryLightColor = '#16243D';
     }
 
     try { sessionStorage.setItem('active_client', JSON.stringify(activeClientObj)); } catch(e){}

@@ -17,13 +17,15 @@
         }
 
         :root {
-            --primary: #0A1628;          /* Azul Profundo */
-            --accent: #EAB308;           /* Dourado / Âmbar */
-            --accent-hover: #CA8A04;
-            --accent-gradient: linear-gradient(135deg, #0A1628 0%, #1E293B 100%);
-            --accent-gradient-hover: linear-gradient(135deg, #1E293B 0%, #334155 100%);
-            --light-bg: #F8FAFC;
-            --dark-text: #0F172A;
+            --primary: #0D1728;          /* Azul-Marinho Oficial */
+            --bg-dark: #0B0F14;          /* Fundo Escuro Oficial */
+            --accent: #EB5E28;           /* Laranja Principal Oficial */
+            --accent-hover: #B83E15;     /* Laranja Escuro Oficial */
+            --accent-light: #FF8C61;     /* Laranja Claro Oficial */
+            --accent-gradient: linear-gradient(135deg, #EB5E28 0%, #B83E15 100%);
+            --accent-gradient-hover: linear-gradient(135deg, #B83E15 0%, #9A3210 100%);
+            --light-bg: #F3F5F7;
+            --dark-text: #0B0F14;
             --muted-text: #64748B;
             --neutral-gray: #94A3B8;
             --border-color: #E2E8F0;
@@ -31,14 +33,14 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0A1628;
+            background: #0B0F14;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             overflow: hidden;
-            color: #0F172A;
+            color: #0B0F14;
             -webkit-font-smoothing: antialiased;
         }
 
@@ -51,9 +53,9 @@
             right: 0;
             bottom: 0;
             background: 
-                radial-gradient(circle at 15% 20%, rgba(234, 179, 8, 0.08) 0%, transparent 45%),
-                radial-gradient(circle at 85% 80%, rgba(30, 41, 59, 0.6) 0%, transparent 45%),
-                radial-gradient(circle at 50% 50%, rgba(10, 22, 40, 0.9) 0%, transparent 80%);
+                radial-gradient(circle at 15% 20%, rgba(235, 94, 40, 0.14) 0%, transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(13, 23, 40, 0.85) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(11, 15, 20, 0.92) 0%, transparent 80%);
             z-index: 0;
         }
 
@@ -100,7 +102,7 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: #EAB308;
+            background: linear-gradient(90deg, #EB5E28 0%, #FF8C61 100%);
         }
 
         @keyframes fadeInUp {
@@ -122,14 +124,14 @@
         .login-logo {
             width: 60px;
             height: 60px;
-            background: #0A1628;
+            background: #0D1728;
             border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0 auto 16px;
-            box-shadow: 0 8px 20px rgba(10, 22, 40, 0.25);
-            border: 1px solid rgba(234, 179, 8, 0.3);
+            box-shadow: 0 8px 20px rgba(11, 15, 20, 0.3), 0 0 16px rgba(235, 94, 40, 0.18);
+            border: 1px solid rgba(235, 94, 40, 0.45);
             transition: transform 0.25s ease;
         }
 
@@ -194,8 +196,8 @@
 
         .form-group input:focus {
             outline: none;
-            border-color: #0A1628;
-            box-shadow: 0 0 0 3px rgba(10, 22, 40, 0.1);
+            border-color: #EB5E28;
+            box-shadow: 0 0 0 3px rgba(235, 94, 40, 0.15);
         }
 
         .form-group input:hover {
@@ -205,7 +207,7 @@
         .btn-login {
             width: 100%;
             padding: 12px 18px;
-            background: #0A1628;
+            background: #EB5E28;
             color: #FFFFFF;
             border: none;
             border-radius: 9px;
@@ -214,7 +216,7 @@
             cursor: pointer;
             transition: all 0.2s ease;
             letter-spacing: 0.2px;
-            box-shadow: 0 4px 14px rgba(10, 22, 40, 0.25);
+            box-shadow: 0 4px 14px rgba(235, 94, 40, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -223,9 +225,9 @@
         }
 
         .btn-login:hover {
-            background: #1E293B;
+            background: #B83E15;
             transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(10, 22, 40, 0.35);
+            box-shadow: 0 6px 20px rgba(235, 94, 40, 0.4);
             filter: brightness(1.03);
         }
 
@@ -260,7 +262,7 @@
         .btn-first-access:hover {
             background: #F1F5F9;
             border-color: #CBD5E1;
-            color: #0A1628;
+            color: #0D1728;
             transform: translateY(-1px);
         }
 
@@ -273,7 +275,7 @@
         }
 
         .login-divider a {
-            color: #0A1628;
+            color: #0D1728;
             text-decoration: none;
             font-weight: 600;
             margin-left: 4px;
@@ -284,7 +286,7 @@
         }
 
         .login-divider a:hover {
-            color: #EAB308;
+            color: #EB5E28;
             text-decoration: underline;
         }
 
@@ -317,9 +319,9 @@
             <div class="login-header">
                 <div class="login-logo">
                     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#EB5E28" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="#FF8C61" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </div>
                 <h1>Aion ERP</h1>

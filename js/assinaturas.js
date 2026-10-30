@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${item.clientes?.telefone ? `<small style="color: var(--gray);"> • ${item.clientes.telefone}</small>` : ''}
                     </td>
                     <td>
-                        <strong style="color: #0A1628;">${item.plano_nome}</strong>
+                        <strong style="color: #0D1728;">${item.plano_nome}</strong>
                         ${item.produtos?.nome ? `<br><small style="color: var(--gray);">🛠️ ${item.produtos.nome}</small>` : ''}
                     </td>
                     <td>
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${c.planos.map(p => `
                                     <div style="font-size: 12.5px; display: flex; justify-content: space-between; background: #FFFFFF; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);">
                                         <span style="color: var(--dark); font-weight: 500;">${p.plano_nome}</span>
-                                        <strong style="color: #0A1628;">${fmtMoeda(p.valor)}</strong>
+                                        <strong style="color: #0D1728;">${fmtMoeda(p.valor)}</strong>
                                     </div>
                                 `).join('')}
                             </div>
