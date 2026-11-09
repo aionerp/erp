@@ -171,8 +171,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectFiltro.innerHTML = '<option value="">Todas as Categorias</option>' +
                     (data || []).map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
             }
+
+            const selectModal = document.getElementById('modalCategoriaSelect');
+            if (selectModal) {
+                selectModal.innerHTML = '<option value="">Selecione uma categoria...</option>' +
+                    (data || []).map(c => `
+                        <option value="${c.nome}" 
+                                data-exige-imei="${c.exige_imei === true}" 
+                                data-exige-serial="${c.exige_serial === true}" 
+                                data-controla-lote="${c.controla_lote_validade || false}" 
+                                data-aviso-vencimento="${c.aviso_vencimento_dias || 30}">
+                            ${c.nome}
+                        </option>
+                    `).join('');
+            }
         } catch (error) {
             console.error('Erro ao carregar categorias:', error);
+        }
+    }
+
+    async function carregarClientesAssinatura() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('clientes')
+                .select('id, nome, cpf_cnpj, telefone')
+                .eq('tipo', 'cliente')
+                .eq('ativo', true)
+                .order('nome');
+            
+            if (error) throw error;
+            const selectCliente = document.getElementById('plano_cliente_id');
+            if (selectCliente) {
+                selectCliente.innerHTML = '<option value="">Selecione o cliente da assinatura...</option>' +
+                    (data || []).map(c => `<option value="${c.id}">${c.nome} ${c.cpf_cnpj ? `(${c.cpf_cnpj})` : ''}</option>`).join('');
+            }
+        } catch (err) {
+            console.error('Erro ao carregar clientes para assinatura:', err);
         }
     }
 
@@ -217,18 +251,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const searchInput = document.getElementById('searchInput');
         const search = searchInput ? searchInput.value.toLowerCase() : '';
         
+        const filtroTipo = document.getElementById('filtroTipo')?.value || '';
         const filtroCategoria = document.getElementById('filtroCategoria')?.value || '';
         const filtroLote = document.getElementById('filtroLote')?.value || '';
         const filtroSaldo = document.getElementById('filtroSaldo')?.value || '';
         const filtroStatus = document.getElementById('filtroStatus')?.value || '';
         
         const filtrados = produtos.filter(p => {
+            // 0. Filtro Tipo (Produtos ou Serviços)
+            const matchTipo = !filtroTipo || (filtroTipo === 'servico' ? p.tipo === 'servico' : p.tipo !== 'servico');
+
             // 1. Pesquisa por texto
             const matchSearch = (p.nome || '').toLowerCase().includes(search) || 
                                 (p.codigo || '').toLowerCase().includes(search) ||
                                 (p.marca || '').toLowerCase().includes(search) ||
                                 (p.modelo || '').toLowerCase().includes(search) ||
-                                (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => b.toLowerCase().includes(search)));
+                                (Array.isArray(p.codigos_barras) && p.codigos_barras.some(b => String(b || '').toLowerCase().includes(search)));
                                 
             // 2. Filtro Categoria
             const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria;
@@ -259,18 +297,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const matchStatus = !filtroStatus || status === filtroStatus;
             
-            return matchSearch && matchCategoria && matchLote && matchSaldo && matchStatus;
+            return matchTipo && matchSearch && matchCategoria && matchLote && matchSaldo && matchStatus;
         });
         
         const tbody = document.getElementById('tableBody');
         if (!tbody) return;
         
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Nenhum produto encontrado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Nenhum produto ou serviço encontrado</td></tr>';
             return;
         }
         
-        const podeAjustar = podeAjustarEstoque();
+        const podeEditar = (typeof verificarPermissao === 'function' ? verificarPermissao('produtos', 'editar') : true) || podeAjustarEstoque();
+        const podeExcluir = typeof verificarPermissao === 'function' ? verificarPermissao('produtos', 'excluir') : true;
         
         tbody.innerHTML = filtrados.map(p => {
             const estoque = p.estoque_total || p.estoque || 0;
@@ -337,20 +376,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${p.modelo ? `<span style="font-weight: 500; color: #1e293b;">${p.modelo}</span>` : '<span style="color: #94a3b8;">-</span>'}</td>
                     <td>${p.categoria || '-'}</td>
                     <td>${loteValidadeText}</td>
-                    <td>${custoFormatado}</td>
+                    <td class="col-custo">${custoFormatado}</td>
                     <td>${vendaFormatada}</td>
                     <td style="font-weight:bold; ${estoqueStyle}">${estoqueText}</td>
                     <td>${minimoText}</td>
                     <td><span class="status-estoque ${statusLabelClass}">${statusLabelText}</span></td>
                     <td class="table-actions" style="white-space: nowrap;">
-                        ${!isServico ? `
-                            <button class="btn-primary" onclick="ajustarEstoque(${p.id})" title="Ajuste de Saldo" style="padding: 6px 10px; font-size: 12px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px;">
-                                ✏️ Ajustar
+                        ${podeEditar ? `
+                            <button class="btn-primary" onclick="editarProduto(${p.id})" title="Editar Cadastro Completo" style="padding: 6px 10px; font-size: 12px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px; background: #2563eb; color: white; border: none;">
+                                ✏️ Editar
                             </button>
                         ` : ''}
-                        <button class="btn-secondary" onclick="verHistorico(${p.id})" title="Histórico de movimento" style="padding: 6px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px; background: #64748B; color: white; border: 1px solid #475569;">
+                        ${!isServico ? `
+                            <button class="btn-info" onclick="ajustarEstoque(${p.id})" title="Ajuste de Saldo de Estoque" style="padding: 6px 10px; font-size: 12px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px; background: #0284c7; color: white; border: none;">
+                                ⚖️ Ajustar
+                            </button>
+                        ` : ''}
+                        <button class="btn-secondary" onclick="verHistorico(${p.id})" title="Histórico de movimento" style="padding: 6px 10px; font-size: 12px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px; background: #64748B; color: white; border: 1px solid #475569;">
                             📜 Histórico
                         </button>
+                        ${podeExcluir ? `
+                            <button class="btn-danger" onclick="excluirProduto(${p.id})" title="Excluir Item" style="padding: 6px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 4px; background: #dc2626; color: white; border: none;">
+                                🗑️
+                            </button>
+                        ` : ''}
                     </td>
                 </tr>
             `;
@@ -1653,14 +1702,675 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+
+    // =====================================================
+    // GESTÃO DE CÓDIGOS DE BARRAS MÚLTIPLOS
+    // =====================================================
+    function renderBarcodes() {
+        const list = document.getElementById('barcodes_list');
+        if (!list) return;
+        list.innerHTML = '';
+        if (produtoBarcodes.length === 0) {
+            list.innerHTML = '<span style="color: #64748B; font-size: 13px; font-style: italic;" id="no_barcodes_placeholder">Nenhum código de barras adicionado</span>';
+            return;
+        }
+        list.innerHTML = produtoBarcodes.map((code, index) => `
+            <span class="barcode-tag">
+                <code>${code}</code>
+                <span onclick="removerBarcode(${index})" style="cursor: pointer; font-weight: bold; background: rgba(255,255,255,0.2); width: 16px; height: 16px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 10px;">✕</span>
+            </span>
+        `).join('');
+    }
+
+    window.removerBarcode = (index) => {
+        produtoBarcodes.splice(index, 1);
+        renderBarcodes();
+    };
+
+    async function adicionarBarcode() {
+        const input = document.getElementById('barcode_input');
+        if (!input) return;
+        const code = input.value.trim();
+        if (!code) return;
+
+        if (produtoBarcodes.includes(code)) {
+            mostrarNotificacao('Este código de barras já foi adicionado para este produto!', 'error');
+            return;
+        }
+
+        try {
+            const currentProductId = document.getElementById('prodFormId').value;
+            let query = supabaseClient
+                .from('produtos')
+                .select('id, nome')
+                .contains('codigos_barras', JSON.stringify([code]));
+
+            if (currentProductId) {
+                query = query.neq('id', currentProductId);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                mostrarNotificacao(`Este código de barras já está em uso pelo produto "${data[0].nome}"!`, 'error');
+                return;
+            }
+
+            produtoBarcodes.push(code);
+            renderBarcodes();
+            input.value = '';
+            input.focus();
+        } catch (err) {
+            console.error('Erro ao validar código de barras:', err);
+            produtoBarcodes.push(code);
+            renderBarcodes();
+            input.value = '';
+        }
+    }
+
+    function atualizarCicloAssinatura() {
+        const freq = document.getElementById('plano_frequencia')?.value || 'mensal';
+        const venc = document.getElementById('plano_data_vencimento')?.value;
+        const spanInfo = document.getElementById('spanDiasRestantes');
+        const cicloSpan = document.querySelector('#assinaturaCicloInfo span:first-child');
+        
+        const labels = {
+            semanal: 'Semanal a cada 7 dias',
+            mensal: 'Mensalidade a cada 30 dias',
+            trimestral: 'Trimestral a cada 90 dias',
+            semestral: 'Semestral a cada 180 dias',
+            anual: 'Anual a cada 365 dias'
+        };
+        
+        if (cicloSpan) {
+            cicloSpan.innerHTML = `📅 <strong>Ciclo de Cobrança:</strong> ${labels[freq] || 'Recorrente'}.`;
+        }
+        
+        if (venc && spanInfo) {
+            const dataVenc = new Date(venc + 'T00:00:00');
+            const hoje = new Date();
+            hoje.setHours(0,0,0,0);
+            const diffTime = dataVenc - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                spanInfo.innerHTML = `⚠️ Vencido há ${Math.abs(diffDays)} dia(s)`;
+                spanInfo.style.color = '#dc2626';
+            } else if (diffDays === 0) {
+                spanInfo.innerHTML = `🔔 Vence Hoje!`;
+                spanInfo.style.color = '#d97706';
+            } else {
+                spanInfo.innerHTML = `⏳ 1º Vencimento em ${diffDays} dia(s)`;
+                spanInfo.style.color = '#166534';
+            }
+        }
+    }
+
+    // =====================================================
+    // EDITAR / EXCLUIR PRODUTO
+    // =====================================================
+    window.editarProduto = async (id) => {
+        if (!verificarPermissao('produtos', 'editar') && !podeAjustarEstoque()) {
+            mostrarNotificacao('Você não tem permissão para editar produtos!', 'error');
+            return;
+        }
+
+        const produto = produtos.find(p => p.id === id);
+        if (!produto) return;
+
+        document.getElementById('modalProdutoTitle').textContent = 'Editar Produto / Serviço';
+        document.getElementById('prodFormId').value = produto.id;
+        document.getElementById('codigo').value = produto.codigo || '';
+        document.getElementById('nome').value = produto.nome || '';
+        document.getElementById('marca').value = produto.marca || '';
+        document.getElementById('modelo').value = produto.modelo || '';
+        document.getElementById('descricao').value = produto.descricao || '';
+        document.getElementById('valor_compra').value = (produto.valor_compra !== undefined && produto.valor_compra !== null) ? produto.valor_compra : '';
+        document.getElementById('valor_venda').value = (produto.valor_venda !== undefined && produto.valor_venda !== null) ? produto.valor_venda : '';
+        document.getElementById('estoque_minimo').value = produto.estoque_minimo || 5;
+        document.getElementById('garantia_dias').value = produto.garantia_dias || 0;
+        document.getElementById('imagem').value = produto.imagem || '';
+
+        produtoBarcodes = Array.isArray(produto.codigos_barras) ? [...produto.codigos_barras] : [];
+        renderBarcodes();
+        document.getElementById('barcode_input').value = '';
+
+        const categoriaSelect = document.getElementById('modalCategoriaSelect');
+        if (categoriaSelect) {
+            categoriaSelect.value = produto.categoria || '';
+            categoriaSelect.dispatchEvent(new Event('change'));
+        }
+
+        document.getElementById('lote').value = produto.lote || '';
+        document.getElementById('data_validade').value = produto.data_validade || '';
+        document.getElementById('alerta_vencimento_dias').value = produto.alerta_vencimento_dias || 30;
+
+        const tipoSelect = document.getElementById('produtoTipo');
+        if (tipoSelect) {
+            tipoSelect.value = produto.tipo || 'produto';
+            tipoSelect.dispatchEvent(new Event('change'));
+        }
+
+        const chkHabilitada = document.getElementById('comissao_habilitada');
+        if (chkHabilitada) {
+            chkHabilitada.checked = produto.comissao_habilitada || false;
+            chkHabilitada.dispatchEvent(new Event('change'));
+        }
+        const chk100 = document.getElementById('comissao_100_porcento');
+        if (chk100) {
+            chk100.checked = produto.comissao_100_porcento !== false;
+            chk100.dispatchEvent(new Event('change'));
+        }
+        const inputComissaoValor = document.getElementById('comissao_valor');
+        if (inputComissaoValor) inputComissaoValor.value = produto.comissao_valor || '';
+
+        const inputDuracaoMinutos = document.getElementById('duracao_minutos');
+        if (inputDuracaoMinutos) inputDuracaoMinutos.value = produto.duracao_minutos || 45;
+
+        // Assinatura recorrente
+        const chkRecorrente = document.getElementById('is_recorrente');
+        if (chkRecorrente) {
+            chkRecorrente.checked = produto.is_recorrente === true;
+            chkRecorrente.dispatchEvent(new Event('change'));
+        }
+        if (produto.is_recorrente) {
+            const selCli = document.getElementById('plano_cliente_id');
+            if (selCli) selCli.value = produto.plano_cliente_id || '';
+            const inpNome = document.getElementById('plano_nome');
+            if (inpNome) inpNome.value = produto.plano_nome || '';
+            const selFreq = document.getElementById('plano_frequencia');
+            if (selFreq) selFreq.value = produto.plano_frequencia || 'mensal';
+            const inpVal = document.getElementById('plano_valor');
+            if (inpVal) inpVal.value = produto.plano_valor || produto.valor_venda || '';
+            const inpVenc = document.getElementById('plano_data_vencimento');
+            if (inpVenc) inpVenc.value = produto.plano_data_vencimento || '';
+            atualizarCicloAssinatura();
+        }
+
+        // Em edição: informar que ajuste de estoque é feito pelo botão Ajustar
+        const saldoAtual = produto.estoque_total || produto.estoque || 0;
+        document.getElementById('quantidade_estoque').value = saldoAtual;
+        document.getElementById('quantidade_estoque').disabled = true;
+        document.getElementById('infoEstoqueInicial').innerHTML = `
+            <strong>ℹ️ Saldo Atual:</strong> ${produto.tipo === 'servico' ? 'Serviço (sem saldo físico)' : `${saldoAtual} unidade(s)`}.<br>
+            <small>Para movimentar entradas/saídas de saldo, utilize o botão <strong>"⚖️ Ajustar"</strong> na tabela principal.</small>
+        `;
+        document.getElementById('seriaisContainer').style.display = 'none';
+
+        document.getElementById('modalProduto').style.display = 'flex';
+    };
+
+    window.excluirProduto = async (id) => {
+        if (!verificarPermissao('produtos', 'excluir')) {
+            mostrarNotificacao('Você não tem permissão para excluir produtos!', 'error');
+            return;
+        }
+
+        const produto = produtos.find(p => p.id === id);
+        if (!confirm(`Tem certeza que deseja excluir "${produto?.nome}"?`)) return;
+
+        try {
+            const { error } = await supabaseClient
+                .from('produtos')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            mostrarNotificacao('Item excluído com sucesso!', 'success');
+            await carregarProdutos();
+        } catch (error) {
+            console.error('Erro ao excluir:', error);
+            mostrarNotificacao('Erro ao excluir item. Verifique se há movimentações vinculadas.', 'error');
+        }
+    };
+
+    // =====================================================
+    // SALVAR PRODUTO / SERVIÇO
+    // =====================================================
+    async function salvarProduto() {
+        const id = document.getElementById('prodFormId').value;
+        const quantidadeEstoque = parseInt(document.getElementById('quantidade_estoque').value);
+
+        const selectCategoria = document.getElementById('modalCategoriaSelect');
+        const selectedOption = selectCategoria?.options[selectCategoria.selectedIndex];
+        const controlaLote = selectedOption?.getAttribute('data-controla-lote') === 'true';
+
+        const dadosProduto = {
+            codigo: document.getElementById('codigo').value.trim(),
+            nome: document.getElementById('nome').value.trim(),
+            tipo: document.getElementById('produtoTipo').value || 'produto',
+            categoria: selectCategoria ? selectCategoria.value : '',
+            marca: document.getElementById('marca').value.trim(),
+            modelo: document.getElementById('modelo').value.trim(),
+            descricao: document.getElementById('descricao').value.trim(),
+            valor_compra: parseFloat(document.getElementById('valor_compra').value) || 0,
+            valor_venda: parseFloat(document.getElementById('valor_venda').value) || 0,
+            estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 5,
+            garantia_dias: parseInt(document.getElementById('garantia_dias').value) || 0,
+            imagem: document.getElementById('imagem').value.trim(),
+            codigos_barras: produtoBarcodes,
+            updated_at: new Date().toISOString()
+        };
+
+        if (controlaLote) {
+            dadosProduto.lote = document.getElementById('lote').value.trim() || null;
+            dadosProduto.data_validade = document.getElementById('data_validade').value || null;
+            dadosProduto.alerta_vencimento_dias = parseInt(document.getElementById('alerta_vencimento_dias').value) || 30;
+        } else {
+            dadosProduto.lote = null;
+            dadosProduto.data_validade = null;
+            dadosProduto.alerta_vencimento_dias = null;
+        }
+
+        if (dadosProduto.tipo === 'servico') {
+            dadosProduto.estoque_total = 0;
+            dadosProduto.duracao_minutos = parseInt(document.getElementById('duracao_minutos')?.value) || 45;
+            const chkHabilitada = document.getElementById('comissao_habilitada');
+            dadosProduto.comissao_habilitada = chkHabilitada ? chkHabilitada.checked : false;
+
+            const chk100 = document.getElementById('comissao_100_porcento');
+            dadosProduto.comissao_100_porcento = chk100 ? chk100.checked : false;
+            dadosProduto.comissao_valor = parseFloat(document.getElementById('comissao_valor').value) || 0;
+
+            const chkRecorrente = document.getElementById('is_recorrente');
+            const isRecorrente = chkRecorrente ? chkRecorrente.checked : false;
+            dadosProduto.is_recorrente = isRecorrente;
+
+            if (isRecorrente) {
+                const clienteId = document.getElementById('plano_cliente_id')?.value;
+                const planoNome = document.getElementById('plano_nome')?.value.trim();
+                const planoFrequencia = document.getElementById('plano_frequencia')?.value || 'mensal';
+                const planoVenc = document.getElementById('plano_data_vencimento')?.value;
+                const planoValor = parseFloat(document.getElementById('plano_valor')?.value) || 0;
+
+                if (!clienteId) {
+                    mostrarNotificacao('Para serviços de assinatura recorrente, selecione um cliente!', 'error');
+                    document.getElementById('plano_cliente_id')?.focus();
+                    return;
+                }
+                if (!planoNome) {
+                    mostrarNotificacao('Informe o nome do plano de assinatura!', 'error');
+                    document.getElementById('plano_nome')?.focus();
+                    return;
+                }
+                if (!planoVenc) {
+                    mostrarNotificacao('Informe a data de vencimento da assinatura!', 'error');
+                    document.getElementById('plano_data_vencimento')?.focus();
+                    return;
+                }
+                if (isNaN(planoValor) || planoValor < 0.01) {
+                    mostrarNotificacao('Informe um valor válido para a assinatura (mínimo R$ 0,01)!', 'error');
+                    document.getElementById('plano_valor')?.focus();
+                    return;
+                }
+
+                dadosProduto.plano_cliente_id = parseInt(clienteId);
+                dadosProduto.plano_nome = planoNome;
+                dadosProduto.plano_frequencia = planoFrequencia;
+                dadosProduto.plano_data_vencimento = planoVenc;
+                dadosProduto.plano_valor = planoValor;
+            } else {
+                dadosProduto.plano_cliente_id = null;
+                dadosProduto.plano_nome = null;
+                dadosProduto.plano_frequencia = null;
+                dadosProduto.plano_data_vencimento = null;
+                dadosProduto.plano_valor = null;
+            }
+        } else {
+            dadosProduto.comissao_habilitada = false;
+            dadosProduto.comissao_100_porcento = false;
+            dadosProduto.comissao_valor = 0;
+            dadosProduto.is_recorrente = false;
+            dadosProduto.plano_cliente_id = null;
+            dadosProduto.plano_nome = null;
+            dadosProduto.plano_frequencia = null;
+            dadosProduto.plano_data_vencimento = null;
+            dadosProduto.plano_valor = null;
+        }
+
+        if (!dadosProduto.codigo || !dadosProduto.nome) {
+            mostrarNotificacao('Preencha o código e o nome do item!', 'error');
+            return;
+        }
+
+        if (isNaN(dadosProduto.valor_venda) || dadosProduto.valor_venda < 0.01) {
+            mostrarNotificacao('O preço de venda deve ser no mínimo R$ 0,01.', 'error');
+            document.getElementById('valor_venda')?.focus();
+            return;
+        }
+
+        try {
+            let produtoIdSalvo = id ? parseInt(id) : null;
+
+            if (id) {
+                const { error } = await supabaseClient
+                    .from('produtos')
+                    .update(dadosProduto)
+                    .eq('id', id);
+
+                if (error) throw error;
+                mostrarNotificacao('Produto/Serviço atualizado com sucesso!', 'success');
+            } else {
+                dadosProduto.created_at = new Date().toISOString();
+                const qtd = dadosProduto.tipo === 'servico' ? 0 : (isNaN(quantidadeEstoque) ? 0 : quantidadeEstoque);
+                dadosProduto.estoque_total = qtd;
+
+                const { data: insData, error } = await supabaseClient
+                    .from('produtos')
+                    .insert([dadosProduto])
+                    .select();
+
+                if (error) throw error;
+                if (insData && insData[0]) {
+                    produtoIdSalvo = insData[0].id;
+                }
+
+                // Se houver saldo inicial em produto, registrar movimento de estoque
+                if (qtd > 0 && produtoIdSalvo) {
+                    try {
+                        await supabaseClient
+                            .from('movimentos_estoque')
+                            .insert([{
+                                loja_id: usuario.loja_id || 1,
+                                produto_id: produtoIdSalvo,
+                                tipo: 'entrada',
+                                quantidade: qtd,
+                                saldo_anterior: 0,
+                                saldo_novo: qtd,
+                                motivo: 'Cadastro inicial de produto',
+                                usuario_id: usuario.id || null,
+                                data: new Date().toISOString()
+                            }]);
+                    } catch (eMov) {
+                        console.warn('Aviso: Movimento inicial não registrado:', eMov);
+                    }
+                }
+
+                mostrarNotificacao('Item cadastrado com sucesso!', 'success');
+            }
+
+            // Sincronizar contrato na tabela servicos_recorrentes se for assinatura
+            if (produtoIdSalvo && dadosProduto.is_recorrente && dadosProduto.plano_cliente_id) {
+                try {
+                    const { data: existente } = await supabaseClient
+                        .from('servicos_recorrentes')
+                        .select('id')
+                        .eq('produto_id', produtoIdSalvo)
+                        .eq('cliente_id', dadosProduto.plano_cliente_id)
+                        .maybeSingle();
+
+                    const dadosAssinatura = {
+                        loja_id: usuario.loja_id || 1,
+                        produto_id: produtoIdSalvo,
+                        cliente_id: dadosProduto.plano_cliente_id,
+                        plano_nome: dadosProduto.plano_nome,
+                        frequencia: dadosProduto.plano_frequencia,
+                        valor: dadosProduto.plano_valor,
+                        data_vencimento: dadosProduto.plano_data_vencimento,
+                        status: 'ativo',
+                        updated_at: new Date().toISOString()
+                    };
+
+                    if (existente && existente.id) {
+                        await supabaseClient
+                            .from('servicos_recorrentes')
+                            .update(dadosAssinatura)
+                            .eq('id', existente.id);
+                    } else {
+                        await supabaseClient
+                            .from('servicos_recorrentes')
+                            .insert([dadosAssinatura]);
+                    }
+                } catch (eAssinatura) {
+                    console.error('Erro ao sincronizar assinatura recorrente:', eAssinatura);
+                }
+            }
+
+            document.getElementById('modalProduto').style.display = 'none';
+            document.getElementById('produtoForm').reset();
+            await carregarProdutos();
+        } catch (error) {
+            console.error('Erro ao salvar produto:', error);
+            mostrarNotificacao('Erro ao salvar produto: ' + (error.message || 'Verifique os dados'), 'error');
+        }
+    }
+
+    // =====================================================
+    // NOVO PRODUTO / SERVIÇO (MODAL)
+    // =====================================================
+    async function abrirModalNovoProduto() {
+        if (!verificarPermissao('produtos', 'criar') && !podeAjustarEstoque()) {
+            mostrarNotificacao('Você não tem permissão para cadastrar produtos!', 'error');
+            return;
+        }
+
+        document.getElementById('modalProdutoTitle').textContent = 'Novo Produto / Serviço';
+        document.getElementById('produtoForm').reset();
+        document.getElementById('prodFormId').value = '';
+
+        produtoBarcodes = [];
+        renderBarcodes();
+        const barcodeInput = document.getElementById('barcode_input');
+        if (barcodeInput) barcodeInput.value = '';
+
+        if (typeof obterProximoCodigoProduto === 'function') {
+            try {
+                const proximoCodigo = await obterProximoCodigoProduto();
+                if (proximoCodigo) {
+                    document.getElementById('codigo').value = proximoCodigo;
+                }
+            } catch (eCod) {
+                console.warn('Erro ao obter próximo código:', eCod);
+            }
+        }
+
+        const qtdEstoqueInput = document.getElementById('quantidade_estoque');
+        if (qtdEstoqueInput) {
+            qtdEstoqueInput.value = 1;
+            qtdEstoqueInput.disabled = false;
+        }
+        const infoEstoqueInicial = document.getElementById('infoEstoqueInicial');
+        if (infoEstoqueInicial) {
+            infoEstoqueInicial.innerHTML = '<strong>ℹ️ INFORMAÇÕES:</strong> Cadastre abaixo a quantidade inicial em estoque deste item.';
+        }
+
+        const groupLoteValidade = document.getElementById('groupLoteValidade');
+        if (groupLoteValidade) groupLoteValidade.style.display = 'none';
+
+        const checkComissao = document.getElementById('comissao_habilitada');
+        if (checkComissao) {
+            checkComissao.checked = false;
+            checkComissao.dispatchEvent(new Event('change'));
+        }
+        const checkComissao100 = document.getElementById('comissao_100_porcento');
+        if (checkComissao100) {
+            checkComissao100.checked = true;
+            checkComissao100.dispatchEvent(new Event('change'));
+        }
+        const valComissao = document.getElementById('comissao_valor');
+        if (valComissao) valComissao.value = '';
+
+        const checkRecorrente = document.getElementById('is_recorrente');
+        if (checkRecorrente) {
+            checkRecorrente.checked = false;
+            checkRecorrente.dispatchEvent(new Event('change'));
+        }
+        const selCli = document.getElementById('plano_cliente_id');
+        if (selCli) selCli.value = '';
+        const inpPlanoNome = document.getElementById('plano_nome');
+        if (inpPlanoNome) inpPlanoNome.value = '';
+        const selFreq = document.getElementById('plano_frequencia');
+        if (selFreq) selFreq.value = 'mensal';
+        const inpPlanoVal = document.getElementById('plano_valor');
+        if (inpPlanoVal) inpPlanoVal.value = '';
+        const inpPlanoVenc = document.getElementById('plano_data_vencimento');
+        if (inpPlanoVenc) inpPlanoVenc.value = '';
+
+        const tipoSelect = document.getElementById('produtoTipo');
+        if (tipoSelect) {
+            tipoSelect.value = 'produto';
+            tipoSelect.dispatchEvent(new Event('change'));
+        }
+
+        const modalCategoriaSelect = document.getElementById('modalCategoriaSelect');
+        if (modalCategoriaSelect) {
+            modalCategoriaSelect.value = '';
+            modalCategoriaSelect.dispatchEvent(new Event('change'));
+        }
+
+        const modal = document.getElementById('modalProduto');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    // Eventos do Modal de Produto / Serviço
+    document.getElementById('btnNovoProduto')?.addEventListener('click', abrirModalNovoProduto);
+    document.getElementById('btnCancelarProduto')?.addEventListener('click', () => {
+        const modal = document.getElementById('modalProduto');
+        if (modal) modal.style.display = 'none';
+    });
+    document.querySelector('.close-modal-produto')?.addEventListener('click', () => {
+        const modal = document.getElementById('modalProduto');
+        if (modal) modal.style.display = 'none';
+    });
+    document.getElementById('btnSalvarProduto')?.addEventListener('click', salvarProduto);
+
+    // Fechar modal ao clicar fora
+    window.addEventListener('click', (e) => {
+        const modalProd = document.getElementById('modalProduto');
+        if (modalProd && e.target === modalProd) {
+            modalProd.style.display = 'none';
+        }
+    });
+
+    // Alteração de Tipo no Modal
+    document.getElementById('produtoTipo')?.addEventListener('change', (e) => {
+        const tipo = e.target.value;
+        const sectionEstoqueInicial = document.getElementById('sectionEstoqueInicial');
+        const groupComissaoServico = document.getElementById('groupComissaoServico');
+        const groupAssinaturaServico = document.getElementById('groupAssinaturaServico');
+        const groupLoteValidade = document.getElementById('groupLoteValidade');
+        
+        if (tipo === 'servico') {
+            if (sectionEstoqueInicial) sectionEstoqueInicial.style.display = 'none';
+            if (groupLoteValidade) groupLoteValidade.style.display = 'none';
+            if (groupComissaoServico) groupComissaoServico.style.display = 'block';
+            if (groupAssinaturaServico) groupAssinaturaServico.style.display = 'block';
+        } else {
+            if (sectionEstoqueInicial) sectionEstoqueInicial.style.display = 'block';
+            if (groupComissaoServico) groupComissaoServico.style.display = 'none';
+            if (groupAssinaturaServico) groupAssinaturaServico.style.display = 'none';
+            
+            // Re-checar lote da categoria selecionada
+            const selCat = document.getElementById('modalCategoriaSelect');
+            const selectedOption = selCat?.options[selCat.selectedIndex];
+            const controlaLote = selectedOption?.getAttribute('data-controla-lote') === 'true';
+            if (groupLoteValidade) groupLoteValidade.style.display = controlaLote ? 'grid' : 'none';
+        }
+    });
+
+    // Alteração de Categoria no Modal
+    document.getElementById('modalCategoriaSelect')?.addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const groupLoteValidade = document.getElementById('groupLoteValidade');
+        const tipo = document.getElementById('produtoTipo')?.value || 'produto';
+        
+        if (!selectedOption || !selectedOption.value || tipo === 'servico') {
+            if (groupLoteValidade) groupLoteValidade.style.display = 'none';
+            return;
+        }
+        
+        const controlaLote = selectedOption.getAttribute('data-controla-lote') === 'true';
+        const avisoVencimento = selectedOption.getAttribute('data-aviso-vencimento') || '30';
+        
+        if (groupLoteValidade) {
+            groupLoteValidade.style.display = controlaLote ? 'grid' : 'none';
+            if (controlaLote) {
+                const inputAviso = document.getElementById('alerta_vencimento_dias');
+                if (inputAviso) inputAviso.value = avisoVencimento;
+            }
+        }
+    });
+
+    // Comissão
+    document.getElementById('comissao_habilitada')?.addEventListener('change', (e) => {
+        const groupValores = document.getElementById('groupComissaoValores');
+        if (groupValores) groupValores.style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    document.getElementById('comissao_100_porcento')?.addEventListener('change', (e) => {
+        const divCustom = document.getElementById('divComissaoValorCustom');
+        if (divCustom) divCustom.style.display = e.target.checked ? 'none' : 'block';
+    });
+
+    // Assinatura
+    document.getElementById('is_recorrente')?.addEventListener('change', (e) => {
+        const groupCampos = document.getElementById('groupAssinaturaCampos');
+        if (groupCampos) {
+            groupCampos.style.display = e.target.checked ? 'flex' : 'none';
+        }
+        if (e.target.checked) {
+            atualizarCicloAssinatura();
+        }
+    });
+
+    document.getElementById('plano_frequencia')?.addEventListener('change', atualizarCicloAssinatura);
+    document.getElementById('plano_data_vencimento')?.addEventListener('input', atualizarCicloAssinatura);
+
+    // Códigos de barras
+    document.getElementById('btn_add_barcode')?.addEventListener('click', adicionarBarcode);
+    document.getElementById('barcode_input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            adicionarBarcode();
+        }
+    });
+
+    // Filtros de tabela
+    document.getElementById('filtroTipo')?.addEventListener('change', renderizarTabela);
+
+    // Ocultar Custo
+    function configurarFiltroOcultarCusto() {
+        const chk = document.getElementById('chkOcultarCusto');
+        const table = document.getElementById('estoqueTable');
+        if (!chk || !table) return;
+
+        const ocultarSalvo = localStorage.getItem('erp_ocultar_custo') === 'true';
+        chk.checked = ocultarSalvo;
+        if (ocultarSalvo) {
+            table.classList.add('hide-custo');
+        } else {
+            table.classList.remove('hide-custo');
+        }
+
+        chk.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            if (checked) {
+                table.classList.add('hide-custo');
+            } else {
+                table.classList.remove('hide-custo');
+            }
+            localStorage.setItem('erp_ocultar_custo', checked ? 'true' : 'false');
+        });
+    }
+
+    // Configurar Ocultar Custo
+    configurarFiltroOcultarCusto();
+
     // Inicializar
     await carregarCategorias();
+    await carregarClientesAssinatura();
     await carregarProdutos();
     
+    window.abrirModalNovoProduto = abrirModalNovoProduto;
+    window.editarProduto = editarProduto;
+    window.excluirProduto = excluirProduto;
     window.ajustarEstoque = ajustarEstoque;
     window.verHistorico = verHistorico;
     window.abrirModalBuscaProdutoAjuste = abrirModalBuscaProdutoAjuste;
     window.fecharModalBuscaProdutoAjuste = fecharModalBuscaProdutoAjuste;
     window.selecionarProdutoParaAjuste = selecionarProdutoParaAjuste;
     window.toggleCheckbox = toggleCheckbox;
+    window.removerBarcode = removerBarcode;
 });

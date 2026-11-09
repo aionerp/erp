@@ -608,7 +608,7 @@ function obterPrimeiraPaginaPermitida(usuario) {
     const paginas = [
         { href: 'dashboard.html', modulo: 'dashboard' },
         { href: 'clientes.html', modulo: 'clientes' },
-        { href: 'produtos.html', modulo: 'produtos' },
+        { href: 'estoque.html', modulo: 'produtos' },
         { href: 'categorias.html', modulo: 'categorias' },
         { href: 'estoque.html', modulo: 'estoque' },
         { href: 'entradas.html', modulo: 'entradas' },

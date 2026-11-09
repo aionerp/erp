@@ -44,7 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const moduloAtual = linksMapPaginas[currentPage];
     if (moduloAtual) {
-        const podeVer = verificarPermissaoUsuario(usuario, moduloAtual, 'ver');
+        let podeVer = false;
+        if (currentPage === 'estoque.html' || currentPage === 'produtos.html') {
+            podeVer = verificarPermissaoUsuario(usuario, 'estoque', 'ver') || verificarPermissaoUsuario(usuario, 'produtos', 'ver');
+        } else {
+            podeVer = verificarPermissaoUsuario(usuario, moduloAtual, 'ver');
+        }
         if (!podeVer) {
             console.warn(`Acesso negado para a página ${currentPage}. Redirecionando...`);
             const proximaPagina = obterPrimeiraPaginaPermitida(usuario);
@@ -206,8 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'group',
                 label: '📦 Suprimentos',
                 items: [
-                    { label: '💾 Estoque', href: 'estoque.html', modulo: 'estoque' },
-                    { label: labelProdutos, href: 'produtos.html', modulo: 'produtos' },
+                    { label: '📦 Estoque', href: 'estoque.html', modulo: 'estoque', modulos: ['estoque', 'produtos'] },
+
                     { label: '🏷️ Categorias', href: 'categorias.html', modulo: 'categorias' }
                 ]
             },
@@ -267,6 +272,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Filtrar os itens permitidos e com condição ativa
                 const visibleItems = item.items.filter(subItem => {
                     if (subItem.condicao === false) return false;
+                    if (Array.isArray(subItem.modulos)) {
+                        return subItem.modulos.some(m => verificarPermissaoUsuario(usuario, m, subItem.action || 'ver'));
+                    }
                     return verificarPermissaoUsuario(usuario, subItem.modulo, subItem.action || 'ver');
                 });
                 
@@ -877,7 +885,12 @@ function filtrarMenuPorPermissao(usuario) {
         const modulo = linksMap[href];
         
         if (modulo) {
-            const podeVer = verificarPermissaoUsuario(usuario, modulo, 'ver');
+            let podeVer = false;
+            if (href === 'estoque.html') {
+                podeVer = verificarPermissaoUsuario(usuario, 'estoque', 'ver') || verificarPermissaoUsuario(usuario, 'produtos', 'ver');
+            } else {
+                podeVer = verificarPermissaoUsuario(usuario, modulo, 'ver');
+            }
             
             if (!podeVer) {
                 link.style.display = 'none';
