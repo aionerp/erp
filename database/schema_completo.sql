@@ -130,7 +130,8 @@ CREATE TABLE public.categorias (
     controla_lote_validade BOOLEAN DEFAULT false,
     aviso_vencimento_dias INTEGER DEFAULT 30,
     ativo BOOLEAN DEFAULT true NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
 -- ============================================================================

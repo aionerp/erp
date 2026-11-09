@@ -99,7 +99,8 @@ ALTER TABLE public.saidas
 -- 7. CONTROLE DE LOTE E VALIDADE POR CATEGORIA E PRODUTOS
 ALTER TABLE public.categorias 
     ADD COLUMN IF NOT EXISTS controla_lote_validade BOOLEAN DEFAULT false,
-    ADD COLUMN IF NOT EXISTS aviso_vencimento_dias INTEGER DEFAULT 30;
+    ADD COLUMN IF NOT EXISTS aviso_vencimento_dias INTEGER DEFAULT 30,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
 
 ALTER TABLE public.produtos 
     ADD COLUMN IF NOT EXISTS data_validade DATE,
