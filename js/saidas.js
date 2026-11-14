@@ -373,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const bannerCaixa = document.getElementById('bannerCaixaFechado');
+                const inputProd = document.getElementById('searchProdutoVenda');
                 const inputCli = document.getElementById('searchCliente');
                 const btnFinalizar = document.getElementById('btnFinalizarVenda');
                 const btnCaixa = document.getElementById('btnCaixaPDV');
@@ -399,8 +400,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!caixaAtivo || isPendente) {
                     // Se caixa estiver fechado OU se houver caixa de dia anterior pendente de fechamento
                     const htmlBanner = isPendente
-                        ? `⚠️ <strong>ATENÇÃO: CAIXA DO DIA ANTERIOR NÃO FOI FECHADO!</strong><br><span style="font-weight: 500; font-size: 13px;">O caixa aberto em <strong>${formatarDataHora(caixaAtivo.data_abertura)}</strong> precisa ser encerrado antes de iniciar as atividades de hoje. Por favor, clique em <strong>🔒 Fechar Caixa Anterior</strong> acima para concluir o fechamento e liberar a abertura do caixa de hoje.</span>`
-                        : '⚠️ O CAIXA ESTÁ FECHADO! Para realizar vendas, é necessário realizar a abertura de caixa clicando em <strong>🔑 Abrir Caixa</strong> acima.';
+                        ? `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                ⚠️ <strong>ATENÇÃO: CAIXA DO DIA ANTERIOR NÃO FOI FECHADO!</strong><br>
+                                <span style="font-weight: 500; font-size: 13px;">O caixa aberto em <strong>${formatarDataHora(caixaAtivo.data_abertura)}</strong> precisa ser encerrado antes de iniciar as atividades de hoje. Conclua o fechamento para liberar a abertura do caixa de hoje.</span>
+                            </div>
+                            <button type="button" id="btnBannerAcaoCaixa" style="background:#d97706; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer; font-size:13px; white-space:nowrap;">🔒 Fechar Caixa Anterior Agora</button>
+                        </div>`
+                        : `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                ⚠️ <strong>O CAIXA ESTÁ FECHADO!</strong><br>
+                                <span style="font-weight: 500; font-size: 13px;">Para realizar vendas hoje, é necessário realizar a abertura de caixa com o valor inicial para troco.</span>
+                            </div>
+                            <button type="button" id="btnBannerAcaoCaixa" style="background:#10b981; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer; font-size:13px; white-space:nowrap;">🔑 Abrir Caixa de Hoje Agora</button>
+                        </div>`;
 
                     const bgBanner = isPendente ? '#fff3cd' : '#f8d7da';
                     const colorBanner = isPendente ? '#856404' : '#721c24';
@@ -429,6 +442,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         bannerCaixa.style.color = colorBanner;
                         bannerCaixa.style.border = borderBanner;
                         bannerCaixa.innerHTML = htmlBanner;
+                    }
+
+                    // Vincular clique no botão de ação rápida do banner
+                    const btnAcaoBanner = document.getElementById('btnBannerAcaoCaixa');
+                    if (btnAcaoBanner) {
+                        btnAcaoBanner.onclick = abrirModalCaixaPDVDinamico;
                     }
 
                     // Desabilitar controles
@@ -478,36 +497,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     btnConfirm.style.display = 'block';
                     btnConfirm.textContent = 'Confirmar Abertura';
+                    let processandoAberturaPDV = false;
                     btnConfirm.onclick = async () => {
-                        const val = parseFloat(document.getElementById('pdvSaldoInicial').value || 0);
-                        if (isNaN(val) || val < 0) {
-                            mostrarNotificacao('Informe um valor inicial válido!', 'error');
-                            return;
-                        }
-
-                        // Validar se há caixa de dia anterior que ainda precisa ser fechado
-                        const statusAtual = await obterStatusCaixa();
-                        if (statusAtual.tipo === 'pendente_fechamento_anterior') {
-                            mostrarNotificacao('⚠️ Não é possível abrir novo caixa: existe um caixa de ' + formatarDataHora(statusAtual.caixa.data_abertura) + ' que precisa ser fechado primeiro!', 'error');
-                            fecharModalCaixaPDV();
-                            await atualizarBotoesEStatusCaixa();
-                            return;
-                        }
-
+                        if (processandoAberturaPDV) return;
+                        processandoAberturaPDV = true;
                         btnConfirm.disabled = true;
-                        btnConfirm.textContent = 'Abrindo...';
+                        btnConfirm.textContent = 'Verificando...';
+
                         try {
+                            const val = parseFloat(document.getElementById('pdvSaldoInicial').value || 0);
+                            if (isNaN(val) || val < 0) {
+                                mostrarNotificacao('Informe um valor inicial válido!', 'error');
+                                btnConfirm.disabled = false;
+                                btnConfirm.textContent = 'Confirmar Abertura';
+                                processandoAberturaPDV = false;
+                                return;
+                            }
+
+                            // Validar se há caixa de dia anterior que ainda precisa ser fechado
+                            const statusAtual = await obterStatusCaixa();
+                            if (statusAtual.tipo === 'pendente_fechamento_anterior') {
+                                mostrarNotificacao('⚠️ Não é possível abrir novo caixa: existe um caixa de ' + formatarDataHora(statusAtual.caixa.data_abertura) + ' que precisa ser fechado primeiro!', 'error');
+                                fecharModalCaixaPDV();
+                                await atualizarBotoesEStatusCaixa();
+                                return;
+                            }
+                            if (statusAtual.tipo === 'aberto_hoje') {
+                                mostrarNotificacao('⚠️ O caixa de hoje já está aberto! Vendas disponíveis.', 'info');
+                                fecharModalCaixaPDV();
+                                await atualizarBotoesEStatusCaixa();
+                                return;
+                            }
+
+                            btnConfirm.textContent = 'Abrindo caixa...';
                             const { data, error } = await supabaseClient
                                 .from('caixas')
                                 .insert({
                                     loja_id: usuario.loja_id,
                                     saldo_inicial: val,
                                     usuario_abertura_id: usuario.id,
-                                    status: 'aberto'
+                                    status: 'aberto',
+                                    data_abertura: new Date().toISOString()
                                 })
                                 .select();
                             if (error) throw error;
-                            mostrarNotificacao('🎉 Caixa aberto com sucesso!', 'success');
+                            mostrarNotificacao('🎉 Caixa aberto com sucesso! Boas vendas.', 'success');
                             fecharModalCaixaPDV();
                             await atualizarBotoesEStatusCaixa();
                         } catch (e) {
@@ -516,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } finally {
                             btnConfirm.disabled = false;
                             btnConfirm.textContent = 'Confirmar Abertura';
+                            processandoAberturaPDV = false;
                         }
                     };
                 } else {
@@ -657,10 +692,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     btnConfirm.style.display = 'block';
                     btnConfirm.textContent = isPendente ? 'Confirmar Fechamento do Caixa Anterior' : 'Confirmar Fechamento';
+                    let processandoFechamentoPDV = false;
                     btnConfirm.onclick = async () => {
+                        if (processandoFechamentoPDV) return;
+                        processandoFechamentoPDV = true;
+
                         const valFinal = parseFloat(document.getElementById('pdvSaldoFinal').value || 0);
                         if (isNaN(valFinal) || valFinal < 0) {
                             mostrarNotificacao('Informe um valor final válido!', 'error');
+                            processandoFechamentoPDV = false;
                             return;
                         }
 
@@ -669,6 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             : 'Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.';
 
                         if (!confirm(msgConfirm)) {
+                            processandoFechamentoPDV = false;
                             return;
                         }
 
@@ -688,11 +729,28 @@ document.addEventListener('DOMContentLoaded', () => {
                                 .select();
                             
                             if (error) throw error;
+
+                            // Se estiver fechando caixa pendente anterior, garantir encerramento de qualquer outro duplicado/fantasma anterior
+                            if (isPendente) {
+                                try {
+                                    await supabaseClient
+                                        .from('caixas')
+                                        .update({
+                                            data_fechamento: dataFechamento,
+                                            saldo_final: 0,
+                                            usuario_fechamento_id: usuario.id,
+                                            status: 'fechado'
+                                        })
+                                        .eq('status', 'aberto');
+                                } catch (eGhosts) {
+                                    console.warn('Aviso ao sincronizar caixas anteriores:', eGhosts);
+                                }
+                            }
                             
                             const dataAberturaLocal = caixaAtivo.data_abertura;
                             
                             mostrarNotificacao(isPendente 
-                                ? '🔒 Caixa anterior fechado com sucesso! Agora realize a abertura do caixa de hoje.' 
+                                ? '🔒 Caixa anterior fechado com sucesso! Abrindo caixa de hoje...' 
                                 : '🔒 Caixa fechado com sucesso!', 'success');
                             fecharModalCaixaPDV();
                             await atualizarBotoesEStatusCaixa();
@@ -716,12 +774,20 @@ document.addEventListener('DOMContentLoaded', () => {
                                 };
                                 imprimirRelatorioFechamentoRapido(caixaParaImpressao, dadosVendas, nomeOperador);
                             }
+
+                            // Se era um caixa pendente do dia anterior, abrir imediatamente o fluxo para abrir o caixa de hoje!
+                            if (isPendente) {
+                                setTimeout(() => {
+                                    abrirModalCaixaPDVDinamico();
+                                }, 350);
+                            }
                         } catch (e) {
                             console.error(e);
                             mostrarNotificacao('Erro ao fechar caixa: ' + e.message, 'error');
                         } finally {
                             btnConfirm.disabled = false;
                             btnConfirm.textContent = isPendente ? 'Confirmar Fechamento do Caixa Anterior' : 'Confirmar Fechamento';
+                            processandoFechamentoPDV = false;
                         }
                     };
                 }

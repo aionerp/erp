@@ -622,6 +622,23 @@ async function fecharCaixa() {
             
         if (error) throw error;
         
+        // Se estiver fechando caixa pendente de dia anterior, garantir encerramento de qualquer outro fantasma/duplicado
+        if (isPendente) {
+            try {
+                await supabaseClient
+                    .from('caixas')
+                    .update({
+                        saldo_final: 0,
+                        usuario_fechamento_id: usuario.id,
+                        status: 'fechado',
+                        data_fechamento: dataFechamento
+                    })
+                    .eq('status', 'aberto');
+            } catch (eGhosts) {
+                console.warn('Aviso ao sincronizar caixas anteriores:', eGhosts);
+            }
+        }
+        
         mostrarNotificacao(isPendente 
             ? '🔒 Caixa anterior fechado com sucesso! Agora você pode abrir o caixa de hoje.' 
             : '🔒 Caixa fechado com sucesso!', 'success');
