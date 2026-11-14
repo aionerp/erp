@@ -142,18 +142,21 @@ CREATE TABLE public.clientes (
     loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
     nome VARCHAR(255) NOT NULL,
     cpf_cnpj VARCHAR(20),
-    tipo VARCHAR(20) DEFAULT 'pf' CHECK (tipo IN ('pf', 'pj', 'fornecedor')),
+    documento VARCHAR(20),
+    tipo VARCHAR(20) DEFAULT 'cliente' CHECK (tipo IN ('cliente', 'fornecedor', 'pf', 'pj')),
     telefone VARCHAR(50),
     email VARCHAR(255),
     cep VARCHAR(10),
     logradouro VARCHAR(255),
+    endereco TEXT,
     numero VARCHAR(50),
     complemento VARCHAR(100),
     bairro VARCHAR(100),
     cidade VARCHAR(100),
     estado VARCHAR(2),
     observacoes TEXT,
-    ativo BOOLEAN DEFAULT true NOT NULL,
+    observacao TEXT,
+    ativo BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
