@@ -249,7 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'group',
                 label: '📈 Relatórios',
                 items: [
-                    { label: '📊 Acessar', href: 'relatorios.html', modulo: 'relatorios' }
+                    { label: '📊 Central de Relatórios', href: 'relatorios.html', modulo: 'relatorios' },
+                    { label: '📦 Registro de Inventário', href: 'relatorios.html?tab=inventario', modulo: 'relatorios' }
                 ]
             }
         ];
@@ -280,10 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (visibleItems.length > 0) {
                     // Verificar se o item ativo está neste grupo
-                    const isAnyActive = visibleItems.some(subItem => currentPage === subItem.href);
+                    const isAnyActive = visibleItems.some(subItem => currentPage === subItem.href.split('?')[0]);
                     
                     const subItemsHtml = visibleItems.map(subItem => {
-                        const isActive = currentPage === subItem.href;
+                        const isActive = subItem.href.includes('?') 
+                            ? (currentPage + window.location.search) === subItem.href 
+                            : (currentPage === subItem.href && !window.location.search.includes('tab='));
                         const clickAttr = subItem.onclick ? `onclick="${subItem.onclick}"` : '';
                         const hrefAttr = subItem.href;
                         return `

@@ -16,7 +16,8 @@ let dadosCarregados = {
     vendas: false,
     lucro: false,
     descontos: false,
-    despesas: false
+    despesas: false,
+    inventario: false
 };
 
 // Variáveis para armazenar dados brutos para exportação
@@ -26,7 +27,8 @@ let dadosExportacao = {
     vendas: null,
     lucro: null,
     descontos: null,
-    despesas: null
+    despesas: null,
+    inventario: null
 };
 
 // Helper: identifica se a venda foi na modalidade fiado
@@ -101,10 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('despesasDataInicio')) document.getElementById('despesasDataInicio').value = trintaDiasAtrasStr;
     if (document.getElementById('despesasDataFim')) document.getElementById('despesasDataFim').value = hoje;
     
-    // Verificar se há aba pré-selecionada via sessionStorage (ex: vindo do Dashboard)
-    const abaPreSelecionada = sessionStorage.getItem('abrir_aba_relatorio');
-    if (abaPreSelecionada) {
+    // Verificar se há aba pré-selecionada via sessionStorage ou parâmetro na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabUrl = urlParams.get('tab');
+    const abaPreSelecionada = sessionStorage.getItem('abrir_aba_relatorio') || tabUrl;
+    if (sessionStorage.getItem('abrir_aba_relatorio')) {
         sessionStorage.removeItem('abrir_aba_relatorio');
+    }
+    if (abaPreSelecionada) {
         setTimeout(() => {
             if (typeof abrirAba === 'function') abrirAba(abaPreSelecionada);
         }, 100);
@@ -113,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar
     inicializarFiltrosUsuario().then(() => {
         carregarDashboard();
+        carregarRegistroInventario();
         carregarMovimentoDiario();
         carregarFaturamento();
         carregarVendasProduto();
@@ -181,6 +188,10 @@ function abrirAba(tabId) {
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.toggle('active', content.id === `tab-${tabId}`);
     });
+
+    if (tabId === 'inventario' && (!dadosCarregados.inventario || produtosInventarioRaw.length === 0)) {
+        carregarRegistroInventario();
+    }
 }
 
 // =====================================================
@@ -2368,6 +2379,388 @@ function renderizarTabelaDespesasRelatorio(itens, totalPagas, totalPendentes, to
 }
 
 // =====================================================
+// REGISTRO DE INVENTÁRIO
+// =====================================================
+
+let produtosInventarioRaw = [];
+let inventarioOrdenacaoAtual = { coluna: 'nome', direcao: 'asc' };
+let listenersInventarioConfigurados = false;
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    if (window.Security && typeof window.Security.sanitizeHtml === 'function') {
+        return window.Security.sanitizeHtml(String(str));
+    }
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function carregarRegistroInventario() {
+    const container = document.getElementById('inventarioContainer');
+    if (!container) return;
+
+    try {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 35px 20px; color: var(--gray);">
+                <div style="border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; margin: 0 auto 12px;"></div>
+                <p style="font-size: 13.5px; margin: 0; font-weight: 500;">Carregando posição do estoque e dados financeiros...</p>
+            </div>
+        `;
+
+        const { data: produtos, error } = await supabaseClient
+            .from('produtos')
+            .select('id, codigo, nome, modelo, marca, categoria, valor_compra, valor_venda, estoque, ativo, tipo, codigos_barras')
+            .order('nome', { ascending: true });
+
+        if (error) throw error;
+
+        // Filtrar apenas produtos físicos (exclui serviços que não possuem saldo físico de estoque)
+        produtosInventarioRaw = (produtos || []).filter(p => p.tipo !== 'servico');
+
+        // Preencher select de categorias dinamicamente
+        const selCategoria = document.getElementById('inventarioFiltroCategoria');
+        if (selCategoria) {
+            const categoriaAtual = selCategoria.value;
+            const categoriasSet = new Set();
+            produtosInventarioRaw.forEach(p => {
+                const cat = (p.categoria || '').trim();
+                if (cat) categoriasSet.add(cat);
+            });
+            const categoriasOrdenadas = Array.from(categoriasSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+            selCategoria.innerHTML = '<option value="">Todas as Categorias</option>';
+            categoriasOrdenadas.forEach(c => {
+                selCategoria.innerHTML += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+            });
+            if (categoriaAtual && categoriasSet.has(categoriaAtual)) {
+                selCategoria.value = categoriaAtual;
+            }
+        }
+
+        // Configurar listeners de filtragem automática
+        configurarListenersInventario();
+
+        dadosCarregados.inventario = true;
+        aplicarFiltrosInventario();
+
+    } catch (err) {
+        console.error('Erro ao carregar registro de inventário:', err);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #dc2626;">
+                <p style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">❌ Erro ao consultar dados de estoque</p>
+                <small style="color: #64748b;">${escapeHtml(err.message || 'Verifique sua conexão ou tente novamente.')}</small><br>
+                <button class="btn-primary" onclick="carregarRegistroInventario()" style="margin-top: 12px; font-size: 12px; padding: 6px 14px;">Tentar Novamente</button>
+            </div>
+        `;
+        dadosCarregados.inventario = false;
+    }
+}
+
+function configurarListenersInventario() {
+    if (listenersInventarioConfigurados) return;
+    listenersInventarioConfigurados = true;
+
+    const elSaldo = document.getElementById('inventarioFiltroSaldo');
+    const elCat = document.getElementById('inventarioFiltroCategoria');
+    const elProd = document.getElementById('inventarioFiltroProduto');
+    const elCod = document.getElementById('inventarioFiltroCodigoRef');
+    const elOrd = document.getElementById('inventarioOrdenacao');
+
+    if (elSaldo) elSaldo.addEventListener('change', aplicarFiltrosInventario);
+    if (elCat) elCat.addEventListener('change', aplicarFiltrosInventario);
+    if (elOrd) elOrd.addEventListener('change', () => {
+        const val = elOrd.value;
+        const [col, dir] = val.split('_');
+        inventarioOrdenacaoAtual = { coluna: col, direcao: dir };
+        aplicarFiltrosInventario();
+    });
+
+    let timeoutBusca = null;
+    const dispararBusca = () => {
+        clearTimeout(timeoutBusca);
+        timeoutBusca = setTimeout(aplicarFiltrosInventario, 250);
+    };
+    if (elProd) elProd.addEventListener('input', dispararBusca);
+    if (elCod) elCod.addEventListener('input', dispararBusca);
+}
+
+function aplicarFiltrosInventario() {
+    const container = document.getElementById('inventarioContainer');
+    if (!container) return;
+
+    const filtroSaldo = document.getElementById('inventarioFiltroSaldo')?.value || 'positivo';
+    const filtroCategoria = document.getElementById('inventarioFiltroCategoria')?.value || '';
+    const filtroProduto = (document.getElementById('inventarioFiltroProduto')?.value || '').trim().toLowerCase();
+    const filtroCodigoRef = (document.getElementById('inventarioFiltroCodigoRef')?.value || '').trim().toLowerCase();
+
+    // 1. Filtrar produtos
+    const produtosFiltrados = produtosInventarioRaw.filter(p => {
+        const saldo = Number(p.estoque) || 0;
+
+        // Filtro de Saldo
+        if (filtroSaldo === 'positivo' && saldo <= 0) return false;
+        if (filtroSaldo === 'zero' && saldo !== 0) return false;
+        if (filtroSaldo === 'negativo' && saldo >= 0) return false;
+        // 'todos' inclui qualquer saldo
+
+        // Filtro por Categoria
+        if (filtroCategoria && (p.categoria || '') !== filtroCategoria) return false;
+
+        // Filtro por Produto (Nome/Descrição)
+        if (filtroProduto) {
+            const nomeStr = (p.nome || '').toLowerCase();
+            const descStr = (p.descricao || '').toLowerCase();
+            if (!nomeStr.includes(filtroProduto) && !descStr.includes(filtroProduto)) {
+                return false;
+            }
+        }
+
+        // Filtro por Código ou Referência
+        if (filtroCodigoRef) {
+            const codStr = (p.codigo || '').toLowerCase();
+            const modStr = (p.modelo || '').toLowerCase();
+            const marStr = (p.marca || '').toLowerCase();
+            let barrasMatch = false;
+            if (Array.isArray(p.codigos_barras)) {
+                barrasMatch = p.codigos_barras.some(b => String(b).toLowerCase().includes(filtroCodigoRef));
+            } else if (p.codigos_barras) {
+                barrasMatch = String(p.codigos_barras).toLowerCase().includes(filtroCodigoRef);
+            }
+            if (!codStr.includes(filtroCodigoRef) && !modStr.includes(filtroCodigoRef) && !marStr.includes(filtroCodigoRef) && !barrasMatch) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    // 2. Mapear cálculos financeiros para cada produto
+    const itensCalculados = produtosFiltrados.map(p => {
+        const saldo = Number(p.estoque) || 0;
+        const custoUnit = Number(p.valor_compra) || 0;
+        const vendaUnit = Number(p.valor_venda) || 0;
+        const totalCusto = saldo * custoUnit;
+        const totalVenda = saldo * vendaUnit;
+        const lucroPotencial = totalVenda - totalCusto;
+        
+        let referencia = p.modelo ? (p.marca ? `${p.modelo} (${p.marca})` : p.modelo) : (p.marca || '-');
+        if (referencia === '-' && Array.isArray(p.codigos_barras) && p.codigos_barras.length > 0) {
+            referencia = p.codigos_barras[0];
+        }
+
+        return {
+            id: p.id,
+            codigo: p.codigo || '-',
+            nome: p.nome || 'Produto sem nome',
+            referencia: referencia,
+            categoria: p.categoria || 'Geral',
+            saldo: saldo,
+            custoUnit: custoUnit,
+            totalCusto: totalCusto,
+            vendaUnit: vendaUnit,
+            totalVenda: totalVenda,
+            lucroPotencial: lucroPotencial
+        };
+    });
+
+    // 3. Totais Consolidados (respeitando os filtros aplicados)
+    let totalQtd = 0;
+    let totalCustoGeral = 0;
+    let totalVendaGeral = 0;
+    let totalLucroGeral = 0;
+
+    itensCalculados.forEach(item => {
+        totalQtd += item.saldo;
+        totalCustoGeral += item.totalCusto;
+        totalVendaGeral += item.totalVenda;
+        totalLucroGeral += item.lucroPotencial;
+    });
+
+    const margemBrutaGeral = totalVendaGeral > 0 ? ((totalLucroGeral / totalVendaGeral) * 100).toFixed(1) : '0.0';
+
+    const formatarMoedaLocal = (valor) => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // 4. Atualizar Indicadores Financeiros no Topo (KPIs)
+    const elKpiCusto = document.getElementById('kpiInventarioTotalCusto');
+    const elKpiVenda = document.getElementById('kpiInventarioTotalVenda');
+    const elKpiLucro = document.getElementById('kpiInventarioLucroPotencial');
+    const elKpiQtd = document.getElementById('kpiInventarioQtdTotal');
+    const elTotalReg = document.getElementById('inventarioTotalRegistros');
+
+    if (elKpiCusto) elKpiCusto.textContent = formatarMoedaLocal(totalCustoGeral);
+    if (elKpiVenda) elKpiVenda.textContent = formatarMoedaLocal(totalVendaGeral);
+    if (elKpiLucro) {
+        elKpiLucro.textContent = formatarMoedaLocal(totalLucroGeral);
+        elKpiLucro.style.color = totalLucroGeral >= 0 ? '#10B981' : '#EF4444';
+        const labelLucro = document.getElementById('labelInventarioLucroPotencial');
+        if (labelLucro) labelLucro.innerHTML = `Lucro bruto potencial <span style="font-size: 11px; font-weight: 700; color: #6b7280; margin-left: 4px;">(${margemBrutaGeral}%)</span>`;
+    }
+    if (elKpiQtd) {
+        elKpiQtd.textContent = totalQtd.toLocaleString('pt-BR');
+        const labelQtd = document.getElementById('labelInventarioQtdTotal');
+        if (labelQtd) labelQtd.innerHTML = `Quantidade total de produtos <span style="font-size: 11px; font-weight: 700; color: #6b7280; margin-left: 4px;">(${itensCalculados.length} itens)</span>`;
+    }
+    if (elTotalReg) {
+        elTotalReg.textContent = `${itensCalculados.length} produto(s) listado(s)`;
+    }
+
+    // 5. Ordenação
+    const col = inventarioOrdenacaoAtual.coluna;
+    const dir = inventarioOrdenacaoAtual.direcao === 'desc' ? -1 : 1;
+
+    itensCalculados.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+
+        if (typeof valA === 'string') {
+            return dir * valA.localeCompare(valB, 'pt-BR');
+        }
+        return dir * ((Number(valA) || 0) - (Number(valB) || 0));
+    });
+
+    // 6. Armazenar para Exportação
+    const labelsSaldo = {
+        positivo: 'Saldo positivo (> 0)',
+        todos: 'Todos os produtos',
+        zero: 'Saldo zero (= 0)',
+        negativo: 'Saldo negativo (< 0)'
+    };
+    dadosExportacao.inventario = {
+        itens: itensCalculados,
+        totalQtd: totalQtd,
+        totalCusto: totalCustoGeral,
+        totalVenda: totalVendaGeral,
+        totalLucro: totalLucroGeral,
+        margemGeral: margemBrutaGeral,
+        filtroSaldoLabel: labelsSaldo[filtroSaldo] || filtroSaldo,
+        filtroCategoria: filtroCategoria || 'Todas as Categorias',
+        dataExportacao: new Date().toISOString()
+    };
+
+    // 7. Renderizar Tabela
+    if (itensCalculados.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: var(--gray); background: #f8fafc; border-radius: 8px; border: 1px dashed var(--border);">
+                <div style="font-size: 32px; margin-bottom: 8px;">📦</div>
+                <p style="font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 4px;">Nenhum produto encontrado</p>
+                <span style="font-size: 12px; color: var(--gray);">Tente ajustar o filtro de saldo ou termos de busca para visualizar os registros.</span>
+            </div>
+        `;
+        return;
+    }
+
+    const renderHeaderTh = (colunaKey, titulo, align = 'left') => {
+        const isAtiva = inventarioOrdenacaoAtual.coluna === colunaKey;
+        const setinha = isAtiva ? (inventarioOrdenacaoAtual.direcao === 'asc' ? ' ▲' : ' ▼') : '';
+        const bgAtivo = isAtiva ? 'background: rgba(255, 255, 255, 0.18);' : '';
+        return `
+            <th style="text-align: ${align}; cursor: pointer; user-select: none; ${bgAtivo}" onclick="ordenarInventarioPor('${colunaKey}')" title="Clique para ordenar por ${titulo}">
+                ${titulo}<span style="font-size: 10px;">${setinha}</span>
+            </th>
+        `;
+    };
+
+    let html = `
+        <table class="table-relatorio" style="min-width: 980px;">
+            <thead>
+                <tr>
+                    ${renderHeaderTh('codigo', 'Código', 'left')}
+                    ${renderHeaderTh('nome', 'Descrição do Produto', 'left')}
+                    ${renderHeaderTh('referencia', 'Referência', 'left')}
+                    ${renderHeaderTh('categoria', 'Grupo / Categoria', 'left')}
+                    ${renderHeaderTh('saldo', 'Saldo Atual', 'center')}
+                    ${renderHeaderTh('custoUnit', 'Custo Unit.', 'right')}
+                    ${renderHeaderTh('totalCusto', 'Valor Total Custo', 'right')}
+                    ${renderHeaderTh('vendaUnit', 'Preço Venda Unit.', 'right')}
+                    ${renderHeaderTh('totalVenda', 'Valor Total Venda', 'right')}
+                    ${renderHeaderTh('lucroPotencial', 'Lucro Potencial', 'right')}
+                </tr>
+            </thead>
+            <tbody>
+                ${itensCalculados.map(p => {
+                    let badgeSaldo;
+                    if (p.saldo > 0) {
+                        badgeSaldo = `<span class="badge-status-pago" style="font-size: 12px; padding: 2px 8px;">${p.saldo}</span>`;
+                    } else if (p.saldo === 0) {
+                        badgeSaldo = `<span style="background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 11px;">0</span>`;
+                    } else {
+                        badgeSaldo = `<span style="background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 11px;">${p.saldo}</span>`;
+                    }
+
+                    const corLucro = p.lucroPotencial >= 0 ? '#16a34a' : '#dc2626';
+
+                    return `
+                        <tr>
+                            <td style="font-family: monospace; font-weight: 600; color: #475569;">${escapeHtml(p.codigo)}</td>
+                            <td><strong style="color: #1e293b;">${escapeHtml(p.nome)}</strong></td>
+                            <td style="color: #64748b; font-size: 12px;">${escapeHtml(p.referencia)}</td>
+                            <td><span style="background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; border: 1px solid #e2e8f0;">${escapeHtml(p.categoria)}</span></td>
+                            <td style="text-align: center;">${badgeSaldo}</td>
+                            <td style="text-align: right; color: #475569;">${formatarMoedaLocal(p.custoUnit)}</td>
+                            <td style="text-align: right; font-weight: 600; color: #1e3a8a;">${formatarMoedaLocal(p.totalCusto)}</td>
+                            <td style="text-align: right; color: #475569;">${formatarMoedaLocal(p.vendaUnit)}</td>
+                            <td style="text-align: right; font-weight: 600; color: #047857;">${formatarMoedaLocal(p.totalVenda)}</td>
+                            <td style="text-align: right; font-weight: 700; color: ${corLucro};">${formatarMoedaLocal(p.lucroPotencial)}</td>
+                        </tr>
+                    `;
+                }).join('')}
+                <tr class="total-row" style="background: #f8fafc; font-size: 13.5px; border-top: 2px solid #cbd5e1;">
+                    <td colspan="4" style="text-align: right;"><strong>TOTAL GERAL (${itensCalculados.length} itens):</strong></td>
+                    <td style="text-align: center;"><strong style="font-size: 14px; color: #0f172a;">${totalQtd.toLocaleString('pt-BR')}</strong></td>
+                    <td style="text-align: right; color: #64748b;">-</td>
+                    <td style="text-align: right;"><strong style="color: #1e3a8a;">${formatarMoedaLocal(totalCustoGeral)}</strong></td>
+                    <td style="text-align: right; color: #64748b;">-</td>
+                    <td style="text-align: right;"><strong style="color: #047857;">${formatarMoedaLocal(totalVendaGeral)}</strong></td>
+                    <td style="text-align: right;"><strong style="color: ${totalLucroGeral >= 0 ? '#16a34a' : '#dc2626'};">${formatarMoedaLocal(totalLucroGeral)}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = html;
+}
+
+function ordenarInventarioPor(coluna) {
+    if (inventarioOrdenacaoAtual.coluna === coluna) {
+        inventarioOrdenacaoAtual.direcao = inventarioOrdenacaoAtual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        inventarioOrdenacaoAtual.coluna = coluna;
+        inventarioOrdenacaoAtual.direcao = (coluna === 'nome' || coluna === 'codigo' || coluna === 'categoria') ? 'asc' : 'desc';
+    }
+
+    const elOrd = document.getElementById('inventarioOrdenacao');
+    if (elOrd) {
+        const optionKey = `${inventarioOrdenacaoAtual.coluna}_${inventarioOrdenacaoAtual.direcao}`;
+        if (elOrd.querySelector(`option[value="${optionKey}"]`)) {
+            elOrd.value = optionKey;
+        }
+    }
+
+    aplicarFiltrosInventario();
+}
+
+function limparFiltrosInventario() {
+    const elSaldo = document.getElementById('inventarioFiltroSaldo');
+    const elCat = document.getElementById('inventarioFiltroCategoria');
+    const elProd = document.getElementById('inventarioFiltroProduto');
+    const elCod = document.getElementById('inventarioFiltroCodigoRef');
+    const elOrd = document.getElementById('inventarioOrdenacao');
+
+    if (elSaldo) elSaldo.value = 'positivo';
+    if (elCat) elCat.value = '';
+    if (elProd) elProd.value = '';
+    if (elCod) elCod.value = '';
+    if (elOrd) elOrd.value = 'nome_asc';
+
+    inventarioOrdenacaoAtual = { coluna: 'nome', direcao: 'asc' };
+    aplicarFiltrosInventario();
+}
+
+// =====================================================
 // EXPORTAÇÕES
 // =====================================================
 
@@ -2586,6 +2979,54 @@ function exportarExcel(tipo) {
             dados.push(['TOTAL GERAL', '', '', '', '', `R$ ${despExp.totalDespesasGeral.toFixed(2)}`]);
             nomeArquivo = `relatorio_despesas_comparativo_${new Date().toISOString().split('T')[0]}`;
             break;
+
+        case 'inventario':
+            if (!dadosExportacao.inventario || !dadosExportacao.inventario.itens || dadosExportacao.inventario.itens.length === 0) {
+                mostrarNotificacao('Nenhum produto no registro de inventário para exportar!', 'warning');
+                return;
+            }
+            const invExp = dadosExportacao.inventario;
+            dados = [
+                ['RELATÓRIO DE REGISTRO DE INVENTÁRIO'],
+                [`Filtro de Saldo: ${invExp.filtroSaldoLabel}`],
+                [`Categoria: ${invExp.filtroCategoria}`],
+                [`Data de Emissão: ${new Date().toLocaleString('pt-BR')}`],
+                [''],
+                ['Código', 'Descrição do Produto', 'Referência', 'Grupo / Categoria', 'Saldo Atual', 'Custo Unitário (R$)', 'Valor Total Custo (R$)', 'Preço Venda Unitário (R$)', 'Valor Total Venda (R$)', 'Lucro Bruto Potencial (R$)']
+            ];
+
+            invExp.itens.forEach(p => {
+                dados.push([
+                    `"${String(p.codigo || '').replace(/"/g, '""')}"`,
+                    `"${String(p.nome || '').replace(/"/g, '""')}"`,
+                    `"${String(p.referencia || '').replace(/"/g, '""')}"`,
+                    `"${String(p.categoria || '').replace(/"/g, '""')}"`,
+                    p.saldo,
+                    p.custoUnit.toFixed(2).replace('.', ','),
+                    p.totalCusto.toFixed(2).replace('.', ','),
+                    p.vendaUnit.toFixed(2).replace('.', ','),
+                    p.totalVenda.toFixed(2).replace('.', ','),
+                    p.lucroPotencial.toFixed(2).replace('.', ',')
+                ]);
+            });
+
+            dados.push(['']);
+            dados.push([
+                'TOTAL GERAL',
+                `${invExp.itens.length} produto(s)`,
+                '',
+                '',
+                invExp.totalQtd,
+                '',
+                invExp.totalCusto.toFixed(2).replace('.', ','),
+                '',
+                invExp.totalVenda.toFixed(2).replace('.', ','),
+                invExp.totalLucro.toFixed(2).replace('.', ',')
+            ]);
+            dados.push(['Margem Bruta Potencial', `${invExp.margemGeral}%`]);
+
+            nomeArquivo = `registro_inventario_${new Date().toISOString().split('T')[0]}`;
+            break;
             
         default:
             mostrarNotificacao('Tipo de exportação inválido', 'error');
@@ -2725,6 +3166,46 @@ function exportarPDF(tipo) {
             titulo = 'Relatório de Despesas & Balanço Financeiro';
             const dExp = dadosExportacao.despesas;
             subtitulo = `Período: ${formatarDataISO(dExp?.dataInicio) || 'Início'} a ${formatarDataISO(dExp?.dataFim) || 'Fim'} | Faturamento: R$ ${(dExp?.totalFaturamento || 0).toFixed(2)} | Despesas: R$ ${(dExp?.totalDespesasGeral || 0).toFixed(2)} | Saldo: R$ ${(dExp?.saldoRealizado || 0).toFixed(2)}`;
+            break;
+
+        case 'inventario':
+            if (!dadosExportacao.inventario || !dadosExportacao.inventario.itens || dadosExportacao.inventario.itens.length === 0) {
+                mostrarNotificacao('Nenhum dado no registro de inventário para exportar!', 'warning');
+                return;
+            }
+            const invPDF = dadosExportacao.inventario;
+            const tabelaInvHtml = document.getElementById('inventarioContainer')?.innerHTML || '';
+            const fmtMoedaPDF = (valor) => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const kpisInvHtml = `
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; text-align: center;">
+                    <div style="padding: 10px 8px; border: 1px solid #e2e8f0; border-top: 3px solid #2563EB; border-radius: 6px; background: #f8fafc;">
+                        <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Total em Estoque (Custo)</div>
+                        <div style="font-size: 15px; font-weight: bold; color: #1e3a8a; margin-top: 3px;">${fmtMoedaPDF(invPDF.totalCusto)}</div>
+                    </div>
+                    <div style="padding: 10px 8px; border: 1px solid #e2e8f0; border-top: 3px solid #10B981; border-radius: 6px; background: #f8fafc;">
+                        <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Total em Venda</div>
+                        <div style="font-size: 15px; font-weight: bold; color: #047857; margin-top: 3px;">${fmtMoedaPDF(invPDF.totalVenda)}</div>
+                    </div>
+                    <div style="padding: 10px 8px; border: 1px solid #e2e8f0; border-top: 3px solid #8B5CF6; border-radius: 6px; background: #f8fafc;">
+                        <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Lucro Bruto Potencial</div>
+                        <div style="font-size: 15px; font-weight: bold; color: #6d28d9; margin-top: 3px;">${fmtMoedaPDF(invPDF.totalLucro)} (${invPDF.margemGeral}%)</div>
+                    </div>
+                    <div style="padding: 10px 8px; border: 1px solid #e2e8f0; border-top: 3px solid #F59E0B; border-radius: 6px; background: #f8fafc;">
+                        <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Quantidade em Estoque</div>
+                        <div style="font-size: 15px; font-weight: bold; color: #b45309; margin-top: 3px;">${invPDF.totalQtd.toLocaleString('pt-BR')} un. (${invPDF.itens.length} itens)</div>
+                    </div>
+                </div>
+            `;
+            container = {
+                innerHTML: `
+                    <div>
+                        ${kpisInvHtml}
+                        ${tabelaInvHtml}
+                    </div>
+                `
+            };
+            titulo = 'Registro de Inventário de Estoque';
+            subtitulo = `Filtro de Saldo: ${invPDF.filtroSaldoLabel} | Categoria: ${invPDF.filtroCategoria} | Emitido em: ${new Date().toLocaleString('pt-BR')}`;
             break;
 
         default:
@@ -3006,6 +3487,10 @@ window.carregarVendasProduto = carregarVendasProduto;
 window.carregarRelatorioLucro = carregarRelatorioLucro;
 window.carregarRelatorioDescontos = carregarRelatorioDescontos;
 window.carregarRelatorioDespesas = carregarRelatorioDespesas;
+window.carregarRegistroInventario = carregarRegistroInventario;
+window.aplicarFiltrosInventario = aplicarFiltrosInventario;
+window.ordenarInventarioPor = ordenarInventarioPor;
+window.limparFiltrosInventario = limparFiltrosInventario;
 window.alternarVisaoDesconto = alternarVisaoDesconto;
 window.exportarExcel = exportarExcel;
 window.exportarPDF = exportarPDF;
