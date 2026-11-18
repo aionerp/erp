@@ -2413,13 +2413,18 @@ async function carregarRegistroInventario() {
 
         const { data: produtos, error } = await supabaseClient
             .from('produtos')
-            .select('id, codigo, nome, modelo, marca, categoria, valor_compra, valor_venda, estoque, ativo, tipo, codigos_barras')
+            .select('id, codigo, nome, modelo, marca, categoria, valor_compra, valor_venda, estoque, estoque_total, ativo, tipo, codigos_barras')
             .order('nome', { ascending: true });
 
         if (error) throw error;
 
         // Filtrar apenas produtos físicos (exclui serviços que não possuem saldo físico de estoque)
-        produtosInventarioRaw = (produtos || []).filter(p => p.tipo !== 'servico');
+        produtosInventarioRaw = (produtos || []).filter(p => {
+            if (p.tipo === 'servico') return false;
+            // Se o produto for explicitamente serviço e não tiver custo, não compõe inventário físico
+            if ((p.nome || '').trim().toLowerCase() === 'serviço' && (!p.valor_compra || Number(p.valor_compra) === 0)) return false;
+            return true;
+        });
 
         // Preencher select de categorias dinamicamente
         const selCategoria = document.getElementById('inventarioFiltroCategoria');
@@ -2497,9 +2502,20 @@ function aplicarFiltrosInventario() {
     const filtroProduto = (document.getElementById('inventarioFiltroProduto')?.value || '').trim().toLowerCase();
     const filtroCodigoRef = (document.getElementById('inventarioFiltroCodigoRef')?.value || '').trim().toLowerCase();
 
+    // Helper resiliente para obter o saldo real (suporta estoque_total e estoque)
+    const obterSaldoProd = (p) => {
+        if (p.estoque_total !== null && p.estoque_total !== undefined && p.estoque_total !== 0) {
+            return Number(p.estoque_total);
+        }
+        if (p.estoque !== null && p.estoque !== undefined) {
+            return Number(p.estoque);
+        }
+        return Number(p.estoque_total) || 0;
+    };
+
     // 1. Filtrar produtos
     const produtosFiltrados = produtosInventarioRaw.filter(p => {
-        const saldo = Number(p.estoque) || 0;
+        const saldo = obterSaldoProd(p);
 
         // Filtro de Saldo
         if (filtroSaldo === 'positivo' && saldo <= 0) return false;
@@ -2540,7 +2556,7 @@ function aplicarFiltrosInventario() {
 
     // 2. Mapear cálculos financeiros para cada produto
     const itensCalculados = produtosFiltrados.map(p => {
-        const saldo = Number(p.estoque) || 0;
+        const saldo = obterSaldoProd(p);
         const custoUnit = Number(p.valor_compra) || 0;
         const vendaUnit = Number(p.valor_venda) || 0;
         const totalCusto = saldo * custoUnit;

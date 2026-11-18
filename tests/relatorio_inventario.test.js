@@ -11,10 +11,21 @@ function calcularInventario(produtos, filtros = {}) {
         filtroCodigoRef = ''
     } = filtros;
 
+    const obterSaldo = (p) => {
+        if (p.estoque_total !== null && p.estoque_total !== undefined && p.estoque_total !== 0) {
+            return Number(p.estoque_total);
+        }
+        if (p.estoque !== null && p.estoque !== undefined) {
+            return Number(p.estoque);
+        }
+        return Number(p.estoque_total) || 0;
+    };
+
     const filtrados = produtos.filter(p => {
         if (p.tipo === 'servico') return false;
+        if ((p.nome || '').trim().toLowerCase() === 'serviço' && (!p.valor_compra || Number(p.valor_compra) === 0)) return false;
 
-        const saldo = Number(p.estoque) || 0;
+        const saldo = obterSaldo(p);
         if (filtroSaldo === 'positivo' && saldo <= 0) return false;
         if (filtroSaldo === 'zero' && saldo !== 0) return false;
         if (filtroSaldo === 'negativo' && saldo >= 0) return false;
@@ -41,7 +52,7 @@ function calcularInventario(produtos, filtros = {}) {
     });
 
     const itens = filtrados.map(p => {
-        const saldo = Number(p.estoque) || 0;
+        const saldo = obterSaldo(p);
         const custoUnit = Number(p.valor_compra) || 0;
         const vendaUnit = Number(p.valor_venda) || 0;
         const totalCusto = saldo * custoUnit;
@@ -216,5 +227,26 @@ test('Relatório Registro de Inventário - Cálculos e Regras de Negócio', asyn
         assert.equal(pneu.totalVenda, 1500.00); // 10 * 150
         assert.equal(pneu.lucroPotencial, 700.00); // 1500 - 800
         assert.equal(pneu.referencia, 'Levorin (Matrix)');
+    });
+
+    await t.test('9. Suporte a estoque_total quando coluna estoque for 0 (caso real MarceloMotos)', () => {
+        const prods = [
+            {
+                codigo: 'MOTO01',
+                nome: 'Vela de Ignição',
+                estoque: 0,
+                estoque_total: 5,
+                valor_compra: 10.00,
+                valor_venda: 25.00,
+                tipo: 'produto'
+            }
+        ];
+        const res = calcularInventario(prods, { filtroSaldo: 'positivo' });
+        assert.equal(res.itens.length, 1);
+        assert.equal(res.itens[0].saldo, 5);
+        assert.equal(res.totais.totalQtd, 5);
+        assert.equal(res.totais.totalCusto, 50.00);
+        assert.equal(res.totais.totalVenda, 125.00);
+        assert.equal(res.totais.totalLucro, 75.00);
     });
 });
