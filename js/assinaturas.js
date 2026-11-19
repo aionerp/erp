@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    if (!verificarPermissao('saidas', 'ver') && !verificarPermissao('produtos', 'ver')) {
+    if (!verificarPermissao('assinaturas', 'ver')) {
         document.querySelector('.content').innerHTML = `
             <div style="text-align: center; padding: 50px;">
                 <h2>🔒 Acesso Negado</h2>
@@ -916,6 +916,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btnNovaAssinatura')?.addEventListener('click', () => {
+        if (!verificarPermissao('assinaturas', 'criar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para cadastrar assinaturas.', 'error');
+            return;
+        }
+
         document.getElementById('modalAssinaturaTitle').textContent = 'Nova Assinatura Recorrente';
         document.getElementById('assinaturaForm').reset();
         document.getElementById('assinaturaId').value = '';
@@ -931,6 +936,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.editarAssinatura = (id) => {
+        if (!verificarPermissao('assinaturas', 'editar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para editar assinaturas.', 'error');
+            return;
+        }
+
         const item = assinaturas.find(a => a.id === id);
         if (!item) return;
 
@@ -950,6 +960,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.excluirAssinatura = async (id) => {
+        if (!verificarPermissao('assinaturas', 'excluir')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para excluir assinaturas.', 'error');
+            return;
+        }
+
         if (!confirm('Tem certeza que deseja excluir esta assinatura recorrente?')) return;
 
         try {

@@ -8,6 +8,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('mesas', 'ver')) {
+        const contentEl = document.querySelector('.content') || document.querySelector('.main-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>🔒 Acesso Negado</h2>
+                    <p>Você não tem permissão para acessar Comandas e Mesas.</p>
+                    <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Início</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
     let mesas = [];
     let listaProdutos = [];
 
@@ -108,6 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // CRIAR MESA / COMANDA
     // =====================================================
     async function salvarMesa() {
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('mesas', 'criar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para cadastrar comandas/mesas.', 'error');
+            return;
+        }
+
         const numero = document.getElementById('numero').value.trim();
         const tipo = document.getElementById('tipo').value;
 
@@ -530,6 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Excluir Mesa/Comanda/Serviço
     window.excluirMesa = async (id, numero) => {
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('mesas', 'fechar') && !verificarPermissao('mesas', 'excluir')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para excluir ou encerrar comandas.', 'error');
+            return;
+        }
+
         if (!confirm(`Deseja realmente excluir a comanda/mesa "${numero}"?`)) return;
 
         try {

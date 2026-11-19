@@ -8,6 +8,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('agendamentos', 'ver')) {
+        const contentEl = document.querySelector('.content') || document.querySelector('.main-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>🔒 Acesso Negado</h2>
+                    <p>Você não tem permissão para acessar a Agenda e Atendimentos.</p>
+                    <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Início</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
     // =====================================================
     // ESTADO GLOBAL DO MÓDULO
     // =====================================================
@@ -1005,6 +1019,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 15. SALVAR AGENDAMENTO (CREATE / UPDATE)
     // =====================================================
     async function salvarAgendamentoMaster() {
+        const acaoNecessaria = currentAppointmentId ? 'editar' : 'criar';
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('agendamentos', acaoNecessaria)) {
+            mostrarNotificacao(`Acesso negado: Você não tem permissão para ${acaoNecessaria === 'editar' ? 'alterar' : 'criar'} agendamentos.`, 'error');
+            return;
+        }
+
         const clienteId = parseInt(document.getElementById('modalClienteId').value);
         const dataStr = document.getElementById('modalData').value;
         const horaInicioStr = document.getElementById('modalHoraInicio').value;
@@ -1872,6 +1892,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnExcluirOuCancelarAtendimento')?.addEventListener('click', () => {
         if (!currentAppointmentId) return;
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('agendamentos', 'excluir')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para cancelar agendamentos.', 'error');
+            return;
+        }
         if (confirm('Tem certeza de que deseja cancelar este agendamento?')) {
             window.transicionarStatusAgendamento(currentAppointmentId, 'cancelado');
         }

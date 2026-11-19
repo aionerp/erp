@@ -9,6 +9,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('fiado', 'ver')) {
+        const contentEl = document.querySelector('.content') || document.querySelector('.main-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>🔒 Acesso Negado</h2>
+                    <p>Você não tem permissão para acessar o Fiado e Contas a Receber.</p>
+                    <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Início</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
     const userNameEl = document.getElementById('userName');
     const userPerfilEl = document.getElementById('userPerfil');
     if (userNameEl) userNameEl.textContent = usuario.nome || 'Usuário';
@@ -1072,6 +1086,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 17. Confirmar Recebimento de Pagamento
     document.getElementById('btnConfirmarPagamento')?.addEventListener('click', async () => {
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('fiado', 'receber')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para receber pagamentos de fiado.', 'error');
+            return;
+        }
+
         const btn = document.getElementById('btnConfirmarPagamento');
         if (!contaSelecionadaParaAcao) return;
 
@@ -1632,6 +1651,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnCancelarEstorno')?.addEventListener('click', fecharModalEstorno);
 
     document.getElementById('btnConfirmarEstorno')?.addEventListener('click', async () => {
+        if (typeof verificarPermissao === 'function' && !verificarPermissao('fiado', 'cancelar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para cancelar ou estornar contas fiadas.', 'error');
+            return;
+        }
+
         if (!estornoInfo) return;
         const motivo = document.getElementById('estornoMotivo')?.value?.trim();
         if (!motivo) {

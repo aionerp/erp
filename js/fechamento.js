@@ -29,6 +29,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'index.html';
         return;
     }
+
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('fechamento', 'ver')) {
+        const contentEl = document.querySelector('.content') || document.querySelector('.main-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>🔒 Acesso Negado</h2>
+                    <p>Você não tem permissão para acessar o Fechamento de Caixa.</p>
+                    <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Início</button>
+                </div>
+            `;
+        }
+        return;
+    }
     
     // Inicializar controles e listeners
     await inicializarPagina();
@@ -159,6 +173,11 @@ async function exibirCaixaFechado() {
 }
 
 async function abrirCaixa() {
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('fechamento', 'abrir')) {
+        mostrarNotificacao('Acesso negado: Você não tem permissão para abrir o caixa.', 'error');
+        return;
+    }
+
     const saldoInicialInput = document.getElementById('saldoInicial');
     const saldoInicial = parseFloat(saldoInicialInput.value) || 0;
     
@@ -587,6 +606,11 @@ function renderizarDespesas(despesas) {
 }
 
 async function fecharCaixa() {
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('fechamento', 'fechar')) {
+        mostrarNotificacao('Acesso negado: Você não tem permissão para fechar o caixa.', 'error');
+        return;
+    }
+
     const saldoFinalInput = document.getElementById('saldoFinal');
     const saldoFinal = parseFloat(saldoFinalInput.value) || 0;
     

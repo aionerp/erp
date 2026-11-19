@@ -8,12 +8,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     
-    // Verificar permissões (usando as permissões de relatorios ou despesas se comissao não tiver perfil exclusivo)
-    if (!temPermissao('relatorios', 'ver') && !temPermissao('despesas', 'ver')) {
+    // Verificar permissões específicas do módulo de comissões
+    if (!temPermissao('comissoes', 'ver')) {
         document.querySelector('.content').innerHTML = `
             <div style="text-align: center; padding: 50px;">
                 <h2>🔒 Acesso Negado</h2>
-                <p>Você não tem permissão para acessar esta página.</p>
+                <p>Você não tem permissão para acessar o módulo de Comissões a Pagar.</p>
                 <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Dashboard</button>
             </div>
         `;
@@ -379,6 +379,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Efetuar pagamento de comissão
     window.pagarComissao = async (vendaId, colabName, comissaoValor) => {
+        if (!temPermissao('comissoes', 'pagar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para pagar comissões!', 'error');
+            return;
+        }
+
         if (!confirm(`Deseja marcar a comissão de R$ ${comissaoValor.toFixed(2)} do colaborador "${colabName}" como PAGA?\n\nIsso gerará automaticamente um lançamento nas Despesas.`)) {
             return;
         }
@@ -458,6 +463,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Pagar comissões selecionadas em lote
     document.getElementById('btnPagarSelecionados')?.addEventListener('click', async () => {
+        if (!temPermissao('comissoes', 'pagar')) {
+            mostrarNotificacao('Acesso negado: Você não tem permissão para pagar comissões!', 'error');
+            return;
+        }
+
         const checkboxes = document.querySelectorAll('.comissao-checkbox:checked');
         if (checkboxes.length === 0) return;
         

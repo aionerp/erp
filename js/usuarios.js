@@ -67,99 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    const PERMISSOES_POR_PERFIL = {
-        admin: {
-            dashboard: { ver: true },
-            clientes: { ver: true, criar: true, editar: true, excluir: true },
-            produtos: { ver: true, criar: true, editar: true, excluir: true },
-            categorias: { ver: true, criar: true, editar: true, excluir: true },
-            estoque: { ver: true, ajustar: true },
-            entradas: { ver: true, criar: true, excluir: true },
-            saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
-            fornecedores: { ver: true, criar: true, editar: true, excluir: true },
-            ordens_servico: { ver: true, criar: true, editar: true, excluir: true },
-            colaboradores: { ver: true, criar: true, editar: true, excluir: true },
-            financeiro: { ver: true, criar: true, editar: true, excluir: true },
-            relatorios: { ver: true, exportar: true },
-            usuarios: { ver: true, criar: true, editar: true, excluir: true }
-        },
-        gerente: {
-            dashboard: { ver: true },
-            clientes: { ver: true, criar: true, editar: true, excluir: false },
-            produtos: { ver: true, criar: true, editar: true, excluir: false },
-            categorias: { ver: true, criar: false, editar: false, excluir: false },
-            estoque: { ver: true, ajustar: true },
-            entradas: { ver: true, criar: true, excluir: false },
-            saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
-            fornecedores: { ver: true, criar: true, editar: true, excluir: false },
-            ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
-            colaboradores: { ver: true, criar: true, editar: true, excluir: false },
-            financeiro: { ver: true, criar: true, editar: true, excluir: false },
-            relatorios: { ver: true, exportar: true },
-            usuarios: { ver: false, criar: false, editar: false, excluir: false }
-        },
-        vendedor: {
-            dashboard: { ver: true },
-            clientes: { ver: true, criar: true, editar: true, excluir: false },
-            produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false, criar: false, editar: false, excluir: false },
-            estoque: { ver: true, ajustar: false },
-            entradas: { ver: false, criar: false, excluir: false },
-            saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
-            ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
-            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
-            financeiro: { ver: false, criar: false, editar: false, excluir: false },
-            relatorios: { ver: false, exportar: false },
-            usuarios: { ver: false, criar: false, editar: false, excluir: false }
-        },
-        tecnico: {
-            dashboard: { ver: true },
-            clientes: { ver: true, criar: true, editar: true, excluir: false },
-            produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false, criar: false, editar: false, excluir: false },
-            estoque: { ver: false, ajustar: false },
-            entradas: { ver: false, criar: false, excluir: false },
-            saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
-            ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
-            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
-            financeiro: { ver: false, criar: false, editar: false, excluir: false },
-            relatorios: { ver: false, exportar: false },
-            usuarios: { ver: false, criar: false, editar: false, excluir: false }
-        },
-        basico: {
-            dashboard: { ver: false },
-            clientes: { ver: true, criar: false, editar: false, excluir: false },
-            produtos: { ver: true, criar: false, editar: false, excluir: false },
-            categorias: { ver: false, criar: false, editar: false, excluir: false },
-            estoque: { ver: false, ajustar: false },
-            entradas: { ver: false, criar: false, excluir: false },
-            saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-            fornecedores: { ver: false, criar: false, editar: false, excluir: false },
-            ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
-            colaboradores: { ver: false, criar: false, editar: false, excluir: false },
-            financeiro: { ver: false, criar: false, editar: false, excluir: false },
-            relatorios: { ver: false, exportar: false },
-            usuarios: { ver: false, criar: false, editar: false, excluir: false }
-        }
-    };
+    // Schema e perfis são providos centralmente por window.AionPermissoes (definido em config.js)
+    const SCHEMA_PERMISSOES = window.AionPermissoes?.SCHEMA || {};
+    const PERMISSOES_POR_PERFIL = window.AionPermissoes?.PERFIS_PADRAO || {};
 
-    const LISTA_TODAS_PERMISSOES = {
-        dashboard: { ver: false },
-        clientes: { ver: false, criar: false, editar: false, excluir: false },
-        produtos: { ver: false, criar: false, editar: false, excluir: false },
-        categorias: { ver: false, criar: false, editar: false, excluir: false },
-        estoque: { ver: false, ajustar: false },
-        entradas: { ver: false, criar: false, excluir: false },
-        saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-        fornecedores: { ver: false, criar: false, editar: false, excluir: false },
-        ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
-        colaboradores: { ver: false, criar: false, editar: false, excluir: false },
-        financeiro: { ver: false, criar: false, editar: false, excluir: false },
-        relatorios: { ver: false, exportar: false },
-        usuarios: { ver: false, criar: false, editar: false, excluir: false }
-    };
     
     // =====================================================
     // CARREGAR USUÁRIOS
@@ -245,84 +156,159 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function carregarPermissoes(perfil, customPermissoes = null) {
         const container = document.getElementById('permissoesContainer');
-        const schemaPermissoes = LISTA_TODAS_PERMISSOES;
-        
-        const labels = {
-            dashboard: '📊 Dashboard',
-            clientes: '👥 Clientes',
-            produtos: '📦 Serviços & Produtos',
-            categorias: '🏷️ Categorias',
-            estoque: '💾 Estoque',
-            entradas: '📥 Entradas',
-            saidas: '💳 PDV / Vendas',
-            fornecedores: '🏭 Fornecedores',
-            ordens_servico: '🔧 OS',
-            colaboradores: '👥 Colaboradores',
-            financeiro: '💸 Financeiro / Despesas',
-            relatorios: '📈 Relatórios',
-            usuarios: '👤 Usuários'
-        };
-        
-        container.innerHTML = Object.entries(schemaPermissoes).map(([modulo, permissoesModulo]) => {
-            const permissoesHtml = Object.entries(permissoesModulo).map(([acao, _]) => {
-                // Obter o valor padrão do perfil
-                const perfilDefaultVal = PERMISSOES_POR_PERFIL[perfil]?.[modulo]?.[acao] !== undefined
-                    ? PERMISSOES_POR_PERFIL[perfil][modulo][acao]
-                    : (PERMISSOES_POR_PERFIL.basico[modulo]?.[acao] || false);
+        if (!container) return;
 
-                // Priorizar valor customizado se existir
-                const valor = (customPermissoes && customPermissoes[modulo] && customPermissoes[modulo][acao] !== undefined)
-                    ? customPermissoes[modulo][acao]
-                    : perfilDefaultVal;
+        const schema = window.AionPermissoes?.SCHEMA || {};
+        const perfisPadrao = window.AionPermissoes?.PERFIS_PADRAO || {};
+        const perfilDefaults = perfisPadrao[perfil] || perfisPadrao.basico || {};
 
-                const acaoLabels = {
-                    ver: 'Visualizar',
-                    criar: 'Cadastrar / Criar',
-                    editar: 'Editar',
-                    excluir: 'Excluir / Deletar',
-                    cancelar: 'Cancelar Venda',
-                    ajustar: 'Ajustar Estoque',
-                    exportar: 'Exportar Relatórios',
-                    ver_vendas_outros: 'Visualizar Venda de Outros Usuários'
-                };
-                
-                // Rótulos específicos para tornar intuitivo
-                let labelText = acaoLabels[acao] || acao.charAt(0).toUpperCase() + acao.slice(1);
-                if (modulo === 'entradas') {
-                    if (acao === 'criar') labelText = 'Permite dar Entrada (Compras)';
-                    if (acao === 'excluir') labelText = 'Cancela Entrada';
-                    if (acao === 'ver') labelText = 'Visualiza Relatório de Compras / Entradas';
-                } else if (modulo === 'saidas') {
-                    if (acao === 'criar') labelText = 'Permite realizar Vendas';
-                    if (acao === 'cancelar') labelText = 'Cancela Vendas';
-                    if (acao === 'ver') labelText = 'Visualiza Relatório de Vendas / PDV';
+        // Agrupar módulos por categoria funcional
+        const grupos = {};
+        for (const [moduloKey, moduloMeta] of Object.entries(schema)) {
+            const grupoNome = moduloMeta.grupo || 'Outros';
+            if (!grupos[grupoNome]) grupos[grupoNome] = [];
+            grupos[grupoNome].push({ modulo: moduloKey, ...moduloMeta });
+        }
+
+        let html = '';
+        for (const [grupoNome, modulosDoGrupo] of Object.entries(grupos)) {
+            html += `
+                <div class="permissoes-grupo-wrapper" data-grupo="${grupoNome.toLowerCase()}">
+                    <div class="permissoes-grupo-header">
+                        <span>📁 ${grupoNome}</span>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="btn-toggle-card" onclick="window.toggleGrupoPermissoes('${grupoNome}', true)">Marcar Grupo</button>
+                            <span style="color:#cbd5e1">|</span>
+                            <button type="button" class="btn-toggle-card" onclick="window.toggleGrupoPermissoes('${grupoNome}', false)">Desmarcar Grupo</button>
+                        </div>
+                    </div>
+                    <div class="permissoes-grupo-cards">
+            `;
+
+            for (const mod of modulosDoGrupo) {
+                const moduloKey = mod.modulo;
+                const acoes = mod.acoes || ['ver'];
+                const labelModulo = mod.label || moduloKey;
+
+                let acoesHtml = '';
+                for (const acao of acoes) {
+                    // Valor padrão do perfil
+                    const perfilVal = perfilDefaults[moduloKey]?.[acao] !== undefined
+                        ? perfilDefaults[moduloKey][acao]
+                        : false;
+
+                    // Valor customizado se fornecido (com fallback de herança)
+                    let valor = perfilVal;
+                    if (customPermissoes && customPermissoes[moduloKey] && customPermissoes[moduloKey][acao] !== undefined) {
+                        valor = customPermissoes[moduloKey][acao];
+                    } else if (customPermissoes && mod.fallback && customPermissoes[mod.fallback] && customPermissoes[mod.fallback][acao] !== undefined) {
+                        valor = customPermissoes[mod.fallback][acao];
+                    } else if (customPermissoes && moduloKey === 'despesas' && customPermissoes.financeiro && customPermissoes.financeiro[acao] !== undefined) {
+                        valor = customPermissoes.financeiro[acao];
+                    } else if (customPermissoes && moduloKey === 'fiado' && customPermissoes.contas_receber && customPermissoes.contas_receber[acao] !== undefined) {
+                        valor = customPermissoes.contas_receber[acao];
+                    }
+
+                    const acaoDesc = mod.acaoLabels?.[acao] || acao.charAt(0).toUpperCase() + acao.slice(1);
+
+                    acoesHtml += `
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: normal; cursor: pointer; font-size: 12.5px;">
+                            <input type="checkbox" 
+                                   data-modulo="${moduloKey}" 
+                                   data-acao="${acao}"
+                                   data-grupo="${grupoNome}"
+                                   ${valor ? 'checked' : ''} 
+                                   class="checkbox-permissao"
+                            >
+                            <span>${acaoDesc}</span>
+                        </label>
+                    `;
                 }
-                
-                return `
-                <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: normal; cursor: pointer; font-size: 13px;">
-                    <input type="checkbox" 
-                           data-modulo="${modulo}" 
-                           data-acao="${acao}"
-                           ${valor ? 'checked' : ''} 
-                           class="checkbox-permissao"
-                    >
-                    ${labelText}
-                </label>
+
+                html += `
+                    <div class="permissoes-card" data-modulo="${moduloKey}" data-grupo="${grupoNome.toLowerCase()}">
+                        <div class="permissoes-card-header">
+                            <h4>${labelModulo}</h4>
+                            <div style="display:flex; gap:6px;">
+                                <button type="button" class="btn-toggle-card" onclick="window.toggleCardPermissoes('${moduloKey}', true)">Todos</button>
+                                <span style="color:#cbd5e1">|</span>
+                                <button type="button" class="btn-toggle-card" onclick="window.toggleCardPermissoes('${moduloKey}', false)">Nenhum</button>
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            ${acoesHtml}
+                        </div>
+                    </div>
                 `;
-            }).join('');
-            
-            return `
-                <div class="permissoes-card" style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; color: #333; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">
-                        ${labels[modulo] || modulo}
-                    </h4>
-                    <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 5px;">
-                        ${permissoesHtml}
+            }
+
+            html += `
                     </div>
                 </div>
             `;
-        }).join('');
+        }
+
+        container.innerHTML = html;
+        aplicarFiltroPermissoes();
     }
+
+    // Toggle de todas as permissões de um card específico
+    window.toggleCardPermissoes = (modulo, checked) => {
+        const checkboxes = document.querySelectorAll(`.checkbox-permissao[data-modulo="${modulo}"]`);
+        checkboxes.forEach(cb => { cb.checked = checked; });
+    };
+
+    // Toggle de todas as permissões de um grupo funcional
+    window.toggleGrupoPermissoes = (grupo, checked) => {
+        const checkboxes = document.querySelectorAll(`.checkbox-permissao[data-grupo="${grupo}"]`);
+        checkboxes.forEach(cb => { cb.checked = checked; });
+    };
+
+    // Marcar / desmarcar todas globalmente
+    window.marcarTodasPermissoes = (checked) => {
+        const checkboxes = document.querySelectorAll('.checkbox-permissao');
+        checkboxes.forEach(cb => { cb.checked = checked; });
+    };
+
+    // Restaurar padrões do perfil atualmente selecionado
+    window.restaurarPadraoPerfil = () => {
+        const perfilSel = document.getElementById('perfil')?.value || 'basico';
+        carregarPermissoes(perfilSel);
+    };
+
+    // Filtro interativo de busca nas permissões
+    function aplicarFiltroPermissoes() {
+        const query = (document.getElementById('filtroPermissoesInput')?.value || '').toLowerCase().trim();
+        const cards = document.querySelectorAll('.permissoes-card');
+        const grupos = document.querySelectorAll('.permissoes-grupo-wrapper');
+
+        if (!query) {
+            cards.forEach(c => c.style.display = '');
+            grupos.forEach(g => g.style.display = '');
+            return;
+        }
+
+        grupos.forEach(grupo => {
+            let temCardVisivel = false;
+            const cardsDoGrupo = grupo.querySelectorAll('.permissoes-card');
+            cardsDoGrupo.forEach(card => {
+                const texto = card.textContent.toLowerCase();
+                const modulo = (card.getAttribute('data-modulo') || '').toLowerCase();
+                if (texto.includes(query) || modulo.includes(query)) {
+                    card.style.display = '';
+                    temCardVisivel = true;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            grupo.style.display = temCardVisivel ? '' : 'none';
+        });
+    }
+
+    document.getElementById('filtroPermissoesInput')?.addEventListener('input', aplicarFiltroPermissoes);
+    document.getElementById('btnMarcarTodasPermissoes')?.addEventListener('click', () => window.marcarTodasPermissoes(true));
+    document.getElementById('btnDesmarcarTodasPermissoes')?.addEventListener('click', () => window.marcarTodasPermissoes(false));
+    document.getElementById('btnRestaurarPadraoPerfil')?.addEventListener('click', window.restaurarPadraoPerfil);
     
     document.getElementById('perfil')?.addEventListener('change', (e) => {
         carregarPermissoes(e.target.value);
@@ -335,18 +321,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-            const usuario = usuarios.find(u => u.id === id);
-            if (!usuario) return;
+            const usuarioAlvo = usuarios.find(u => u.id === id);
+            if (!usuarioAlvo) return;
             
             document.getElementById('modalTitle').textContent = 'Editar Usuário';
-            document.getElementById('usuarioId').value = usuario.id;
-            document.getElementById('nome').value = usuario.nome || '';
+            document.getElementById('usuarioId').value = usuarioAlvo.id;
+            document.getElementById('nome').value = usuarioAlvo.nome || '';
             
             const prefixo = obterPrefixoLoja();
             const badge = document.getElementById('prefixoLojaBadge');
             if (badge) badge.textContent = '.' + prefixo;
 
-            let baseUser = usuario.email || '';
+            let baseUser = usuarioAlvo.email || '';
             if (baseUser.endsWith('.' + prefixo)) {
                 baseUser = baseUser.substring(0, baseUser.length - (prefixo.length + 1));
             }
@@ -355,19 +341,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 inputBase.value = baseUser;
                 inputBase.disabled = true;
             }
-            document.getElementById('email').value = usuario.email || '';
+            document.getElementById('email').value = usuarioAlvo.email || '';
             const preview = document.getElementById('previewUsuarioGerado');
-            if (preview) preview.textContent = usuario.email || '';
+            if (preview) preview.textContent = usuarioAlvo.email || '';
 
             document.getElementById('senha').value = '';
             document.getElementById('senha').placeholder = 'Deixe em branco para manter a senha atual';
             document.getElementById('senha').required = false;
-            document.getElementById('perfil').value = usuario.perfil || 'basico';
-            document.getElementById('telefone').value = usuario.telefone || '';
-            document.getElementById('cargo').value = usuario.cargo || '';
-            document.getElementById('ativo').value = usuario.ativo ? 'true' : 'false';
             
-            carregarPermissoes(usuario.perfil || 'basico', usuario.permissoes);
+            const selectPerfil = document.getElementById('perfil');
+            const selectAtivo = document.getElementById('ativo');
+            selectPerfil.value = usuarioAlvo.perfil || 'basico';
+            selectAtivo.value = usuarioAlvo.ativo ? 'true' : 'false';
+
+            document.getElementById('telefone').value = usuarioAlvo.telefone || '';
+            document.getElementById('cargo').value = usuarioAlvo.cargo || '';
+            
+            // Regra de segurança: O próprio usuário logado não pode revogar seu admin ou desativar a si mesmo
+            const isMesmoUsuario = String(usuarioAlvo.id) === String(usuario.id);
+            if (isMesmoUsuario && usuario.perfil === 'admin') {
+                selectPerfil.disabled = true;
+                selectPerfil.title = 'Você não pode alterar seu próprio perfil de Administrador.';
+                selectAtivo.disabled = true;
+                selectAtivo.title = 'Você não pode desativar seu próprio usuário.';
+            } else {
+                selectPerfil.disabled = false;
+                selectPerfil.title = '';
+                selectAtivo.disabled = false;
+                selectAtivo.title = '';
+            }
+
+            carregarPermissoes(usuarioAlvo.perfil || 'basico', usuarioAlvo.permissoes);
+
+            // Regra de segurança: Apenas administradores podem alterar a matriz de permissões
+            const isAdmin = usuario.perfil === 'admin';
+            document.querySelectorAll('.checkbox-permissao').forEach(cb => {
+                cb.disabled = !isAdmin;
+            });
+            const btnToolbar = document.querySelectorAll('.permissoes-toolbar button, .btn-toggle-card');
+            btnToolbar.forEach(b => {
+                b.disabled = !isAdmin;
+            });
             
             document.getElementById('modalUsuario').style.display = 'flex';
         } catch (error) {
@@ -378,7 +392,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.toggleStatus = async (id, novoStatus) => {
         if (!temPermissao('usuarios', 'excluir')) {
-            mostrarNotificacao('Você não tem permissão para alterar status!', 'error');
+            mostrarNotificacao('Você não tem permissão para alterar status de usuários!', 'error');
+            return;
+        }
+
+        if (String(id) === String(usuario.id) && !novoStatus) {
+            mostrarNotificacao('Ação bloqueada: você não pode desativar seu próprio usuário!', 'error');
             return;
         }
         
@@ -392,11 +411,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (error) throw error;
             
-            mostrarNotificacao(`Usuário ${novoStatus ? 'ativado' : 'desativado'}!`, 'success');
+            mostrarNotificacao(`Usuário ${novoStatus ? 'ativado' : 'desativado'} com sucesso!`, 'success');
             carregarUsuarios();
         } catch (error) {
             console.error('Erro ao alterar status:', error);
-            mostrarNotificacao('Erro ao alterar status', 'error');
+            mostrarNotificacao('Erro ao alterar status: ' + (error.message || error), 'error');
         }
     };
     
@@ -406,6 +425,18 @@ document.addEventListener('DOMContentLoaded', () => {
         let email = document.getElementById('email').value.trim();
         const baseUser = document.getElementById('username_base')?.value.trim();
         const prefixo = obterPrefixoLoja();
+
+        if (id) {
+            if (!temPermissao('usuarios', 'editar')) {
+                mostrarNotificacao('Você não tem permissão para editar usuários!', 'error');
+                return;
+            }
+        } else {
+            if (!temPermissao('usuarios', 'criar')) {
+                mostrarNotificacao('Você não tem permissão para criar novos usuários!', 'error');
+                return;
+            }
+        }
 
         if (!email && baseUser) {
             email = `${baseUser}.${prefixo}`;
@@ -427,19 +458,48 @@ document.addEventListener('DOMContentLoaded', () => {
             mostrarNotificacao('Informe a senha para o novo usuário!', 'error');
             return;
         }
+
+        // Regra de segurança: Não permitir que usuários sem perfil admin criem ou alterem usuários para admin
+        if (usuario.perfil !== 'admin' && perfil === 'admin') {
+            mostrarNotificacao('Apenas administradores podem conceder o perfil de Administrador.', 'error');
+            return;
+        }
+
+        // Regra de segurança: Não permitir que o usuário atual revogue seu próprio perfil de admin
+        if (id && String(id) === String(usuario.id)) {
+            if (usuario.perfil === 'admin' && perfil !== 'admin') {
+                mostrarNotificacao('Você não pode alterar seu próprio perfil de Administrador.', 'error');
+                return;
+            }
+            if (usuario.ativo && !ativo) {
+                mostrarNotificacao('Você não pode desativar seu próprio usuário.', 'error');
+                return;
+            }
+        }
         
         // Coletar permissões marcadas nos checkboxes
         let permissoes = {};
-        const checkboxes = document.querySelectorAll('.checkbox-permissao');
-        checkboxes.forEach(checkbox => {
-            const modulo = checkbox.getAttribute('data-modulo');
-            const acao = checkbox.getAttribute('data-acao');
-            
-            if (!permissoes[modulo]) {
-                permissoes[modulo] = {};
+        if (perfil === 'admin') {
+            // Se o perfil for admin, gerar matriz completa com true em todos os módulos e ações
+            const schema = window.AionPermissoes?.SCHEMA || {};
+            for (const [modKey, modMeta] of Object.entries(schema)) {
+                permissoes[modKey] = {};
+                for (const ac of (modMeta.acoes || ['ver'])) {
+                    permissoes[modKey][ac] = true;
+                }
             }
-            permissoes[modulo][acao] = checkbox.checked;
-        });
+        } else {
+            const checkboxes = document.querySelectorAll('.checkbox-permissao');
+            checkboxes.forEach(checkbox => {
+                const modulo = checkbox.getAttribute('data-modulo');
+                const acao = checkbox.getAttribute('data-acao');
+                
+                if (!permissoes[modulo]) {
+                    permissoes[modulo] = {};
+                }
+                permissoes[modulo][acao] = checkbox.checked;
+            });
+        }
         
         const dados = {
             nome: nome,
@@ -456,6 +516,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
+            const btnSalvar = document.getElementById('btnSalvar');
+            btnSalvar.disabled = true;
+            btnSalvar.textContent = 'Salvando...';
+
             if (id) {
                 const { error } = await supabaseClient
                     .from('usuarios')
@@ -464,6 +528,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (error) throw error;
                 mostrarNotificacao('✅ Usuário atualizado com sucesso!', 'success');
+
+                // Se o próprio usuário logado for editado, atualizar a sessão local
+                if (String(id) === String(usuario.id)) {
+                    const usuarioAtualizado = {
+                        ...usuario,
+                        nome: dados.nome,
+                        email: dados.email,
+                        cargo: dados.cargo,
+                        telefone: dados.telefone,
+                        permissoes: dados.permissoes
+                    };
+                    sessionStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+                }
             } else {
                 const { error } = await supabaseClient
                     .from('usuarios')
@@ -482,7 +559,13 @@ document.addEventListener('DOMContentLoaded', () => {
             carregarUsuarios();
         } catch (error) {
             console.error('Erro ao salvar usuário:', error);
-            mostrarNotificacao('❌ Erro ao salvar usuário: ' + error.message, 'error');
+            mostrarNotificacao('❌ Erro ao salvar usuário: ' + (error.message || error), 'error');
+        } finally {
+            const btnSalvar = document.getElementById('btnSalvar');
+            if (btnSalvar) {
+                btnSalvar.disabled = false;
+                btnSalvar.textContent = 'Salvar';
+            }
         }
     }
     
@@ -555,10 +638,48 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filtroPerfil')?.addEventListener('change', renderizarTabela);
     document.getElementById('filtroStatus')?.addEventListener('change', renderizarTabela);
     
+    function renderizarAbaPerfis() {
+        const perfisGrid = document.getElementById('perfisGrid');
+        if (!perfisGrid) return;
+
+        const perfisMeta = [
+            { key: 'admin', nome: '👑 Administrador', badgeClass: 'perfil-admin', desc: 'Acesso total irrestrito a todas as 24 áreas e funcionalidades do sistema.' },
+            { key: 'gerente', nome: '📊 Gerente', badgeClass: 'perfil-gerente', desc: 'Acesso operacional amplo (vendas, estoque, financeiro, clientes, relatórios), sem gestão de usuários.' },
+            { key: 'vendedor', nome: '💰 Vendedor', badgeClass: 'perfil-vendedor', desc: 'Frente de caixa (PDV), abertura de caixa, emissão de carnês/fiado, consulta de estoque e catálogo.' },
+            { key: 'tecnico', nome: '🔧 Técnico', badgeClass: 'perfil-tecnico', desc: 'Ordens de serviço, assistência técnica, catálogo e agendamentos.' },
+            { key: 'basico', nome: '👤 Básico', badgeClass: 'perfil-basico', desc: 'Acesso mínimo de consulta aos cadastros permitidos.' }
+        ];
+
+        const schema = window.AionPermissoes?.SCHEMA || {};
+        const perfisPadrao = window.AionPermissoes?.PERFIS_PADRAO || {};
+
+        perfisGrid.innerHTML = perfisMeta.map(p => {
+            const defaults = perfisPadrao[p.key] || {};
+            const modulosPermitidos = Object.keys(schema).filter(m => defaults[m]?.ver);
+
+            return `
+                <div class="card" style="border-left: 4px solid var(--primary, #0A4D68); padding: 16px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; font-size: 15px;">${p.nome}</h4>
+                        <span class="perfil-badge ${p.badgeClass}">${p.key.toUpperCase()}</span>
+                    </div>
+                    <p style="font-size: 12.5px; color: #64748b; margin: 0 0 12px 0;">${p.desc}</p>
+                    <div style="font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                        Módulos Liberados por Padrão (${modulosPermitidos.length} de ${Object.keys(schema).length}):
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${modulosPermitidos.map(m => `<span style="background: #f1f5f9; color: #1e293b; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${schema[m]?.label || m}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
     // =====================================================
     // INICIALIZAR
     // =====================================================
     
+    renderizarAbaPerfis();
     carregarUsuarios();
     initTabs();
     

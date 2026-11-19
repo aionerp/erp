@@ -72,6 +72,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('importacao', 'ver')) {
+        const contentEl = document.querySelector('.content') || document.querySelector('.main-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>🔒 Acesso Negado</h2>
+                    <p>Você não tem permissão para acessar a Importação de Dados.</p>
+                    <button class="btn-primary" onclick="window.location.href='dashboard.html'">Voltar ao Início</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
     // Carregar informações das categorias do banco de dados
     await carregarMetadadosCategorias();
 
@@ -573,6 +587,11 @@ function mostrarAlertaValidacao(mensagem, isAviso = false, isCompletamenteValido
 
 // Executar importação linha a linha
 async function executarImportacao() {
+    if (typeof verificarPermissao === 'function' && !verificarPermissao('importacao', 'executar')) {
+        alert('Acesso negado: Você não tem permissão para executar importação de dados.');
+        return;
+    }
+
     if (dadosCarregados.length === 0 || !entidadeSelecionada) return;
 
     // Mostrar painel de progresso e ocultar outros

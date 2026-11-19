@@ -497,102 +497,395 @@ function isLogado() {
     return sessionStorage.getItem('usuario') !== null;
 }
 
+// =====================================================
+// FUNÇÕES DE PERMISSÃO E MATRIZ CENTRALIZADA (Aion ERP)
+// =====================================================
+
 // Função para obter o usuário logado
 function getUsuarioLogado() {
-    const usuario = sessionStorage.getItem('usuario');
-    return usuario ? JSON.parse(usuario) : null;
+    try {
+        const usuario = sessionStorage.getItem('usuario');
+        return usuario ? JSON.parse(usuario) : null;
+    } catch (e) {
+        return null;
+    }
 }
 
-// =====================================================
-// FUNÇÕES DE PERMISSÃO
-// =====================================================
+// 1. Esquema completo de módulos e ações granulares do Aion ERP
+const SCHEMA_PERMISSOES = {
+    // 1. Visão Geral & Empresa
+    dashboard: {
+        label: '📊 Dashboard',
+        grupo: 'Visão Geral',
+        acoes: ['ver'],
+        acaoLabels: { ver: 'Visualizar Dashboard e Indicadores' }
+    },
+    configuracoes: {
+        label: '🏢 Dados da Empresa',
+        grupo: 'Empresa',
+        acoes: ['ver', 'editar'],
+        fallback: 'usuarios',
+        acaoLabels: { ver: 'Visualizar Dados da Empresa', editar: 'Alterar Dados da Empresa e Cupons' }
+    },
+    usuarios: {
+        label: '👤 Gestão de Usuários',
+        grupo: 'Empresa',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Lista de Usuários', criar: 'Cadastrar Novo Usuário', editar: 'Editar Dados e Permissões', excluir: 'Ativar / Desativar Usuário' }
+    },
+    importacao: {
+        label: '📥 Importação de Dados',
+        grupo: 'Empresa',
+        acoes: ['ver', 'executar'],
+        fallback: 'usuarios',
+        acaoLabels: { ver: 'Acessar Tela de Importação', executar: 'Executar Importação de Planilhas' }
+    },
+
+    // 2. CRM & Pessoas
+    clientes: {
+        label: '👥 Clientes',
+        grupo: 'CRM',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Clientes', criar: 'Cadastrar Novo Cliente', editar: 'Editar Cliente', excluir: 'Excluir / Inativar Cliente' }
+    },
+    fornecedores: {
+        label: '🏭 Fornecedores',
+        grupo: 'CRM',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Fornecedores', criar: 'Cadastrar Fornecedor', editar: 'Editar Fornecedor', excluir: 'Excluir Fornecedor' }
+    },
+    colaboradores: {
+        label: '👥 Colaboradores',
+        grupo: 'CRM',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Colaboradores', criar: 'Cadastrar Colaborador', editar: 'Editar Colaborador', excluir: 'Excluir Colaborador' }
+    },
+
+    // 3. Suprimentos & Estoque
+    produtos: {
+        label: '📦 Serviços & Produtos',
+        grupo: 'Suprimentos',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Catálogo de Produtos', criar: 'Cadastrar Produto/Serviço', editar: 'Editar Produto/Preço/Serial', excluir: 'Excluir Produto' }
+    },
+    estoque: {
+        label: '💾 Saldo & Ajuste de Estoque',
+        grupo: 'Suprimentos',
+        acoes: ['ver', 'ajustar'],
+        acaoLabels: { ver: 'Visualizar Saldo de Estoque', ajustar: 'Ajustar / Movimentar Estoque Manualmente' }
+    },
+    categorias: {
+        label: '🏷️ Categorias',
+        grupo: 'Suprimentos',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Categorias', criar: 'Criar Categoria', editar: 'Editar Categoria', excluir: 'Excluir Categoria' }
+    },
+
+    // 4. Compras
+    entradas: {
+        label: '📥 Compras / Entradas',
+        grupo: 'Compras',
+        acoes: ['ver', 'criar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Relatório de Compras', criar: 'Lançar Nova Entrada (Nota Fiscal)', excluir: 'Cancelar / Estornar Entrada' }
+    },
+    devolucoes: {
+        label: '🔄 Devoluções de Mercadorias',
+        grupo: 'Compras',
+        acoes: ['ver', 'criar'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Devoluções', criar: 'Registrar Devolução de Mercadoria' }
+    },
+
+    // 5. Faturamento & Vendas
+    saidas: {
+        label: '💳 PDV / Vendas',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'cancelar', 'ver_vendas_outros'],
+        acaoLabels: { ver: 'Acessar Frente de Caixa / Vendas', criar: 'Realizar Nova Venda (PDV)', cancelar: 'Cancelar Venda Concluída', ver_vendas_outros: 'Visualizar Vendas de Outros Operadores' }
+    },
+    assinaturas: {
+        label: '🔄 Serviços Recorrentes / Assinaturas',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Assinaturas Recorrentes', criar: 'Cadastrar Nova Assinatura', editar: 'Editar Assinatura', excluir: 'Cancelar / Encerrar Assinatura' }
+    },
+    promocoes: {
+        label: '🎯 Ações Promocionais',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Promoções', criar: 'Criar Ação Promocional', editar: 'Editar Promoção', excluir: 'Encerrar / Excluir Promoção' }
+    },
+    agendamentos: {
+        label: '📅 Agendamentos de Atendimentos',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        fallback: 'dashboard',
+        acaoLabels: { ver: 'Visualizar Grade de Agendamentos', criar: 'Criar Novo Agendamento', editar: 'Reagendar / Alterar Agendamento', excluir: 'Cancelar Agendamento' }
+    },
+    mesas: {
+        label: '📋 Comanda / Mesas / Atendimentos',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'editar', 'fechar'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Comandas e Mesas', criar: 'Abrir Comanda / Mesa', editar: 'Adicionar / Modificar Itens', fechar: 'Encerrar e Fechar Comanda' }
+    },
+    ordens_servico: {
+        label: '🔧 Ordens de Serviço (OS)',
+        grupo: 'Faturamento',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        acaoLabels: { ver: 'Visualizar Ordens de Serviço', criar: 'Abrir Nova OS', editar: 'Atualizar Status e Laudo da OS', excluir: 'Cancelar / Excluir OS' }
+    },
+
+    // 6. Financeiro
+    fechamento: {
+        label: '💵 Fechamento de Caixa',
+        grupo: 'Financeiro',
+        acoes: ['ver', 'abrir', 'fechar'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Histórico de Caixas', abrir: 'Realizar Abertura / Suprimento', fechar: 'Efetuar Fechamento / Sangria de Caixa' }
+    },
+    fiado: {
+        label: '📋 Fiado e Contas a Receber',
+        grupo: 'Financeiro',
+        acoes: ['ver', 'criar', 'receber', 'cancelar'],
+        fallback: 'saidas',
+        acaoLabels: { ver: 'Visualizar Contas a Receber (Fiado)', criar: 'Registrar Nova Conta / Carnê', receber: 'Dar Baixa / Receber Pagamentos', cancelar: 'Cancelar Venda a Prazo' }
+    },
+    despesas: {
+        label: '💸 Despesas / Contas a Pagar',
+        grupo: 'Financeiro',
+        acoes: ['ver', 'criar', 'editar', 'excluir'],
+        fallback: 'financeiro',
+        acaoLabels: { ver: 'Visualizar Despesas', criar: 'Cadastrar Nova Despesa / Boleto', editar: 'Editar Despesa', excluir: 'Excluir / Cancelar Despesa' }
+    },
+    comissoes: {
+        label: '💰 Comissões a Pagar',
+        grupo: 'Financeiro',
+        acoes: ['ver', 'pagar'],
+        fallback: 'relatorios',
+        acaoLabels: { ver: 'Visualizar Relatório de Comissões', pagar: 'Registrar Pagamento de Comissão' }
+    },
+
+    // 7. Relatórios
+    relatorios: {
+        label: '📊 Central de Relatórios',
+        grupo: 'Relatórios',
+        acoes: ['ver', 'exportar'],
+        acaoLabels: { ver: 'Visualizar Relatórios Gerais', exportar: 'Exportar Relatórios (PDF / Excel)' }
+    },
+    inventario: {
+        label: '📦 Registro de Inventário',
+        grupo: 'Relatórios',
+        acoes: ['ver', 'exportar'],
+        fallback: 'relatorios',
+        acaoLabels: { ver: 'Visualizar Inventário Físico e Financeiro', exportar: 'Exportar Balanço de Inventário' }
+    }
+};
+
+// Aliases para módulos equivalentes
+const ALIASES_MODULOS = {
+    'financeiro': 'despesas',
+    'contas_receber': 'fiado',
+    'caixas': 'fechamento',
+    'empresa': 'configuracoes'
+};
+
+// 2. Matriz de permissões padrão por perfil
+const PERMISSOES_PADRAO_PERFIL = {
+    admin: {
+        dashboard: { ver: true },
+        configuracoes: { ver: true, editar: true },
+        usuarios: { ver: true, criar: true, editar: true, excluir: true },
+        importacao: { ver: true, executar: true },
+        clientes: { ver: true, criar: true, editar: true, excluir: true },
+        fornecedores: { ver: true, criar: true, editar: true, excluir: true },
+        colaboradores: { ver: true, criar: true, editar: true, excluir: true },
+        produtos: { ver: true, criar: true, editar: true, excluir: true },
+        estoque: { ver: true, ajustar: true },
+        categorias: { ver: true, criar: true, editar: true, excluir: true },
+        entradas: { ver: true, criar: true, excluir: true },
+        devolucoes: { ver: true, criar: true },
+        saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
+        assinaturas: { ver: true, criar: true, editar: true, excluir: true },
+        promocoes: { ver: true, criar: true, editar: true, excluir: true },
+        agendamentos: { ver: true, criar: true, editar: true, excluir: true },
+        mesas: { ver: true, criar: true, editar: true, fechar: true },
+        ordens_servico: { ver: true, criar: true, editar: true, excluir: true },
+        fechamento: { ver: true, abrir: true, fechar: true },
+        fiado: { ver: true, criar: true, receber: true, cancelar: true },
+        despesas: { ver: true, criar: true, editar: true, excluir: true },
+        comissoes: { ver: true, pagar: true },
+        relatorios: { ver: true, exportar: true },
+        inventario: { ver: true, exportar: true }
+    },
+    gerente: {
+        dashboard: { ver: true },
+        configuracoes: { ver: true, editar: true },
+        usuarios: { ver: false, criar: false, editar: false, excluir: false },
+        importacao: { ver: false, executar: false },
+        clientes: { ver: true, criar: true, editar: true, excluir: false },
+        fornecedores: { ver: true, criar: true, editar: true, excluir: false },
+        colaboradores: { ver: true, criar: true, editar: true, excluir: false },
+        produtos: { ver: true, criar: true, editar: true, excluir: false },
+        estoque: { ver: true, ajustar: true },
+        categorias: { ver: true, criar: false, editar: false, excluir: false },
+        entradas: { ver: true, criar: true, excluir: false },
+        devolucoes: { ver: true, criar: true },
+        saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
+        assinaturas: { ver: true, criar: true, editar: true, excluir: false },
+        promocoes: { ver: true, criar: true, editar: true, excluir: false },
+        agendamentos: { ver: true, criar: true, editar: true, excluir: false },
+        mesas: { ver: true, criar: true, editar: true, fechar: true },
+        ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+        fechamento: { ver: true, abrir: true, fechar: true },
+        fiado: { ver: true, criar: true, receber: true, cancelar: false },
+        despesas: { ver: true, criar: true, editar: true, excluir: false },
+        comissoes: { ver: true, pagar: true },
+        relatorios: { ver: true, exportar: true },
+        inventario: { ver: true, exportar: true }
+    },
+    vendedor: {
+        dashboard: { ver: true },
+        configuracoes: { ver: false, editar: false },
+        usuarios: { ver: false, criar: false, editar: false, excluir: false },
+        importacao: { ver: false, executar: false },
+        clientes: { ver: true, criar: true, editar: true, excluir: false },
+        fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+        colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+        produtos: { ver: true, criar: false, editar: false, excluir: false },
+        estoque: { ver: true, ajustar: false },
+        categorias: { ver: false, criar: false, editar: false, excluir: false },
+        entradas: { ver: false, criar: false, excluir: false },
+        devolucoes: { ver: false, criar: false },
+        saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
+        assinaturas: { ver: false, criar: false, editar: false, excluir: false },
+        promocoes: { ver: true, criar: false, editar: false, excluir: false },
+        agendamentos: { ver: true, criar: true, editar: false, excluir: false },
+        mesas: { ver: true, criar: true, editar: true, fechar: false },
+        ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
+        fechamento: { ver: true, abrir: true, fechar: false },
+        fiado: { ver: true, criar: true, receber: true, cancelar: false },
+        despesas: { ver: false, criar: false, editar: false, excluir: false },
+        comissoes: { ver: false, pagar: false },
+        relatorios: { ver: false, exportar: false },
+        inventario: { ver: false, exportar: false }
+    },
+    tecnico: {
+        dashboard: { ver: true },
+        configuracoes: { ver: false, editar: false },
+        usuarios: { ver: false, criar: false, editar: false, excluir: false },
+        importacao: { ver: false, executar: false },
+        clientes: { ver: true, criar: true, editar: true, excluir: false },
+        fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+        colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+        produtos: { ver: true, criar: false, editar: false, excluir: false },
+        estoque: { ver: false, ajustar: false },
+        categorias: { ver: false, criar: false, editar: false, excluir: false },
+        entradas: { ver: false, criar: false, excluir: false },
+        devolucoes: { ver: false, criar: false },
+        saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
+        assinaturas: { ver: false, criar: false, editar: false, excluir: false },
+        promocoes: { ver: false, criar: false, editar: false, excluir: false },
+        agendamentos: { ver: true, criar: true, editar: true, excluir: false },
+        mesas: { ver: false, criar: false, editar: false, fechar: false },
+        ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
+        fechamento: { ver: false, abrir: false, fechar: false },
+        fiado: { ver: false, criar: false, receber: false, cancelar: false },
+        despesas: { ver: false, criar: false, editar: false, excluir: false },
+        comissoes: { ver: false, pagar: false },
+        relatorios: { ver: false, exportar: false },
+        inventario: { ver: false, exportar: false }
+    },
+    basico: {
+        dashboard: { ver: false },
+        configuracoes: { ver: false, editar: false },
+        usuarios: { ver: false, criar: false, editar: false, excluir: false },
+        importacao: { ver: false, executar: false },
+        clientes: { ver: true, criar: false, editar: false, excluir: false },
+        fornecedores: { ver: false, criar: false, editar: false, excluir: false },
+        colaboradores: { ver: false, criar: false, editar: false, excluir: false },
+        produtos: { ver: true, criar: false, editar: false, excluir: false },
+        estoque: { ver: false, ajustar: false },
+        categorias: { ver: false, criar: false, editar: false, excluir: false },
+        entradas: { ver: false, criar: false, excluir: false },
+        devolucoes: { ver: false, criar: false },
+        saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
+        assinaturas: { ver: false, criar: false, editar: false, excluir: false },
+        promocoes: { ver: false, criar: false, editar: false, excluir: false },
+        agendamentos: { ver: false, criar: false, editar: false, excluir: false },
+        mesas: { ver: false, criar: false, editar: false, fechar: false },
+        ordens_servico: { ver: false, criar: false, editar: false, excluir: false },
+        fechamento: { ver: false, abrir: false, fechar: false },
+        fiado: { ver: false, criar: false, receber: false, cancelar: false },
+        despesas: { ver: false, criar: false, editar: false, excluir: false },
+        comissoes: { ver: false, pagar: false },
+        relatorios: { ver: false, exportar: false },
+        inventario: { ver: false, exportar: false }
+    }
+};
+
+/**
+ * Função mestre para checagem de permissão de um usuário
+ * @param {object} usuario - Objeto do usuário (ou null para usar o logado)
+ * @param {string} modulo - Nome do módulo ou tela
+ * @param {string} acao - Ação desejada ('ver', 'criar', 'editar', 'excluir', etc.)
+ * @returns {boolean}
+ */
+function verificarPermissaoUsuario(usuario, modulo, acao = 'ver') {
+    if (!usuario) return false;
+
+    // Administrador tem acesso absoluto a todas as telas e ações
+    if (usuario.perfil === 'admin') return true;
+
+    // Normalizar nome do módulo (suporte a aliases)
+    const moduloReal = ALIASES_MODULOS[modulo] || modulo;
+    const permissoes = usuario.permissoes || {};
+
+    // 1. Permissão explicitamente configurada para o módulo e ação
+    if (permissoes[moduloReal] && permissoes[moduloReal][acao] !== undefined) {
+        return Boolean(permissoes[moduloReal][acao]);
+    }
+
+    // 2. Compatibilidade reversa: suporte a chaves legadas se o módulo não existir no JSON
+    if (moduloReal === 'despesas' && permissoes.financeiro && permissoes.financeiro[acao] !== undefined) {
+        return Boolean(permissoes.financeiro[acao]);
+    }
+    if (moduloReal === 'fiado' && permissoes.contas_receber && permissoes.contas_receber[acao] !== undefined) {
+        return Boolean(permissoes.contas_receber[acao]);
+    }
+
+    // 3. Fallback inteligente de herança legado (se o módulo novo ainda não foi configurado no JSON)
+    const fallbackModulo = SCHEMA_PERMISSOES[moduloReal]?.fallback;
+    if (fallbackModulo && permissoes[fallbackModulo] && permissoes[fallbackModulo][acao] !== undefined) {
+        return Boolean(permissoes[fallbackModulo][acao]);
+    }
+
+    // 4. Se não houver permissão customizada no usuário, aplicar o padrão do perfil
+    const perfil = usuario.perfil || 'basico';
+    const perfilDefaults = PERMISSOES_PADRAO_PERFIL[perfil] || PERMISSOES_PADRAO_PERFIL.basico;
+    if (perfilDefaults[moduloReal] && perfilDefaults[moduloReal][acao] !== undefined) {
+        return Boolean(perfilDefaults[moduloReal][acao]);
+    }
+
+    return false;
+}
 
 /**
  * Verifica se o usuário logado tem permissão para um módulo/ação
- * @param {string} modulo - Nome do módulo (ex: 'clientes', 'produtos')
+ * @param {string} modulo - Nome do módulo (ex: 'clientes', 'produtos', 'fiado')
  * @param {string} acao - Ação (ex: 'ver', 'criar', 'editar', 'excluir')
  * @returns {boolean}
  */
 function temPermissao(modulo, acao = 'ver') {
     const usuario = getUsuarioLogado();
-    if (!usuario) return false;
-    
-    // Admin tem acesso total
-    if (usuario.perfil === 'admin') return true;
-    
-    // Verificar permissões do usuário
-    const permissoes = usuario.permissoes || {};
-    
-    // Se não tiver permissões definidas, usar fallback por perfil
-    if (Object.keys(permissoes).length === 0) {
-        const permissoesFallback = {
-            gerente: {
-                dashboard: { ver: true },
-                clientes: { ver: true, criar: true, editar: true, excluir: false },
-                produtos: { ver: true, criar: true, editar: true, excluir: false },
-                categorias: { ver: true, criar: false, editar: false, excluir: false },
-                estoque: { ver: true, ajustar: true },
-                entradas: { ver: true, criar: true, excluir: false },
-                saidas: { ver: true, criar: true, cancelar: true, ver_vendas_outros: true },
-                fornecedores: { ver: true, criar: true, editar: true, excluir: false },
-                ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
-                colaboradores: { ver: true, criar: true, editar: true, excluir: false },
-                financeiro: { ver: true, criar: true, editar: true, excluir: false },
-                relatorios: { ver: true, exportar: true },
-                usuarios: { ver: false, criar: false, editar: false, excluir: false }
-            },
-            vendedor: {
-                dashboard: { ver: true },
-                clientes: { ver: true, criar: true, editar: true, excluir: false },
-                produtos: { ver: true, criar: false, editar: false, excluir: false },
-                categorias: { ver: false },
-                estoque: { ver: true, ajustar: false },
-                entradas: { ver: false },
-                saidas: { ver: true, criar: true, cancelar: false, ver_vendas_outros: false },
-                fornecedores: { ver: false },
-                ordens_servico: { ver: false },
-                colaboradores: { ver: false },
-                financeiro: { ver: false },
-                relatorios: { ver: false },
-                usuarios: { ver: false }
-            },
-            tecnico: {
-                dashboard: { ver: true },
-                clientes: { ver: true, criar: true, editar: true, excluir: false },
-                produtos: { ver: true, criar: false, editar: false, excluir: false },
-                categorias: { ver: false },
-                estoque: { ver: false },
-                entradas: { ver: false },
-                saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-                fornecedores: { ver: false },
-                ordens_servico: { ver: true, criar: true, editar: true, excluir: false },
-                colaboradores: { ver: false },
-                financeiro: { ver: false },
-                relatorios: { ver: false },
-                usuarios: { ver: false }
-            },
-            basico: {
-                dashboard: { ver: false },
-                clientes: { ver: true, criar: false, editar: false, excluir: false },
-                produtos: { ver: true, criar: false, editar: false, excluir: false },
-                categorias: { ver: false },
-                estoque: { ver: false },
-                entradas: { ver: false },
-                saidas: { ver: false, criar: false, cancelar: false, ver_vendas_outros: false },
-                fornecedores: { ver: false },
-                ordens_servico: { ver: false },
-                colaboradores: { ver: false },
-                financeiro: { ver: false },
-                relatorios: { ver: false },
-                usuarios: { ver: false }
-            }
-        };
-        
-        const perfilPermissoes = permissoesFallback[usuario.perfil] || permissoesFallback.basico;
-        return perfilPermissoes[modulo]?.[acao] || false;
-    }
-    
-    return permissoes[modulo]?.[acao] || false;
+    return verificarPermissaoUsuario(usuario, modulo, acao);
+}
+
+// Alias para verificarPermissao
+function verificarPermissao(modulo, acao = 'ver') {
+    return temPermissao(modulo, acao);
 }
 
 /**
@@ -602,55 +895,77 @@ function temPermissao(modulo, acao = 'ver') {
  */
 function obterPrimeiraPaginaPermitida(usuario) {
     if (!usuario) return 'index.html';
-    
     if (usuario.perfil === 'admin') return 'dashboard.html';
-    
-    const paginas = [
+
+    const paginasOrdem = [
         { href: 'dashboard.html', modulo: 'dashboard' },
-        { href: 'clientes.html', modulo: 'clientes' },
-        { href: 'estoque.html', modulo: 'produtos' },
-        { href: 'categorias.html', modulo: 'categorias' },
-        { href: 'estoque.html', modulo: 'estoque' },
-        { href: 'entradas.html', modulo: 'entradas' },
         { href: 'saidas.html', modulo: 'saidas' },
-        { href: 'despesas.html', modulo: 'financeiro' },
+        { href: 'estoque.html', modulo: 'estoque' },
+        { href: 'produtos.html', modulo: 'produtos' },
+        { href: 'clientes.html', modulo: 'clientes' },
+        { href: 'fechamento.html', modulo: 'fechamento' },
+        { href: 'fiado.html', modulo: 'fiado' },
+        { href: 'agendamentos.html', modulo: 'agendamentos' },
+        { href: 'mesas.html', modulo: 'mesas' },
+        { href: 'entradas.html', modulo: 'entradas' },
+        { href: 'devolucoes.html', modulo: 'devolucoes' },
+        { href: 'despesas.html', modulo: 'despesas' },
+        { href: 'assinaturas.html', modulo: 'assinaturas' },
+        { href: 'promocoes.html', modulo: 'promocoes' },
         { href: 'fornecedores.html', modulo: 'fornecedores' },
         { href: 'colaboradores.html', modulo: 'colaboradores' },
+        { href: 'categorias.html', modulo: 'categorias' },
+        { href: 'comissoes.html', modulo: 'comissoes' },
         { href: 'relatorios.html', modulo: 'relatorios' },
-        { href: 'usuarios.html', modulo: 'usuarios' }
+        { href: 'usuarios.html', modulo: 'usuarios' },
+        { href: 'importacao.html', modulo: 'importacao' }
     ];
-    
-    for (const p of paginas) {
-        if (temPermissao(p.modulo, 'ver')) {
+
+    for (const p of paginasOrdem) {
+        if (verificarPermissaoUsuario(usuario, p.modulo, 'ver')) {
             return p.href;
         }
     }
-    
+
     return 'index.html';
 }
-
-window.obterPrimeiraPaginaPermitida = obterPrimeiraPaginaPermitida;
 
 /**
  * Verifica se o usuário tem permissão e redireciona se não tiver
  * @param {string} modulo - Nome do módulo
  * @param {string} acao - Ação (padrão: 'ver')
- * @param {string} redirectTo - Página para redirecionar (padrão: 'dashboard.html')
+ * @param {string} redirectTo - Página para redirecionar (padrão: automática)
  * @returns {boolean}
  */
-function verificarEAcessar(modulo, acao = 'ver', redirectTo = 'dashboard.html') {
+function verificarEAcessar(modulo, acao = 'ver', redirectTo = null) {
     if (!temPermissao(modulo, acao)) {
-        mostrarNotificacao('Acesso negado! Você não tem permissão.', 'error');
+        if (typeof mostrarNotificacao === 'function') {
+            mostrarNotificacao('Acesso negado! Você não tem permissão para esta funcionalidade.', 'error');
+        }
+        const target = redirectTo || obterPrimeiraPaginaPermitida(getUsuarioLogado());
         setTimeout(() => {
-            window.location.href = redirectTo;
-        }, 1000);
+            window.location.href = target;
+        }, 800);
         return false;
     }
     return true;
 }
 
-// Exportar funções
+// Objeto de namespace global
+window.AionPermissoes = {
+    SCHEMA: SCHEMA_PERMISSOES,
+    PERFIS_PADRAO: PERMISSOES_PADRAO_PERFIL,
+    ALIASES: ALIASES_MODULOS,
+    verificar: verificarPermissaoUsuario,
+    obterPrimeiraPagina: obterPrimeiraPaginaPermitida
+};
+
+// Exportar globalmente para todas as páginas e scripts
+window.getUsuarioLogado = getUsuarioLogado;
 window.temPermissao = temPermissao;
+window.verificarPermissao = verificarPermissao;
+window.verificarPermissaoUsuario = verificarPermissaoUsuario;
+window.obterPrimeiraPaginaPermitida = obterPrimeiraPaginaPermitida;
 window.verificarEAcessar = verificarEAcessar;
 
 // =====================================================
