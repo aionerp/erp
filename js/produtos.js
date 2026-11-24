@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         tbody.innerHTML = produtosPagina.map(p => {
             const isServico = p.tipo === 'servico';
-            const estoque = p.estoque_total || 0;
+            const estoque = p.estoque_total ?? p.estoque ?? 0;
             const minimo = p.estoque_minimo || 5;
             const estoqueClass = estoque < minimo ? 'color: #dc3545; font-weight: bold;' : 'color: #28a745;';
             const estoqueText = isServico ? '<span style="color: var(--primary); font-weight: 600;">🛠️ Serviço</span>' : `${estoque} unid.`;
@@ -892,13 +892,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     await supabaseClient
                         .from('produtos')
-                        .update({ estoque_total: seriaisList.length })
+                        .update({ estoque_total: seriaisList.length, estoque: seriaisList.length })
                         .eq('id', produtoId);
                     
                     mostrarNotificacao(`Produto cadastrado com ${seriaisList.length} item(ns) em estoque!`, 'success');
                 } else {
                     // Outros nichos / sem controle de serial/IMEI: salva direto com a quantidade informada
                     dadosProduto.estoque_total = dadosProduto.tipo === 'servico' ? 0 : quantidadeEstoque;
+                    dadosProduto.estoque = dadosProduto.tipo === 'servico' ? 0 : quantidadeEstoque;
                     const { data: insData, error } = await supabaseClient
                         .from('produtos')
                         .insert([dadosProduto])

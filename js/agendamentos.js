@@ -156,8 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectProd) {
             selectProd.innerHTML = '<option value="">Selecione um produto do estoque...</option>' +
                 produtosCatalogo.map(p => {
-                    return `<option value="${p.id}" data-nome="${p.nome}" data-valor="${p.valor_venda}" data-estoque="${p.estoque_total || 0}">
-                        ${p.nome} — ${formatarMoeda(p.valor_venda)} (Estoque: ${p.estoque_total || 0})
+                    const est = p.estoque_total ?? p.estoque ?? 0;
+                    return `<option value="${p.id}" data-nome="${p.nome}" data-valor="${p.valor_venda}" data-estoque="${est}">
+                        ${p.nome} — ${formatarMoeda(p.valor_venda)} (Estoque: ${est})
                     </option>`;
                 }).join('');
         }
@@ -1390,17 +1391,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Buscar produto atual
                 const { data: pData } = await supabaseClient
                     .from('produtos')
-                    .select('id, estoque_total')
+                    .select('id, estoque_total, estoque')
                     .eq('id', item.id)
                     .single();
 
                 if (pData) {
-                    const estoqueAnt = Number(pData.estoque_total) || 0;
+                    const estoqueAnt = Number(pData.estoque_total ?? pData.estoque ?? 0);
                     const qtdBaixa = Number(item.quantidade) || 0;
                     const novoEstoque = Math.max(0, estoqueAnt - qtdBaixa);
                     await supabaseClient
                         .from('produtos')
-                        .update({ estoque_total: novoEstoque })
+                        .update({ estoque_total: novoEstoque, estoque: novoEstoque })
                         .eq('id', item.id);
 
                     // Registrar movimento de estoque

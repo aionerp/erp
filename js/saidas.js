@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const local = obterLotesLocal(produto.id);
         if (Array.isArray(local) && local.length > 0) {
-            const estoque = parseInt(produto.estoque_total || produto.estoque) || 0;
+            const estoque = parseInt(produto.estoque_total ?? produto.estoque) || 0;
             const sincronizados = sincronizarLotesComEstoqueTotal(local, estoque);
             produto.lotes = sincronizados;
             return sincronizados.map(l => ({
@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return [{
                 lote: String(produto.lote || 'LOTE-PADRAO').trim(),
                 data_validade: produto.data_validade || '',
-                quantidade: parseInt(produto.estoque_total || produto.estoque) || 0,
+                quantidade: parseInt(produto.estoque_total ?? produto.estoque) || 0,
                 alerta_vencimento_dias: parseInt(produto.alerta_vencimento_dias) || 30
             }];
         }
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!Array.isArray(p.lotes) || p.lotes.length === 0) {
                     const local = obterLotesLocal(p.id);
                     if (Array.isArray(local) && local.length > 0) {
-                        const estoque = parseInt(p.estoque_total || p.estoque) || 0;
+                        const estoque = parseInt(p.estoque_total ?? p.estoque) || 0;
                         p.lotes = sincronizarLotesComEstoqueTotal(local, estoque);
                     }
                 } else {
@@ -2637,6 +2637,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Montar payload de atualização do produto no Supabase
                     const updateProdPayload = {
                         estoque_total: novoEst,
+                        estoque: novoEst,
                         ultima_movimentacao: new Date().toISOString()
                     };
 
@@ -3044,11 +3045,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     continue; // Serviços não possuem controle de estoque físico
                 }
 
-                const estAtual = item.produtos?.estoque_total || 0;
+                const estAtual = item.produtos?.estoque_total ?? item.produtos?.estoque ?? 0;
                 const novoEst  = estAtual + item.quantidade;
 
                 await supabaseClient.from('produtos')
-                    .update({ estoque_total: novoEst, ultima_movimentacao: new Date().toISOString() })
+                    .update({ estoque_total: novoEst, estoque: novoEst, ultima_movimentacao: new Date().toISOString() })
                     .eq('id', item.produto_id);
 
                 if (item.serial_id) {

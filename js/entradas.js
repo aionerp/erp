@@ -610,11 +610,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .like('observacao', `%Entrada: #${id}%`)
                     .eq('produto_id', item.produto_id);
                 
-                const novoEstoque = (item.produtos.estoque_total || 0) - item.quantidade;
+                const estAtual = item.produtos?.estoque_total ?? item.produtos?.estoque ?? 0;
+                const novoEstoque = estAtual - item.quantidade;
                 await supabaseClient
                     .from('produtos')
                     .update({
                         estoque_total: novoEstoque,
+                        estoque: novoEstoque,
                         ultima_movimentacao: new Date().toISOString()
                     })
                     .eq('id', item.produto_id);
@@ -778,11 +780,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const { data: produtoObj } = await supabaseClient
                     .from('produtos')
-                    .select('estoque_total, valor_compra')
+                    .select('estoque_total, estoque, valor_compra')
                     .eq('id', item.id)
                     .single();
                 
-                const estoqueAtual = produtoObj?.estoque_total || 0;
+                const estoqueAtual = produtoObj?.estoque_total ?? produtoObj?.estoque ?? 0;
                 const custoAtual = produtoObj?.valor_compra || 0;
                 const novoEstoque = estoqueAtual + item.quantidade;
                 
@@ -797,6 +799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const updatePayload = {
                     estoque_total: novoEstoque,
+                    estoque: novoEstoque,
                     valor_compra: novoCustoMedio,
                     ultima_movimentacao: new Date().toISOString()
                 };

@@ -523,14 +523,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Obter estoque atual e tipo do produto
                 const { data: prodData } = await supabaseClient
                     .from('produtos')
-                    .select('estoque_total, tipo')
+                    .select('estoque_total, estoque, tipo')
                     .eq('id', item.produto_id)
                     .single();
 
                 const isServico = prodData?.tipo === 'servico';
 
                 if (!isServico) {
-                    const estoqueAtual = prodData?.estoque_total || 0;
+                    const estoqueAtual = prodData?.estoque_total ?? prodData?.estoque ?? 0;
                     const novoEstoque = estoqueAtual + item.qtdADevolver;
 
                     // Atualizar saldo do produto
@@ -538,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         .from('produtos')
                         .update({
                             estoque_total: novoEstoque,
+                            estoque: novoEstoque,
                             ultima_movimentacao: new Date().toISOString()
                          })
                         .eq('id', item.produto_id);

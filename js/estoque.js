@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 2. Se temos salvo no cache local (persistência imediata mesmo se coluna do banco ainda não existir)
         const local = obterLotesLocal(produto.id);
         if (Array.isArray(local) && local.length > 0) {
-            const estoque = parseInt(produto.estoque_total || produto.estoque) || 0;
+            const estoque = parseInt(produto.estoque_total ?? produto.estoque) || 0;
             const sincronizados = sincronizarLotesComEstoqueTotal(local, estoque);
             produto.lotes = sincronizados;
             return sincronizados;
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return [{
                 lote: String(produto.lote || 'LOTE-PADRAO').trim(),
                 data_validade: produto.data_validade || '',
-                quantidade: parseInt(produto.estoque_total || produto.estoque) || 0,
+                quantidade: parseInt(produto.estoque_total ?? produto.estoque) || 0,
                 alerta_vencimento_dias: parseInt(produto.alerta_vencimento_dias) || 30,
                 criado_em: produto.created_at || new Date().toISOString()
             }];
@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!Array.isArray(p.lotes) || p.lotes.length === 0) {
                     const local = obterLotesLocal(p.id);
                     if (Array.isArray(local) && local.length > 0) {
-                        const estoque = parseInt(p.estoque_total || p.estoque) || 0;
+                        const estoque = parseInt(p.estoque_total ?? p.estoque) || 0;
                         p.lotes = sincronizarLotesComEstoqueTotal(local, estoque);
                     }
                 } else {
@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                              (filtroLote === 'sem_lote' && !temLote);
                              
             // 4. Filtro Saldo
-            const estoque = p.estoque_total || p.estoque || 0;
+            const estoque = p.estoque_total ?? p.estoque ?? 0;
             const matchSaldo = !filtroSaldo ||
                               (filtroSaldo === 'com_saldo' && estoque > 0) ||
                               (filtroSaldo === 'sem_saldo' && estoque <= 0);
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const podeExcluir = typeof verificarPermissao === 'function' ? verificarPermissao('produtos', 'excluir') : true;
         
         tbody.innerHTML = filtrados.map(p => {
-            const estoque = p.estoque_total || p.estoque || 0;
+            const estoque = p.estoque_total ?? p.estoque ?? 0;
             const minimo = p.estoque_minimo || 5;
             let statusText = '', statusClass = '';
             
@@ -618,7 +618,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         document.getElementById('produtoId').value = produto.id;
         document.getElementById('produtoNome').value = produto.nome + (produto.modelo ? ` - Modelo: ${produto.modelo}` : '');
-        const estoqueAtual = produto.estoque_total || produto.estoque || 0;
+        const estoqueAtual = produto.estoque_total ?? produto.estoque ?? 0;
         document.getElementById('estoqueAtual').value = estoqueAtual;
         document.getElementById('quantidade').value = '1';
         document.getElementById('tipo').value = 'entrada';
@@ -1047,7 +1047,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         
-        const estoqueAtual = produto.estoque_total || produto.estoque || 0;
+        const estoqueAtual = produto.estoque_total ?? produto.estoque ?? 0;
         const controle = await obterControleCategoria(produto);
         
         // 1. Validação de Lote e Validade
@@ -1239,6 +1239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const updateData = {
                 estoque_total: novoEstoque,
+                estoque: novoEstoque,
                 updated_at: new Date().toISOString()
             };
 
@@ -1546,7 +1547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         listaDiv.innerHTML = lista.map(p => {
-            const estoque = p.estoque_total || p.estoque || 0;
+            const estoque = p.estoque_total ?? p.estoque ?? 0;
             const estoqueCor = estoque <= 0 ? '#dc2626' : (estoque < (p.estoque_minimo || 5) ? '#d97706' : '#16a34a');
             const serialBadge = p._matchedSerial ? `
                 <span style="background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c7d2fe; display: inline-block;">
@@ -1889,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Em edição: informar que ajuste de estoque é feito pelo botão Ajustar
-        const saldoAtual = produto.estoque_total || produto.estoque || 0;
+        const saldoAtual = produto.estoque_total ?? produto.estoque ?? 0;
         document.getElementById('quantidade_estoque').value = saldoAtual;
         document.getElementById('quantidade_estoque').disabled = true;
         document.getElementById('infoEstoqueInicial').innerHTML = `

@@ -2504,13 +2504,13 @@ function aplicarFiltrosInventario() {
 
     // Helper resiliente para obter o saldo real (suporta estoque_total e estoque)
     const obterSaldoProd = (p) => {
-        if (p.estoque_total !== null && p.estoque_total !== undefined && p.estoque_total !== 0) {
+        if (p.estoque_total !== null && p.estoque_total !== undefined) {
             return Number(p.estoque_total);
         }
         if (p.estoque !== null && p.estoque !== undefined) {
             return Number(p.estoque);
         }
-        return Number(p.estoque_total) || 0;
+        return 0;
     };
 
     // 1. Filtrar produtos

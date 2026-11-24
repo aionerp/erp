@@ -1729,14 +1729,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Estornar estoque da venda vinculada
                         const { data: itensSaida } = await supabaseClient
                             .from('saida_itens')
-                            .select('*, produtos(id, nome, estoque_total)')
+                            .select('*, produtos(id, nome, estoque_total, estoque)')
                             .eq('saida_id', vendaId);
 
                         for (const item of (itensSaida || [])) {
-                            const estAtual = item.produtos?.estoque_total || 0;
+                            const estAtual = item.produtos?.estoque_total ?? item.produtos?.estoque ?? 0;
                             const novoEst = estAtual + item.quantidade;
                             await supabaseClient.from('produtos')
-                                .update({ estoque_total: novoEst, ultima_movimentacao: new Date().toISOString() })
+                                .update({ estoque_total: novoEst, estoque: novoEst, ultima_movimentacao: new Date().toISOString() })
                                 .eq('id', item.produto_id);
 
                             if (item.serial_id) {
