@@ -890,69 +890,86 @@ document.addEventListener('DOMContentLoaded', () => {
                         obsField.value = `Fechamento de ${checkout.numero}`;
                     }
 
+                    let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
+                    if (!dummyProduct) {
+                        try {
+                            const { data } = await supabaseClient.from('produtos').select('id, nome, codigo, tipo').eq('codigo', 'REST-MESA').maybeSingle();
+                            if (data) {
+                                dummyProduct = data;
+                                produtos.push(dummyProduct);
+                            } else {
+                                const { data: insData } = await supabaseClient.from('produtos').insert([{
+                                    nome: 'Consumo Comanda/Serviço',
+                                    codigo: 'REST-MESA',
+                                    categoria: 'Outros',
+                                    tipo: 'servico',
+                                    valor_venda: 0.01,
+                                    estoque_total: 0,
+                                    estoque: 0,
+                                    ativo: true
+                                }]).select();
+                                if (insData && insData[0]) {
+                                    dummyProduct = insData[0];
+                                    produtos.push(dummyProduct);
+                                }
+                            }
+                        } catch(e) {
+                            console.warn('Erro ao carregar produto dummy de comanda:', e);
+                        }
+                    }
+
                     // Se existirem itens detalhados na comanda, carrega cada um deles
                     if (checkout.itens && checkout.itens.length > 0) {
                         carrinho = checkout.itens.map(item => {
+                            const isManual = !item.id || isNaN(Number(item.id)) || item.codigo === 'MANUAL' || item.tipo === 'servico' || String(item.id).startsWith('manual');
+                            const finalId = isManual && dummyProduct ? dummyProduct.id : (Number(item.id) || (dummyProduct ? dummyProduct.id : 1));
+                            const qtd = Number(item.quantidade) || 1;
+                            const unit = Number(item.valor_venda) || Number(item.subtotal) || 0;
+                            const nomeFinal = item.nome || (isManual ? 'Lançamento Manual' : 'Lançamento Comanda');
                             return {
-                                id: item.id,
-                                nome: item.nome,
-                                codigo: item.codigo,
+                                id: finalId,
+                                nome: nomeFinal,
+                                codigo: isManual ? 'REST-MESA' : (item.codigo || 'REST-MESA'),
+                                tipo: isManual ? 'servico' : (item.tipo || 'produto'),
                                 categoria: 'Restaurante',
-                                valor_venda: item.valor_venda,
-                                quantidade: item.quantidade,
-                                subtotal: item.valor_venda * item.quantidade,
-                                serial: null,
-                                imei: null
+                                valor_venda: unit,
+                                quantidade: qtd,
+                                subtotal: unit * qtd,
+                                serial: isManual ? nomeFinal.substring(0, 100) : (item.serial || null),
+                                imei: item.imei || null
                             };
                         });
 
                         // Verificar se há lançamentos manuais adicionais (valor acumulado > soma dos produtos)
-                        const somaItens = checkout.itens.reduce((s, i) => s + ((i.valor_venda || 0) * (i.quantidade || 1)), 0);
-                        const diferenca = checkout.valor - somaItens;
+                        const somaItens = carrinho.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+                        const diferenca = Number(checkout.valor || 0) - somaItens;
                         if (diferenca > 0.01) {
-                            let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
-                            if (!dummyProduct) {
-                                dummyProduct = { id: 999999, codigo: 'REST-MESA' };
-                            }
+                            const descDif = `Lançamentos Adicionais ${checkout.numero}`;
                             carrinho.push({
-                                id: dummyProduct.id,
-                                nome: `Lançamentos Adicionais ${checkout.numero}`,
+                                id: dummyProduct ? dummyProduct.id : 1,
+                                nome: descDif,
                                 codigo: 'REST-MESA',
+                                tipo: 'servico',
                                 categoria: 'Restaurante',
-                                valor_venda: diferenca,
+                                valor_venda: Math.round(diferenca * 100) / 100,
                                 quantidade: 1,
-                                subtotal: diferenca,
-                                serial: null,
+                                subtotal: Math.round(diferenca * 100) / 100,
+                                serial: descDif.substring(0, 100),
                                 imei: null
                             });
                         }
                     } else {
-                        // Caso contrário (lançamento manual de valor adicional), procuramos ou criamos o produto dummy
-                        let dummyProduct = produtos.find(p => p.codigo === 'REST-MESA');
-                        if (!dummyProduct) {
-                            const { data, error } = await supabaseClient.from('produtos').insert([{
-                                nome: 'Consumo Comanda/Serviço',
-                                codigo: 'REST-MESA',
-                                categoria: 'Outros',
-                                valor_venda: 0,
-                                estoque_total: 99999,
-                                ativo: true
-                            }]).select();
-                            if (!error && data && data.length > 0) {
-                                dummyProduct = data[0];
-                                produtos.push(dummyProduct);
-                            }
-                        }
-                        
+                        const descConsumo = `Consumo ${checkout.numero}`;
                         carrinho = [{
-                            id: dummyProduct ? dummyProduct.id : 999999,
-                            nome: `Consumo ${checkout.numero}`,
+                            id: dummyProduct ? dummyProduct.id : 1,
+                            nome: descConsumo,
                             codigo: 'REST-MESA',
+                            tipo: 'servico',
                             categoria: 'Restaurante',
-                            valor_venda: checkout.valor,
+                            valor_venda: Number(checkout.valor) || 0,
                             quantidade: 1,
-                            subtotal: checkout.valor,
-                            serial: null,
+                            subtotal: Number(checkout.valor) || 0,
+                            serial: descConsumo.substring(0, 100),
                             imei: null
                         }];
                     }
@@ -2105,7 +2122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span style="font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 2px;">Produto</span>
                     <strong>${item.nome}</strong>
                     <small>Cód: ${item.codigo || item.id}
-                        ${item.serial ? `<br><span style="color:#2563eb;font-weight:600;">🔢 Serial: <code>${item.serial}</code></span>` : ''}
+                        ${item.serial && item.tipo !== 'servico' && item.codigo !== 'REST-MESA' ? `<br><span style="color:#2563eb;font-weight:600;">🔢 Serial: <code>${item.serial}</code></span>` : ''}
                         ${item.imei   ? `<br><span style="color:#4b5563;">📱 IMEI: ${item.imei}</span>` : ''}
                     </small>
                     ${item.lote ? `
@@ -2544,6 +2561,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const itensGravadosParaRelatorio = [];
 
             for (const item of carrinho) {
+                const isManualOuMesa = item.codigo === 'REST-MESA' || item.codigo === 'MANUAL' || item.tipo === 'servico' || String(item.id).startsWith('manual');
+                const serialVal = item.serial || (isManualOuMesa && item.nome ? item.nome : null);
+
                 const itemPayload = {
                     saida_id:       venda.id,
                     produto_id:     item.id,
@@ -2553,7 +2573,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     desconto:       item.desconto || 0,
                     origem_desconto: item.desconto > 0 ? (item.origem_desconto || 'Manual') : null,
                     promocao_id:    item.promocao_id || null,
-                    ...(item.serial_id ? { serial_id: item.serial_id } : {})
+                    ...(item.serial_id ? { serial_id: item.serial_id } : {}),
+                    ...(serialVal ? { serial: String(serialVal).substring(0, 100) } : {}),
+                    ...(item.imei ? { imei: String(item.imei).substring(0, 100) } : {})
                 };
 
                 itensGravadosParaRelatorio.push({
@@ -3279,9 +3301,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p style="margin:2px 0;">Data: ${formatarData(venda?.data || new Date())} - ${venda?.hora || horaVenda}</p>
                         <h3 style="margin:2px 0;font-size:17px;font-weight:bold;color:${isDevolucao ? '#b45309' : '#000'};">${isDevolucao ? `🔄 ESTORNO / DEVOLUÇÃO #${venda?.id || vendaId}` : `PEDIDO NÚMERO: ${venda?.id || vendaId}`}</h3>
                         <p style="margin:2px 0;">Operador: ${venda?.usuarios?.nome || usuario.nome || 'Aion ERP'}</p>
-                        ${isDevolucao && venda.observacao ? `
-                            <p style="color:#b45309;margin-top:4px;font-size:14px;">
-                                ${venda.observacao}
+                        ${venda.observacao ? `
+                            <p style="margin:4px 0;font-size:14px;color:${isDevolucao ? '#b45309' : '#000'};">
+                                <strong>Obs:</strong> ${venda.observacao}
                             </p>` : ''}
                         ${cancelada ? `
                             <p style="color:#dc2626;margin-top:6px;font-size:15px;font-weight:bold;">
@@ -3310,23 +3332,30 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         ${(itens || []).map(item => {
                             const descItem = (Math.abs(item.quantidade) * (item.valor_unitario || 0)) - Math.abs(item.subtotal || 0);
+                            const isManualOuMesa = item.produtos?.codigo === 'REST-MESA' || item.codigo === 'REST-MESA' || item.codigo === 'MANUAL';
+                            const nomeItem = (isManualOuMesa && (item.serial || item.nome))
+                                ? (item.serial || item.nome)
+                                : (item.produtos?.nome || item.nome || item.serial || 'Produto');
+                            const codigoItem = isManualOuMesa ? (item.produtos?.codigo || 'SERV') : (item.produtos?.codigo || item.produto_id);
+                            const numSerieImei = item.numero_serie || (!isManualOuMesa ? item.serial : null) || item.imei;
+
                             return `
                             <div style="margin-bottom:12px;font-size:15px;line-height:1.3;">
                                 <div style="display:flex;justify-content:space-between;">
-                                    <span style="width:30%;text-align:left;">${item.produtos?.codigo || item.produto_id}</span>
+                                    <span style="width:30%;text-align:left;">${codigoItem}</span>
                                     <span style="width:40%;text-align:center;">${Math.abs(item.quantidade)} x ${formatarMoeda(item.valor_unitario)}</span>
                                     <span style="width:30%;text-align:right;">${isDevolucao ? '-' : ''}R$ ${parseFloat(Math.abs(item.subtotal || 0)).toFixed(2)}</span>
                                 </div>
                                 <div style="text-transform:uppercase;font-weight:bold;margin-top:2px;">
-                                    ${item.produtos?.nome || 'Produto'}
+                                    ${nomeItem}
                                 </div>
                                 ${descItem > 0 ? `
                                 <div style="font-size:13px;color:#dc2626;margin-top:2px;">
                                     Desconto no produto: - ${formatarMoeda(descItem)}${item.origem_desconto ? ` (${item.origem_desconto})` : ''}
                                 </div>` : ''}
-                                ${(item.numero_serie || item.imei) ? `
+                                ${numSerieImei ? `
                                 <div style="font-size:13px;margin-top:2px;">
-                                    IMEI / n° Série: ${item.numero_serie || item.imei}
+                                    IMEI / n° Série: ${numSerieImei}
                                 </div>` : ''}
                             </div>`;
                         }).join('')}

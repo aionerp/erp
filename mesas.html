@@ -193,6 +193,7 @@
                 <div class="form-group">
                     <label>Adicionar Lançamento (Valor Adicional em R$)</label>
                     <div style="display: flex; gap: 8px;">
+                        <input type="text" id="lancamentoDescricao" placeholder="Descrição (opcional, ex: Couvert / Taxa)" style="flex: 1.2; padding:10px; border-radius:8px; border:1px solid var(--border);">
                         <input type="number" step="0.01" id="lancamentoValor" placeholder="Ex: 25.50" style="flex: 1; padding:10px; border-radius:8px; border:1px solid var(--border);">
                         <button type="button" class="btn-primary" id="btnAdicionarLancamentoRapido" style="padding: 10px 16px; border-radius: 8px; white-space: nowrap; font-weight: 600;">➕ Lançar Valor</button>
                     </div>
@@ -212,12 +213,12 @@
                 </div>
 
                 <div id="carrinhoMesaContainer" style="margin-top: 20px; display: none;">
-                    <div style="font-size: 13px; color: var(--gray); text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Produtos Lançados</div>
-                    <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: white; margin-bottom: 15px;">
+                    <div style="font-size: 13px; color: var(--gray); text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Itens e Lançamentos da Comanda</div>
+                    <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: white; margin-bottom: 15px;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                             <thead>
                                 <tr style="background: var(--light); text-align: left; border-bottom: 1px solid var(--border);">
-                                    <th style="padding: 6px 10px;">Produto</th>
+                                    <th style="padding: 6px 10px;">Item / Lançamento</th>
                                     <th style="padding: 6px 10px; text-align: center;">Qtd</th>
                                     <th style="padding: 6px 10px; text-align: right;">Subtotal</th>
                                     <th style="padding: 6px 10px; text-align: center;">Ações</th>

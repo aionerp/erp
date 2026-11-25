@@ -173,6 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor_acumulado);
         document.getElementById('consumoStatus').value = m.status;
         document.getElementById('lancamentoValor').value = '';
+        const descInput = document.getElementById('lancamentoDescricao');
+        if (descInput) descInput.value = '';
 
         // Reset product search and quantity
         const searchInput = document.getElementById('searchProdutoMesa');
@@ -181,6 +183,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hiddenId) hiddenId.value = '';
         const qtdInput = document.getElementById('lancamentoProdutoQtd');
         if (qtdInput) qtdInput.value = '1';
+
+        // Reconciliação automática de lançamentos manuais acumulados legados
+        const itens = [...(m.itens_carrinho || [])];
+        const somaItens = itens.reduce((s, it) => s + ((Number(it.valor_venda) || Number(it.subtotal) || 0) * (Number(it.quantidade) || 1)), 0);
+        const diferenca = Number(m.valor_acumulado || 0) - somaItens;
+        if (diferenca > 0.01) {
+            itens.push({
+                id: 'manual_' + Date.now(),
+                tipo: 'servico',
+                nome: 'Lançamento Manual',
+                codigo: 'MANUAL',
+                quantidade: 1,
+                valor_venda: Math.round(diferenca * 100) / 100,
+                subtotal: Math.round(diferenca * 100) / 100
+            });
+            m.itens_carrinho = itens;
+            supabaseClient.from('mesas_comandas').update({ itens_carrinho: itens }).eq('id', m.id);
+        }
 
         // Renderizar carrinho de itens da mesa
         renderCarrinhoMesa(m.itens_carrinho || []);
@@ -211,15 +231,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         container.style.display = 'block';
         tbody.innerHTML = itens.map((it, idx) => {
-            const subtotal = it.valor_venda * it.quantidade;
+            const subtotal = (Number(it.valor_venda) || Number(it.subtotal) || 0) * (Number(it.quantidade) || 1);
             const subtotalFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal);
+            const isManual = it.tipo === 'servico' || String(it.id).startsWith('manual') || it.codigo === 'MANUAL';
+            const badgeTipo = isManual 
+                ? '<span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-left: 6px;">Lançamento</span>' 
+                : '';
             return `
                 <tr>
-                    <td style="padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: 500;">${it.nome}</td>
-                    <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">${it.quantidade}</td>
+                    <td style="padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: 500;">
+                        ${it.nome} ${badgeTipo}
+                    </td>
+                    <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">${it.quantidade || 1}</td>
                     <td style="padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--primary);">${subtotalFormatado}</td>
                     <td style="padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border);">
-                        <button type="button" class="btn-danger" onclick="removerItemMesa(${idx})" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none;">🗑️</button>
+                        <button type="button" class="btn-danger" onclick="removerItemMesa(${idx})" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none;" title="Remover item/lançamento">🗑️</button>
                     </td>
                 </tr>
             `;
@@ -237,15 +263,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         itens.splice(index, 1);
         
-        const valorItem = itemRemovido.valor_venda * itemRemovido.quantidade;
+        const valorItem = (Number(itemRemovido.valor_venda) || Number(itemRemovido.subtotal) || 0) * (Number(itemRemovido.quantidade) || 1);
         let novoValor = Math.max(0, m.valor_acumulado - valorItem);
+        let novoStatus = m.status;
+        if (novoValor <= 0 && itens.length === 0) {
+            novoStatus = 'livre';
+        }
 
         try {
             const { error } = await supabaseClient
                 .from('mesas_comandas')
                 .update({
                     itens_carrinho: itens,
-                    valor_acumulado: novoValor
+                    valor_acumulado: novoValor,
+                    status: novoStatus
                 })
                 .eq('id', id);
 
@@ -253,8 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             m.itens_carrinho = itens;
             m.valor_acumulado = novoValor;
+            m.status = novoStatus;
 
             document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoValor);
+            document.getElementById('consumoStatus').value = novoStatus;
             renderCarrinhoMesa(itens);
             
             const btnCheckout = document.getElementById('btnLancarVendaMesa');
@@ -277,10 +310,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lancamento = parseFloat(document.getElementById('lancamentoValor').value) || 0;
         const status = document.getElementById('consumoStatus').value;
+        const descInput = document.getElementById('lancamentoDescricao');
+        const descricao = (descInput?.value || '').trim() || 'Lançamento Manual';
         
         let novoValor = m.valor_acumulado + lancamento;
         let novoStatus = status;
         let novosItens = [...(m.itens_carrinho || [])];
+
+        if (lancamento > 0) {
+            novosItens.push({
+                id: 'manual_' + Date.now(),
+                tipo: 'servico',
+                nome: descricao,
+                codigo: 'MANUAL',
+                quantidade: 1,
+                valor_venda: lancamento,
+                subtotal: lancamento
+            });
+        }
 
         // Se o status for setado como livre, zera o consumo acumulado e limpa itens
         if (status === 'livre') {
@@ -303,6 +350,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 .eq('id', id);
 
             if (error) throw error;
+
+            m.itens_carrinho = novosItens;
+            m.valor_acumulado = novoValor;
+            m.status = novoStatus;
+
             mostrarNotificacao('Mesa atualizada com sucesso!', 'success');
             document.getElementById('modalConsumo').style.display = 'none';
             carregarMesas();
@@ -341,10 +393,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const descInput = document.getElementById('lancamentoDescricao');
+        const descricao = (descInput?.value || '').trim() || 'Lançamento Manual';
+
         const btn = document.getElementById('btnAdicionarLancamentoRapido');
         btn.disabled = true;
         btn.textContent = '...';
 
+        const novoItem = {
+            id: 'manual_' + Date.now(),
+            tipo: 'servico',
+            nome: descricao,
+            codigo: 'MANUAL',
+            quantidade: 1,
+            valor_venda: lancamento,
+            subtotal: lancamento
+        };
+
+        const novosItens = [...(m.itens_carrinho || []), novoItem];
         const novoValor = m.valor_acumulado + lancamento;
         const novoStatus = m.status === 'livre' ? 'ocupada' : m.status;
 
@@ -353,18 +419,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('mesas_comandas')
                 .update({
                     status: novoStatus,
-                    valor_acumulado: novoValor
+                    valor_acumulado: novoValor,
+                    itens_carrinho: novosItens
                 })
                 .eq('id', id);
 
             if (error) throw error;
 
+            m.itens_carrinho = novosItens;
             m.valor_acumulado = novoValor;
             m.status = novoStatus;
 
             document.getElementById('consumoValorTotal').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoValor);
             document.getElementById('consumoStatus').value = novoStatus;
             document.getElementById('lancamentoValor').value = '';
+            if (descInput) descInput.value = '';
+
+            renderCarrinhoMesa(novosItens);
 
             const btnCheckout = document.getElementById('btnLancarVendaMesa');
             if (btnCheckout) {
