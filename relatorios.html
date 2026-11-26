@@ -445,11 +445,17 @@
                         <h3>Registro de Inventário</h3>
                         <p>Posição de estoque, custo e lucro potencial</p>
                     </div>
+                    <div class="card-relatorio" onclick="abrirAba('fechamento')" style="border-left-color: #EB5E28;">
+                        <div class="icon">💵</div>
+                        <h3>Fechamento de Caixa</h3>
+                        <p>Visualizar, reimprimir ou cancelar fechamentos e reajustar valores</p>
+                    </div>
                 </div>
                 
                 <!-- Abas de Relatórios -->
                 <div class="tabs-container" id="tabsContainer">
                     <button class="tab-btn active" data-tab="dashboard" onclick="abrirAba('dashboard')">📊 Dashboard</button>
+                    <button class="tab-btn" data-tab="fechamento" onclick="abrirAba('fechamento')">💵 Fechamento de Caixa</button>
                     <button class="tab-btn" data-tab="inventario" onclick="abrirAba('inventario')">📦 Registro de Inventário</button>
                     <button class="tab-btn" data-tab="movimento" onclick="abrirAba('movimento')">📋 Movimento Diário</button>
                     <button class="tab-btn" data-tab="faturamento" onclick="abrirAba('faturamento')">💰 Faturamento</button>
@@ -926,6 +932,15 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Tab: Relatório de Fechamento de Caixa -->
+                <div id="tab-fechamento" class="tab-content">
+                    <div class="relatorio-container">
+                        <div id="fechamentoRelatorioMount">
+                            <div style="text-align: center; padding: 25px; color: var(--gray);">Carregando relatórios de fechamento de caixa...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -933,6 +948,8 @@
     <script src="js/security.js?v=2.2.0"></script>
     <script src="js/config.js?v=2.2.0"></script>
     <script src="js/auth-check.js?v=2.2.0"></script>
+    <script src="js/export-helper.js?v=2.2.0"></script>
+    <script src="js/fechamento-relatorio.js?v=2.2.0"></script>
     <script src="js/promocoes.js?v=2.2.0"></script>
     <script src="js/relatorios.js?v=2.2.0"></script>
     <script src="js/ajuda.js?v=2.2.0"></script>

@@ -717,13 +717,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         btnConfirm.textContent = 'Fechando...';
                         try {
                             const dataFechamento = new Date().toISOString();
+                            const diferencaCaixa = Math.round((valFinal - saldoEsperadoGaveta) * 100) / 100;
                             const { data, error } = await supabaseClient
                                 .from('caixas')
                                 .update({
                                     data_fechamento: dataFechamento,
                                     saldo_final: valFinal,
+                                    saldo_esperado: Math.round(saldoEsperadoGaveta * 100) / 100,
+                                    diferenca_caixa: diferencaCaixa,
                                     usuario_fechamento_id: usuario.id,
-                                    status: 'fechado'
+                                    status: 'fechado',
+                                    cancelado: false
                                 })
                                 .eq('id', caixaAtivo.id)
                                 .select();

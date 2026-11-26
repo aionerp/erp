@@ -17,7 +17,8 @@ let dadosCarregados = {
     lucro: false,
     descontos: false,
     despesas: false,
-    inventario: false
+    inventario: false,
+    fechamento: false
 };
 
 // Variáveis para armazenar dados brutos para exportação
@@ -191,6 +192,15 @@ function abrirAba(tabId) {
 
     if (tabId === 'inventario' && (!dadosCarregados.inventario || produtosInventarioRaw.length === 0)) {
         carregarRegistroInventario();
+    }
+
+    if (tabId === 'fechamento' && window.RelatorioFechamentoCaixa) {
+        if (!dadosCarregados.fechamento) {
+            dadosCarregados.fechamento = true;
+            window.RelatorioFechamentoCaixa.mount('fechamentoRelatorioMount');
+        } else {
+            window.RelatorioFechamentoCaixa.carregarDados();
+        }
     }
 }
 

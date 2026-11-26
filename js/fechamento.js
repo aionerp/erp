@@ -1,22 +1,34 @@
 // js/fechamento.js
-// Lógica para controle de abertura e fechamento diário de caixa no Supabase
+// Controle de abertura e fechamento diário de caixa — integrado com FechamentoCore e RelatorioFechamentoCaixa
 
 let caixaAtivo = null;
-let dadosVendasAtivo = null; // Guardará os dados do caixa ativo para impressão
+let dadosVendasAtivo = null;
+let registrosAtivo = { vendas: [], despesas: [], pagamentosFiado: [], categorias: {}, totalItens: 0 };
+let usuarioEditouSaldoFinalAtivo = false;
 const usuario = JSON.parse(sessionStorage.getItem('usuario'));
 
 function formatarMoeda(valor) {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(valor) || 0);
 }
 
 function formatarDataHora(dataISO) {
     if (!dataISO) return '-';
     const date = new Date(dataISO);
-    return date.toLocaleString('pt-BR');
+    return isNaN(date.getTime()) ? '-' : date.toLocaleString('pt-BR');
 }
 
-// Helper: identifica de forma infalível se um registro foi cancelado/estornado
+function escapeSafe(str) {
+    if (window.FechamentoCore) return window.FechamentoCore.escapeHtmlSafe(str);
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function isRegistroCancelado(obj) {
+    if (window.FechamentoCore) return window.FechamentoCore.isRegistroCancelado(obj);
     if (!obj) return false;
     if (obj.cancelado === true || obj.cancelado === 'true' || obj.cancelado === 't' || obj.cancelado === 1 || obj.cancelado === '1') return true;
     if (obj.status === 'cancelado' || obj.status === 'cancelada') return true;
@@ -43,24 +55,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         return;
     }
-    
-    // Inicializar controles e listeners
+
     await inicializarPagina();
 });
 
 async function inicializarPagina() {
-    // 1. Verificar se a tabela caixas existe e carregar dados
     try {
         caixaAtivo = await obterCaixaAtivo();
     } catch (e) {
-        // Se der erro ao carregar (por exemplo, tabela inexistente)
         exibirMensagemConfiguracaoSQL();
         return;
     }
 
-    // Como obterCaixaAtivo trata erro e retorna null em caso de erro da tabela,
-    // precisamos testar se a chamada de teste na API falha de fato para exibir a instrução de SQL.
-    // Vamos fazer uma consulta direta rápida para validar a tabela caixas.
     try {
         const { error } = await supabaseClient.from('caixas').select('id').limit(1);
         if (error && (error.status === 404 || error.code === 'PGRST116')) {
@@ -73,66 +79,107 @@ async function inicializarPagina() {
     }
 
     if (caixaAtivo) {
-        // Caixa está aberto
-        exibirCaixaAberto(caixaAtivo);
+        await exibirCaixaAberto(caixaAtivo);
     } else {
-        // Caixa está fechado
-        exibirCaixaFechado();
+        await exibirCaixaFechado();
     }
 
-    // Carregar histórico de caixas fechados
-    carregarHistoricoCaixas();
+    if (window.RelatorioFechamentoCaixa) {
+        await window.RelatorioFechamentoCaixa.mount('fechamentoRelatorioContainer', {
+            onDataChanged: async () => {
+                if (!caixaAtivo) {
+                    await atualizarCardUltimoCaixaFechado();
+                }
+            }
+        });
+    }
 }
 
 function exibirMensagemConfiguracaoSQL() {
     const statusBadge = document.getElementById('statusCaixaBadge');
     if (statusBadge) statusBadge.innerHTML = '<span class="status-badge fechado">⚠️ Tabela Não Configurada</span>';
-    
+
     const layout = document.querySelector('.fechamento-layout');
     if (layout) {
         layout.innerHTML = `
             <div class="panel-secao" style="border-left: 5px solid var(--danger);">
                 <h3 style="color: var(--danger);">⚠️ Banco de Dados Não Configurado</h3>
                 <p style="font-size: 14px; margin-bottom: 20px;">
-                    A tabela de controle de caixas (<code>caixas</code>) não foi encontrada no banco de dados Supabase. 
-                    Para utilizar este recurso, você precisa executar o script de criação no seu Supabase.
+                    A tabela de controle de caixas (<code>caixas</code>) não foi encontrada no banco de dados.
                 </p>
-                <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--dark);">Passos para configurar:</h4>
-                <ol style="margin-left: 20px; margin-bottom: 20px; font-size: 14px; line-height: 1.8;">
-                    <li>Acesse o <a href="https://supabase.com" target="_blank" style="color: var(--primary); font-weight: 700;">Painel do Supabase</a> e abra seu projeto.</li>
-                    <li>No menu lateral esquerdo, clique no ícone do <strong>SQL Editor</strong> (ícone <code>SQL</code>).</li>
-                    <li>Clique em <strong>New query</strong> (Nova consulta).</li>
-                    <li>Copie o script SQL abaixo, cole no editor e clique no botão <strong>Run</strong> (Executar) no canto inferior direito.</li>
-                </ol>
-                 <textarea readonly style="width: 100%; height: 210px; padding: 12px; font-family: monospace; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #faf9f6; resize: none; outline: none; margin-bottom: 20px;" onclick="this.select()">-- 1. Criar tabela de controle de caixas com suporte multi-tenant (loja_id)
-CREATE TABLE public.caixas (
+                <textarea readonly style="width: 100%; height: 230px; padding: 12px; font-family: monospace; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #faf9f6; resize: none; outline: none; margin-bottom: 20px;" onclick="this.select()">CREATE TABLE public.caixas (
     id SERIAL PRIMARY KEY,
     loja_id INTEGER NOT NULL REFERENCES public.lojas(id) ON DELETE CASCADE,
     data_abertura TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     data_fechamento TIMESTAMP WITH TIME ZONE,
     saldo_inicial NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
     saldo_final NUMERIC(10, 2),
+    saldo_esperado NUMERIC(10, 2),
+    diferenca_caixa NUMERIC(10, 2),
+    ajustes_fechamento JSONB DEFAULT '{}'::jsonb,
+    observacao_fechamento TEXT,
+    cancelado BOOLEAN DEFAULT false,
+    cancelado_em TIMESTAMP WITH TIME ZONE,
+    cancelado_por INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    motivo_cancelamento TEXT,
+    historico_fechamentos JSONB DEFAULT '[]'::jsonb,
     usuario_abertura_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
     usuario_fechamento_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
-    status VARCHAR(50) DEFAULT 'aberto' NOT NULL,
+    status VARCHAR(50) DEFAULT 'aberto' NOT NULL CHECK (status IN ('aberto', 'fechado', 'cancelado')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Adicionar coluna caixa_id na tabela de saidas
-ALTER TABLE public.saidas ADD COLUMN IF NOT EXISTS caixa_id INTEGER REFERENCES public.caixas(id) ON DELETE SET NULL;
-
--- 3. Habilitar RLS (Row Level Security) na tabela caixas
-ALTER TABLE public.caixas ENABLE ROW LEVEL SECURITY;
-
--- 4. Criar política de isolamento multi-tenant (RLS) para tabela caixas
-CREATE POLICY tenant_caixas_policy ON public.caixas
-    FOR ALL USING (loja_id = public.obter_loja_id_requisicao());
-</textarea>
+);</textarea>
                 <button class="btn-acao-caixa btn-abrir" onclick="window.location.reload()">
                     🔄 Já executei o SQL, recarregar página
                 </button>
             </div>
         `;
+    }
+}
+
+async function atualizarCardUltimoCaixaFechado() {
+    const infoEl = document.getElementById('ultimoCaixaInfo');
+    if (!infoEl) return;
+
+    try {
+        const ultimoCaixa = await obterUltimoCaixaFechado();
+        if (!ultimoCaixa) {
+            infoEl.style.display = 'none';
+            return;
+        }
+        infoEl.style.display = 'block';
+        document.getElementById('uAberturaDate').textContent = formatarDataHora(ultimoCaixa.data_abertura);
+        document.getElementById('uFechamentoDate').textContent = formatarDataHora(ultimoCaixa.data_fechamento);
+        document.getElementById('uSaldoInicial').textContent = formatarMoeda(ultimoCaixa.saldo_inicial);
+        document.getElementById('uSaldoFinal').textContent = formatarMoeda(ultimoCaixa.saldo_final);
+
+        const btnVisualizar = document.getElementById('btnVisualizarUltimoRelatorio');
+        if (btnVisualizar) {
+            btnVisualizar.onclick = () => {
+                if (window.RelatorioFechamentoCaixa) {
+                    window.RelatorioFechamentoCaixa.visualizarFechamento(ultimoCaixa.id);
+                }
+            };
+        }
+
+        const btnImprimir = document.getElementById('btnImprimirUltimoRelatorio');
+        if (btnImprimir) {
+            btnImprimir.onclick = () => {
+                imprimirRelatorioPorCaixa(ultimoCaixa);
+            };
+        }
+
+        const btnCancelar = document.getElementById('btnCancelarUltimoRelatorio');
+        if (btnCancelar) {
+            const podeCancelar = typeof verificarPermissao !== 'function' || verificarPermissao('fechamento', 'cancelar') || verificarPermissao('fechamento', 'fechar');
+            btnCancelar.style.display = podeCancelar ? 'inline-flex' : 'none';
+            btnCancelar.onclick = () => {
+                if (window.RelatorioFechamentoCaixa) {
+                    window.RelatorioFechamentoCaixa.abrirModalCancelarFechamento(ultimoCaixa.id);
+                }
+            };
+        }
+    } catch (e) {
+        console.error('Erro ao carregar último caixa:', e);
     }
 }
 
@@ -142,34 +189,14 @@ async function exibirCaixaFechado() {
 
     const statusBadge = document.getElementById('statusCaixaBadge');
     if (statusBadge) statusBadge.innerHTML = '<span class="status-badge fechado">🔴 Caixa Fechado</span>';
-    
+
     document.getElementById('aberturaSeccion').style.display = 'block';
     document.getElementById('fechamentoSeccion').style.display = 'none';
-    
-    // Configurar listener de abertura
+
     const btnAbrir = document.getElementById('btnAbrirCaixa');
-    btnAbrir.onclick = abrirCaixa;
-    
-    // Carregar informações do último caixa fechado
-    try {
-        const ultimoCaixa = await obterUltimoCaixaFechado();
-        if (ultimoCaixa) {
-            document.getElementById('ultimoCaixaInfo').style.display = 'block';
-            document.getElementById('uAberturaDate').textContent = formatarDataHora(ultimoCaixa.data_abertura);
-            document.getElementById('uFechamentoDate').textContent = formatarDataHora(ultimoCaixa.data_fechamento);
-            document.getElementById('uSaldoInicial').textContent = formatarMoeda(ultimoCaixa.saldo_inicial);
-            document.getElementById('uSaldoFinal').textContent = formatarMoeda(ultimoCaixa.saldo_final);
-            
-            const btnImprimir = document.getElementById('btnImprimirUltimoRelatorio');
-            if (btnImprimir) {
-                btnImprimir.onclick = () => {
-                    imprimirRelatorioPorCaixa(ultimoCaixa);
-                };
-            }
-        }
-    } catch (e) {
-        console.error('Erro ao carregar último caixa:', e);
-    }
+    if (btnAbrir) btnAbrir.onclick = abrirCaixa;
+
+    await atualizarCardUltimoCaixaFechado();
 }
 
 async function abrirCaixa() {
@@ -180,18 +207,17 @@ async function abrirCaixa() {
 
     const saldoInicialInput = document.getElementById('saldoInicial');
     const saldoInicial = parseFloat(saldoInicialInput.value) || 0;
-    
+
     if (saldoInicial < 0) {
         mostrarNotificacao('O saldo inicial não pode ser menor que zero!', 'error');
         return;
     }
-    
+
     const btn = document.getElementById('btnAbrirCaixa');
     btn.disabled = true;
     btn.textContent = '⏳ Abrindo caixa...';
-    
+
     try {
-        // Validar se existe caixa pendente de fechamento de dia anterior
         const statusAtual = await obterStatusCaixa();
         if (statusAtual.tipo === 'pendente_fechamento_anterior') {
             mostrarNotificacao('⚠️ Não é possível abrir um novo caixa: existe um caixa de ' + formatarDataHora(statusAtual.caixa.data_abertura) + ' que precisa ser fechado primeiro!', 'error');
@@ -221,13 +247,13 @@ async function abrirCaixa() {
         const { error } = await supabaseClient
             .from('caixas')
             .insert([payloadCaixa]);
-            
+
         if (error) throw error;
-        
+
         mostrarNotificacao('✅ Caixa aberto com sucesso!', 'success');
         setTimeout(() => {
             window.location.reload();
-        }, 1000);
+        }, 900);
     } catch (e) {
         console.error('Erro ao abrir caixa:', e);
         if (e.status === 404 || e.code === 'PGRST116') {
@@ -243,15 +269,13 @@ async function abrirCaixa() {
 async function exibirCaixaAberto(caixa) {
     const isPendente = isCaixaDiaAnterior(caixa);
     const statusBadge = document.getElementById('statusCaixaBadge');
-    
-    // Remover banner existente se houver
+
     const bannerExistente = document.getElementById('bannerCaixaPendente');
     if (bannerExistente) bannerExistente.remove();
 
     if (isPendente) {
         if (statusBadge) statusBadge.innerHTML = '<span class="status-badge pendente">⚠️ Caixa Anterior Pendente</span>';
-        
-        // Criar e exibir banner de advertência
+
         const fechamentoSeccion = document.getElementById('fechamentoSeccion');
         const banner = document.createElement('div');
         banner.id = 'bannerCaixaPendente';
@@ -271,10 +295,10 @@ async function exibirCaixaAberto(caixa) {
     } else {
         if (statusBadge) statusBadge.innerHTML = '<span class="status-badge aberto">🟢 Caixa Aberto (Hoje)</span>';
     }
-    
+
     document.getElementById('aberturaSeccion').style.display = 'none';
     document.getElementById('fechamentoSeccion').style.display = 'block';
-    
+
     const btnFechar = document.getElementById('btnFecharCaixa');
     if (btnFechar) {
         if (isPendente) {
@@ -286,12 +310,10 @@ async function exibirCaixaAberto(caixa) {
         }
         btnFechar.onclick = fecharCaixa;
     }
-    
-    // Dados básicos do caixa
+
     document.getElementById('cDataAbertura').textContent = formatarDataHora(caixa.data_abertura) + (isPendente ? ' (Pendente do Dia Anterior)' : '');
     document.getElementById('cSaldoInicial').textContent = formatarMoeda(caixa.saldo_inicial);
-    
-    // Buscar operador da abertura
+
     let nomeOperador = 'Desconhecido';
     try {
         const { data: userObj } = await supabaseClient
@@ -304,185 +326,139 @@ async function exibirCaixaAberto(caixa) {
         console.error(e);
     }
     document.getElementById('cUsuarioAbertura').textContent = nomeOperador;
-    
-    // KPI fundo inicial
     document.getElementById('kpiFundoInicial').textContent = formatarMoeda(caixa.saldo_inicial);
-    
-    // Carregar vendas do caixa ativo
+
+    vincularListenersAjustesAtivo();
     await carregarVendasCaixa(caixa);
+}
+
+function lerAjustesAtivo() {
+    return {
+        suprimento: Math.max(0, parseFloat(document.getElementById('ajAtivoSuprimento')?.value) || 0),
+        sangria: Math.max(0, parseFloat(document.getElementById('ajAtivoSangria')?.value) || 0),
+        ajuste_dinheiro: parseFloat(document.getElementById('ajAtivoDinheiro')?.value) || 0,
+        ajuste_cartao: parseFloat(document.getElementById('ajAtivoCartao')?.value) || 0,
+        ajuste_pix: parseFloat(document.getElementById('ajAtivoPix')?.value) || 0,
+        ajuste_outros: 0,
+        ajuste_despesas: parseFloat(document.getElementById('ajAtivoDespesas')?.value) || 0,
+        observacao: (document.getElementById('ajAtivoObservacao')?.value || '').trim()
+    };
+}
+
+function recalcularResumoAtivoEmTela() {
+    if (!caixaAtivo || !window.FechamentoCore) return null;
+    const aj = lerAjustesAtivo();
+    const elSaldoFinal = document.getElementById('saldoFinal');
+    const calcTemp = window.FechamentoCore.calcularResumoFechamentoCaixa({
+        saldoInicial: caixaAtivo.saldo_inicial,
+        vendas: registrosAtivo.vendas,
+        pagamentosFiado: registrosAtivo.pagamentosFiado,
+        despesas: registrosAtivo.despesas,
+        ajustes: aj
+    });
+
+    if (!usuarioEditouSaldoFinalAtivo && elSaldoFinal) {
+        elSaldoFinal.value = Math.max(0, calcTemp.saldoEsperadoGaveta).toFixed(2);
+    }
+
+    const declaradoVal = parseFloat(elSaldoFinal?.value);
+    const resumo = window.FechamentoCore.calcularResumoFechamentoCaixa({
+        saldoInicial: caixaAtivo.saldo_inicial,
+        saldoFinalDeclarado: isNaN(declaradoVal) ? 0 : declaradoVal,
+        vendas: registrosAtivo.vendas,
+        pagamentosFiado: registrosAtivo.pagamentosFiado,
+        despesas: registrosAtivo.despesas,
+        ajustes: aj
+    });
+
+    const elVendasDia = document.getElementById('kpiVendasDia');
+    const elDespesasDia = document.getElementById('kpiDespesasDia');
+    const elTotalCaixa = document.getElementById('kpiTotalCaixa');
+    const elDescontos = document.getElementById('kpiDescontos');
+    const elEsp = document.getElementById('ativoEsperadoGaveta');
+    const elDif = document.getElementById('ativoDiferencaCaixa');
+
+    if (elVendasDia) elVendasDia.textContent = formatarMoeda(resumo.totalVendas);
+    if (elDespesasDia) elDespesasDia.textContent = formatarMoeda(resumo.totalDespesas + resumo.sangria);
+    if (elTotalCaixa) elTotalCaixa.textContent = formatarMoeda(resumo.totalLiquidoGeral);
+    if (elDescontos) elDescontos.textContent = formatarMoeda(resumo.totalDescontos);
+    if (elEsp) elEsp.textContent = formatarMoeda(resumo.saldoEsperadoGaveta);
+    if (elDif) {
+        if (Math.abs(resumo.diferencaCaixa) < 0.005) {
+            elDif.textContent = 'R$ 0,00 (Caixa Batido)';
+            elDif.style.color = '#059669';
+        } else if (resumo.diferencaCaixa > 0) {
+            elDif.textContent = `+${formatarMoeda(resumo.diferencaCaixa)} (Sobra)`;
+            elDif.style.color = '#1d4ed8';
+        } else {
+            elDif.textContent = `${formatarMoeda(resumo.diferencaCaixa)} (Quebra)`;
+            elDif.style.color = '#dc2626';
+        }
+    }
+
+    dadosVendasAtivo = {
+        ...resumo,
+        totalItens: registrosAtivo.totalItens,
+        categorias: registrosAtivo.categorias,
+        despesas: registrosAtivo.despesas
+    };
+
+    renderizarFormasPagamento(resumo.formasPagamento);
+    return resumo;
+}
+
+function vincularListenersAjustesAtivo() {
+    ['ajAtivoSuprimento', 'ajAtivoSangria', 'ajAtivoDinheiro', 'ajAtivoCartao', 'ajAtivoPix', 'ajAtivoDespesas'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.boundAtivo) {
+            el.dataset.boundAtivo = '1';
+            el.addEventListener('input', recalcularResumoAtivoEmTela);
+        }
+    });
+    const elFinal = document.getElementById('saldoFinal');
+    if (elFinal && !elFinal.dataset.boundAtivo) {
+        elFinal.dataset.boundAtivo = '1';
+        elFinal.addEventListener('input', () => {
+            usuarioEditouSaldoFinalAtivo = true;
+            recalcularResumoAtivoEmTela();
+        });
+    }
 }
 
 async function carregarVendasCaixa(caixa) {
     try {
-        // 1. Buscar vendas da loja
-        let todasSaidas = [];
-        try {
-            const { data, error } = await supabaseClient
-                .from('saidas')
-                .select('*');
-            if (!error && data) {
-                todasSaidas = data;
-            } else if (error) {
-                console.warn('Erro ao consultar saidas:', error);
-            }
-        } catch (errQ) {
-            console.warn('Erro de rede/query em saidas:', errQ);
-        }
+        const [saidasRes, despesasRes, fiadoRes] = await Promise.all([
+            supabaseClient.from('saidas').select('*'),
+            supabaseClient.from('despesas').select('*'),
+            supabaseClient.from('contas_receber_pagamentos').select('*')
+        ]);
 
-        // 2. Filtrar vendas pertencentes a este caixa
-        const dataAbertura = new Date(caixa.data_abertura);
-        const dataFechamento = caixa.data_fechamento ? new Date(caixa.data_fechamento) : null;
-        const dataAberturaStr = caixa.data_abertura ? caixa.data_abertura.substring(0, 10) : '';
+        const todasSaidas = (!saidasRes.error && saidasRes.data) ? saidasRes.data : [];
+        const todasDespesas = (!despesasRes.error && despesasRes.data) ? despesasRes.data : [];
+        const todosFiados = (!fiadoRes.error && fiadoRes.data) ? fiadoRes.data : [];
 
-        const vendas = todasSaidas.filter(v => {
-            if (isRegistroCancelado(v)) return false;
-            
-            // Vínculo explícito por caixa_id
-            if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixa.id)) {
-                return true;
-            }
-            
-            // Se caixa_id for nulo ou ausente, validar por período/data
-            if (!v.caixa_id) {
-                const dtVenda = v.data_finalizacao ? new Date(v.data_finalizacao) : (v.created_at ? new Date(v.created_at) : null);
-                if (dtVenda && !isNaN(dtVenda.getTime())) {
-                    if (dtVenda >= dataAbertura && (!dataFechamento || dtVenda <= dataFechamento)) {
-                        return true;
-                    }
-                }
-                if (v.data && dataAberturaStr) {
-                    const str = String(v.data).substring(0, 10);
-                    if (str === dataAberturaStr) {
-                        return true;
-                    }
-                }
-            }
-            return false;
+        const filtrados = window.FechamentoCore.filtrarRegistrosDoCaixa(caixa, {
+            saidas: todasSaidas,
+            despesas: todasDespesas,
+            pagamentosFiado: todosFiados
         });
 
-        // 3. Carregar despesas do período do caixa
-        let despesas = [];
-        try {
-            const { data: despesasData, error: despesasError } = await supabaseClient
-                .from('despesas')
-                .select('*');
-            if (!despesasError && despesasData) {
-                despesas = despesasData.filter(d => {
-                    const dt = d.data_pagamento ? new Date(d.data_pagamento) : (d.created_at ? new Date(d.created_at) : (d.data ? new Date(d.data) : null));
-                    if (dt && !isNaN(dt.getTime())) {
-                        if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) {
-                            return true;
-                        }
-                    }
-                    if (d.data && dataAberturaStr && String(d.data).substring(0, 10) === dataAberturaStr) {
-                        return true;
-                    }
-                    return false;
-                });
-            }
-        } catch (e) {
-            console.warn('Erro ao carregar despesas do caixa:', e);
-        }
-        const totalDespesas = despesas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
-        
-        // 4. Calcular totais
-        let totalVendas = 0;
-        let totalDescontos = 0;
-        let totalItens = 0;
-        let dinheiroVendas = 0;
-        
-        const formasPagamento = {};
-        const vendaIds = [];
-        
-        vendas.forEach(v => {
-            const valTotal = Number(v.total) || 0;
-            const valDesc = Number(v.desconto) || 0;
-            const fp = v.forma_pagamento || 'Outro / Não Informado';
-            const isFiado = fp.toLowerCase().includes('a pagar') || fp.includes('(F)');
-
-            // Só adiciona ao faturamento líquido do caixa se NÃO for venda fiada direta
-            if (!isFiado) {
-                totalVendas += valTotal;
-            }
-            totalDescontos += valDesc;
-            vendaIds.push(v.id);
-            
-            // Agrupar por forma de pagamento
-            formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
-            
-            // Só adiciona a dinheiroVendas se for dinheiro e não for venda fiada
-            if (fp.toLowerCase().includes('dinheiro') && !isFiado) {
-                dinheiroVendas += valTotal;
-            }
+        const resumoBase = window.FechamentoCore.calcularResumoFechamentoCaixa({
+            saldoInicial: caixa.saldo_inicial,
+            vendas: filtrados.vendasFiltradas,
+            pagamentosFiado: filtrados.fiadosFiltrados,
+            despesas: filtrados.despesasFiltradas
         });
 
-        // 4.1. Carregar pagamentos de Fiado / Contas a Receber realizados neste caixa
-        let pagamentosFiadoCaixa = [];
-        try {
-            const { data: crPags, error: crPagsErr } = await supabaseClient
-                .from('contas_receber_pagamentos')
-                .select('*')
-                .eq('caixa_id', caixa.id);
-            if (!crPagsErr && crPags) {
-                pagamentosFiadoCaixa = crPags.filter(p => !isRegistroCancelado(p) && p.tipo_operacao !== 'venda_realizada' && p.tipo_operacao !== 'estorno');
-            } else {
-                const { data: crPagsAll } = await supabaseClient
-                    .from('contas_receber_pagamentos')
-                    .select('*');
-                if (crPagsAll) {
-                    pagamentosFiadoCaixa = crPagsAll.filter(p => {
-                        if (isRegistroCancelado(p) || p.tipo_operacao === 'venda_realizada' || p.tipo_operacao === 'estorno') return false;
-                        if (p.caixa_id && String(p.caixa_id) === String(caixa.id)) return true;
-                        const dt = p.data_pagamento ? new Date(p.data_pagamento) : null;
-                        if (dt && !isNaN(dt.getTime())) {
-                            if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) return true;
-                        }
-                        return false;
-                    });
-                }
-            }
-        } catch (e) {
-            console.warn('Aviso ao carregar pagamentos de contas a receber no caixa:', e);
-        }
-
-        pagamentosFiadoCaixa.forEach(p => {
-            const valPago = Number(p.valor_pago) || 0;
-            // Baixas e recebimentos de fiado realizados no caixa somam ao faturamento do dia do caixa!
-            totalVendas += valPago;
-
-            const fpKey = (p.forma_pagamento || 'Dinheiro') + ' (Receb. Fiado)';
-            formasPagamento[fpKey] = (formasPagamento[fpKey] || 0) + valPago;
-
-            if ((p.forma_pagamento || '').toLowerCase().includes('dinheiro')) {
-                dinheiroVendas += valPago;
-            }
-        });
-        
-        // Exibir KPIs
-        const elVendasDia = document.getElementById('kpiVendasDia');
-        const elDespesasDia = document.getElementById('kpiDespesasDia');
-        const elTotalCaixa = document.getElementById('kpiTotalCaixa');
-        const elDescontos = document.getElementById('kpiDescontos');
-        const elSaldoFinal = document.getElementById('saldoFinal');
-
-        if (elVendasDia) elVendasDia.textContent = formatarMoeda(totalVendas);
-        if (elDespesasDia) elDespesasDia.textContent = formatarMoeda(totalDespesas);
-        if (elTotalCaixa) elTotalCaixa.textContent = formatarMoeda((Number(caixa.saldo_inicial) || 0) + totalVendas - totalDespesas);
-        if (elDescontos) elDescontos.textContent = formatarMoeda(totalDescontos);
-        
-        // Sugerir saldo final na gaveta (Saldo Inicial + Vendas em Dinheiro - Despesas)
-        const saldoFinalEsperado = (Number(caixa.saldo_inicial) || 0) + dinheiroVendas - totalDespesas;
-        if (elSaldoFinal) elSaldoFinal.value = Math.max(0, saldoFinalEsperado).toFixed(2);
-        
-        // 5. Carregar itens vendidos com fallback seguro
         let itens = [];
+        let totalItens = 0;
+        const vendaIds = resumoBase.vendaIds;
         if (vendaIds.length > 0) {
             try {
                 const { data: itensData, error: errorItens } = await supabaseClient
                     .from('saida_itens')
                     .select('quantidade, subtotal, produto_id, produtos(nome, categoria)')
                     .in('saida_id', vendaIds.slice(0, 300));
-                
                 if (!errorItens && itensData) {
                     itens = itensData;
                 } else {
@@ -496,17 +472,14 @@ async function carregarVendasCaixa(caixa) {
                 console.warn('Aviso ao buscar itens para fechamento:', errI);
             }
         }
-        
-        // Calcular total itens e categorias
+
         const categorias = {};
         itens.forEach(item => {
             const qtd = Number(item.quantidade) || 0;
             const sub = Number(item.subtotal) || 0;
             totalItens += qtd;
             const cat = item.produtos?.categoria || 'Serviços e Produtos';
-            if (!categorias[cat]) {
-                categorias[cat] = { qtd: 0, total: 0 };
-            }
+            if (!categorias[cat]) categorias[cat] = { qtd: 0, total: 0 };
             categorias[cat].qtd += qtd;
             categorias[cat].total += sub;
         });
@@ -514,22 +487,18 @@ async function carregarVendasCaixa(caixa) {
         const elItensVendidos = document.getElementById('kpiItensVendidos');
         if (elItensVendidos) elItensVendidos.textContent = totalItens;
 
-        // Guardar para impressão
-        dadosVendasAtivo = {
-            totalVendas,
-            totalDescontos,
-            totalItens,
-            formasPagamento,
+        registrosAtivo = {
+            vendas: filtrados.vendasFiltradas,
+            despesas: filtrados.despesasFiltradas,
+            pagamentosFiado: filtrados.fiadosFiltrados,
             categorias,
-            totalDespesas,
-            despesas
+            totalItens
         };
 
-        // Renderizar tabelas na tela
-        renderizarFormasPagamento(formasPagamento);
+        usuarioEditouSaldoFinalAtivo = false;
+        recalcularResumoAtivoEmTela();
         renderizarVendasPorPlano(categorias);
-        renderizarDespesas(despesas);
-        
+        renderizarDespesas(filtrados.despesasFiltradas);
     } catch (e) {
         console.error('Erro ao carregar vendas do caixa:', e);
         mostrarNotificacao('Erro ao carregar dados de vendas: ' + e.message, 'error');
@@ -539,16 +508,16 @@ async function carregarVendasCaixa(caixa) {
 function renderizarFormasPagamento(formasPagamento) {
     const tbody = document.querySelector('#tabelaPagamentos tbody');
     if (!tbody) return;
-    
-    const keys = Object.keys(formasPagamento);
+
+    const keys = Object.keys(formasPagamento || {});
     if (keys.length === 0) {
         tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--gray);">Nenhuma venda registrada neste caixa</td></tr>`;
         return;
     }
-    
+
     tbody.innerHTML = keys.map(key => `
         <tr>
-            <td><strong>${key}</strong></td>
+            <td><strong>${escapeSafe(key)}</strong></td>
             <td style="text-align: right; font-weight: 700; color: var(--success);">${formatarMoeda(formasPagamento[key])}</td>
         </tr>
     `).join('');
@@ -557,14 +526,13 @@ function renderizarFormasPagamento(formasPagamento) {
 function renderizarVendasPorPlano(categorias) {
     const tbody = document.querySelector('#tabelaPlanos tbody');
     if (!tbody) return;
-    
+
     const keys = Object.keys(categorias).filter(cat => categorias[cat].qtd > 0 || categorias[cat].total > 0);
     if (keys.length === 0) {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--gray);">Nenhum item vendido neste caixa</td></tr>`;
         return;
     }
-    
-    // Ordenar categorias colocando "Plano" ou "Planos" primeiro, se existirem
+
     keys.sort((a, b) => {
         const isAPlano = a.toLowerCase().includes('plano');
         const isBPlano = b.toLowerCase().includes('plano');
@@ -572,13 +540,13 @@ function renderizarVendasPorPlano(categorias) {
         if (!isAPlano && isBPlano) return 1;
         return a.localeCompare(b);
     });
-    
+
     tbody.innerHTML = keys.map(cat => {
         const isPlano = cat.toLowerCase().includes('plano');
         const estiloLinha = isPlano ? 'style="background-color: #fcf8e3; font-weight: 600;"' : '';
         return `
             <tr ${estiloLinha}>
-                <td>${isPlano ? '📱 ' : ''}<strong>${cat}</strong></td>
+                <td>${isPlano ? '📱 ' : ''}<strong>${escapeSafe(cat)}</strong></td>
                 <td style="text-align: center;">${categorias[cat].qtd}</td>
                 <td style="text-align: right; font-weight: 700;">${formatarMoeda(categorias[cat].total)}</td>
             </tr>
@@ -589,15 +557,15 @@ function renderizarVendasPorPlano(categorias) {
 function renderizarDespesas(despesas) {
     const tbody = document.querySelector('#tabelaDespesas tbody');
     if (!tbody) return;
-    
+
     if (!despesas || despesas.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray); padding: 15px;">Nenhuma despesa registrada neste período</td></tr>';
         return;
     }
-    
+
     tbody.innerHTML = despesas.map(d => `
         <tr>
-            <td><strong>${d.descricao}</strong><br><small style="color:var(--gray);">${d.categoria || 'Sem categoria'}</small></td>
+            <td><strong>${escapeSafe(d.descricao)}</strong><br><small style="color:var(--gray);">${escapeSafe(d.categoria || 'Sem categoria')}</small></td>
             <td>${new Date(d.created_at || d.data).toLocaleDateString('pt-BR')}</td>
             <td><span class="status-badge ${d.status === 'pago' ? 'aberto' : 'fechado'}" style="padding: 2px 8px; font-size: 11px;">${d.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
             <td style="text-align: right; font-weight: 700; color: #dc2626;">- ${formatarMoeda(d.valor)}</td>
@@ -613,7 +581,7 @@ async function fecharCaixa() {
 
     const saldoFinalInput = document.getElementById('saldoFinal');
     const saldoFinal = parseFloat(saldoFinalInput.value) || 0;
-    
+
     if (saldoFinal < 0) {
         mostrarNotificacao('O saldo final não pode ser menor que zero!', 'error');
         return;
@@ -623,30 +591,37 @@ async function fecharCaixa() {
     const msgConfirm = isPendente
         ? 'Deseja realmente fechar o caixa do dia anterior? Após o fechamento, você poderá abrir o caixa de hoje para iniciar as operações do novo dia.'
         : 'Deseja realmente fechar o caixa? Esta ação impedirá novas vendas hoje.';
-    
+
     if (!confirm(msgConfirm)) {
         return;
     }
-    
+
     const btn = document.getElementById('btnFecharCaixa');
     btn.disabled = true;
     btn.textContent = '⏳ Fechando caixa...';
-    
+
     try {
+        const resumoFinal = recalcularResumoAtivoEmTela();
+        const aj = lerAjustesAtivo();
         const dataFechamento = new Date().toISOString();
+
         const { error } = await supabaseClient
             .from('caixas')
             .update({
                 saldo_final: saldoFinal,
+                saldo_esperado: resumoFinal ? resumoFinal.saldoEsperadoGaveta : saldoFinal,
+                diferenca_caixa: resumoFinal ? resumoFinal.diferencaCaixa : 0,
+                ajustes_fechamento: aj,
+                observacao_fechamento: aj.observacao || null,
                 usuario_fechamento_id: usuario.id,
                 status: 'fechado',
+                cancelado: false,
                 data_fechamento: dataFechamento
             })
             .eq('id', caixaAtivo.id);
-            
+
         if (error) throw error;
-        
-        // Se estiver fechando caixa pendente de dia anterior, garantir encerramento de qualquer outro fantasma/duplicado
+
         if (isPendente) {
             try {
                 await supabaseClient
@@ -662,21 +637,23 @@ async function fecharCaixa() {
                 console.warn('Aviso ao sincronizar caixas anteriores:', eGhosts);
             }
         }
-        
-        mostrarNotificacao(isPendente 
-            ? '🔒 Caixa anterior fechado com sucesso! Agora você pode abrir o caixa de hoje.' 
+
+        mostrarNotificacao(isPendente
+            ? '🔒 Caixa anterior fechado com sucesso! Agora você pode abrir o caixa de hoje.'
             : '🔒 Caixa fechado com sucesso!', 'success');
-        
-        // Perguntar sobre a impressão
+
         const imprimir = confirm('Deseja imprimir o Relatório de Fechamento de Caixa?');
         if (imprimir) {
             const nomeOperador = document.getElementById('cUsuarioAbertura').textContent;
-            // Atualizar o objeto local do caixa ativo com os dados de fechamento para a impressão
             caixaAtivo.data_fechamento = dataFechamento;
             caixaAtivo.saldo_final = saldoFinal;
+            caixaAtivo.saldo_esperado = resumoFinal ? resumoFinal.saldoEsperadoGaveta : saldoFinal;
+            caixaAtivo.diferenca_caixa = resumoFinal ? resumoFinal.diferencaCaixa : 0;
+            caixaAtivo.ajustes_fechamento = aj;
+            caixaAtivo.observacao_fechamento = aj.observacao || null;
             imprimirRelatorioFechamento(caixaAtivo, dadosVendasAtivo, nomeOperador);
         }
-        
+
         setTimeout(() => {
             window.location.reload();
         }, 1200);
@@ -688,564 +665,23 @@ async function fecharCaixa() {
     }
 }
 
-// =====================================================
-// FUNÇÕES DE IMPRESSÃO DO RELATÓRIO DE FECHAMENTO
-// =====================================================
-
 function imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador) {
-    const dataHoraAbertura = formatarDataHora(caixa.data_abertura);
-    const dataHoraFechamento = formatarDataHora(caixa.data_fechamento || new Date().toISOString());
-    const saldoInicial = formatarMoeda(caixa.saldo_inicial);
-    const saldoFinal = formatarMoeda(caixa.saldo_final || 0);
-    const totalVendas = formatarMoeda(dadosVendas.totalVendas);
-    const totalDescontos = formatarMoeda(dadosVendas.totalDescontos);
-    const totalItens = dadosVendas.totalItens;
-    const totalDespesas = formatarMoeda(dadosVendas.totalDespesas || 0);
-    const totalGeral = formatarMoeda(caixa.saldo_inicial + dadosVendas.totalVendas - (dadosVendas.totalDespesas || 0));
-    
-    // Formas de pagamento html
-    let pagamentosHtml = '';
-    const fpKeys = Object.keys(dadosVendas.formasPagamento);
-    if (fpKeys.length > 0) {
-        pagamentosHtml = fpKeys.map(k => `
-            <tr>
-                <td>${k}</td>
-                <td class="text-right">${formatarMoeda(dadosVendas.formasPagamento[k])}</td>
-            </tr>
-        `).join('');
-    } else {
-        pagamentosHtml = '<tr><td colspan="2" class="text-center">Nenhuma venda registrada</td></tr>';
-    }
-
-    // Planos / Categorias html (Tipo / Quantidade apenas!)
-    let planosHtml = '';
-    const planoKeys = Object.keys(dadosVendas.categorias);
-    if (planoKeys.length > 0) {
-        planoKeys.sort((a, b) => {
-            const isAPlano = a.toLowerCase().includes('plano');
-            const isBPlano = b.toLowerCase().includes('plano');
-            if (isAPlano && !isBPlano) return -1;
-            if (!isAPlano && isBPlano) return 1;
-            return a.localeCompare(b);
+    if (window.RelatorioFechamentoCaixa) {
+        window.RelatorioFechamentoCaixa.imprimirCupomTermico({
+            caixa,
+            resumo: dadosVendas,
+            despesas: dadosVendas.despesas || [],
+            categorias: dadosVendas.categorias || {},
+            totalItens: dadosVendas.totalItens || 0,
+            nomeAbertura: nomeOperador,
+            historico: Array.isArray(caixa.historico_fechamentos) ? caixa.historico_fechamentos : []
         });
-
-        planosHtml = planoKeys.map(k => `
-            <tr>
-                <td>${k}</td>
-                <td class="text-right bold">${dadosVendas.categorias[k].qtd}</td>
-            </tr>
-        `).join('');
-    } else {
-        planosHtml = '<tr><td colspan="2" class="text-center">Nenhum item vendido</td></tr>';
     }
-
-    // Despesas html
-    let despesasHtml = '';
-    if (dadosVendas.despesas && dadosVendas.despesas.length > 0) {
-        despesasHtml = dadosVendas.despesas.map(d => `
-            <tr>
-                <td>${d.descricao}</td>
-                <td class="text-right">${formatarMoeda(d.valor)}</td>
-            </tr>
-        `).join('');
-    } else {
-        despesasHtml = '<tr><td colspan="2" class="text-center">Nenhuma despesa</td></tr>';
-    }
-
-    const janela = window.open('', '_blank');
-    janela.document.write(`
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <title>Relatório de Fechamento de Caixa</title>
-            <style>
-                @page { margin: 0; size: auto; }
-                body {
-                    font-family: 'Courier New', Courier, monospace;
-                    margin: 0;
-                    padding: 4mm;
-                    width: 100%;
-                    max-width: 72mm;
-                    margin: 0 auto;
-                    font-size: 13px;
-                    line-height: 1.3;
-                    box-sizing: border-box;
-                    background: #fff;
-                    color: #000;
-                }
-                .header {
-                    text-align: center;
-                    border-bottom: 1px dashed #000;
-                    padding-bottom: 8px;
-                    margin-bottom: 10px;
-                }
-                .header h1 {
-                    margin: 0 0 3px 0;
-                    font-size: 14px;
-                    text-transform: uppercase;
-                    font-weight: bold;
-                }
-                .header p {
-                    margin: 0;
-                    font-size: 11px;
-                }
-                .info-line {
-                    font-size: 11px;
-                    margin-bottom: 8px;
-                    border-bottom: 1px dashed #000;
-                    padding-bottom: 5px;
-                }
-                .kpi-section {
-                    margin-bottom: 10px;
-                    border-bottom: 1px dashed #000;
-                    padding-bottom: 5px;
-                }
-                .kpi-row {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 12px;
-                    margin-bottom: 3px;
-                }
-                .secao {
-                    margin-bottom: 12px;
-                }
-                .secao h3 {
-                    margin: 0 0 5px 0;
-                    font-size: 12px;
-                    text-transform: uppercase;
-                    border-bottom: 1px dashed #000;
-                    padding-bottom: 3px;
-                    font-weight: bold;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                th, td {
-                    padding: 3px 0;
-                    font-size: 12px;
-                    text-align: left;
-                }
-                th {
-                    border-bottom: 1px dashed #000;
-                    font-weight: bold;
-                }
-                .text-right {
-                    text-align: right;
-                }
-                .text-center {
-                    text-align: center;
-                }
-                .bold {
-                    font-weight: bold;
-                }
-                .no-print-btn {
-                    text-align: right;
-                    margin-bottom: 10px;
-                }
-                .btn {
-                    background: #000;
-                    color: #fff;
-                    border: 1px solid #000;
-                    padding: 5px 10px;
-                    font-size: 11px;
-                    font-family: monospace;
-                    cursor: pointer;
-                    font-weight: bold;
-                }
-                .btn-secondary {
-                    background: #888;
-                    border-color: #888;
-                    margin-left: 5px;
-                }
-                @media print {
-                    .no-print-btn {
-                        display: none !important;
-                    }
-                    body {
-                        width: 72mm;
-                        margin: 0;
-                        padding: 2mm;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="no-print-btn">
-                <button class="btn" onclick="window.print()">Imprimir</button>
-                <button class="btn btn-secondary" onclick="window.close()">Fechar</button>
-            </div>
-            
-            <div class="header">
-                <h1>FECHAMENTO DE CAIXA</h1>
-                <p>${usuario.loja_nome || 'Aion ERP'}</p>
-            </div>
-            
-            <div class="info-line">
-                Abertura:   ${dataHoraAbertura}<br>
-                Fechamento: ${dataHoraFechamento}<br>
-                Operador:   ${nomeOperador}
-            </div>
-            
-            <div class="kpi-section">
-                <div class="kpi-row"><span>Saldo Inicial:</span><span class="bold">${saldoInicial}</span></div>
-                <div class="kpi-row"><span>Vendas no Dia:</span><span class="bold">${totalVendas}</span></div>
-                <div class="kpi-row"><span>Despesas no Dia:</span><span class="bold" style="color:#dc2626;">-${totalDespesas}</span></div>
-                <div class="kpi-row"><span>Total Líquido:</span><span class="bold">${totalGeral}</span></div>
-                <div class="kpi-row"><span>Declarado Caixa:</span><span class="bold">${saldoFinal}</span></div>
-                <div class="kpi-row"><span>Descontos:</span><span class="bold">${totalDescontos}</span></div>
-                <div class="kpi-row"><span>Itens Vendidos:</span><span class="bold">${totalItens}</span></div>
-            </div>
-            
-            <div class="secao">
-                <h3>💳 Pagamentos</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Forma</th>
-                            <th class="text-right">Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pagamentosHtml}
-                        <tr style="border-top: 1px dashed #000; font-weight: bold;">
-                            <td>TOTAL VENDAS</td>
-                            <td class="text-right">${totalVendas}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="secao">
-                <h3>💸 Despesas</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Descrição</th>
-                            <th class="text-right">Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${despesasHtml}
-                        <tr style="border-top: 1px dashed #000; font-weight: bold;">
-                            <td>TOTAL DESPESAS</td>
-                            <td class="text-right">${totalDespesas}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="secao">
-                <h3>📦 Tipo / Quantidade</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Tipo (Categoria)</th>
-                            <th class="text-right">Qtd</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${planosHtml}
-                    </tbody>
-                </table>
-            </div>
-
-            <div style="margin-top: 40px; border-top: 1px dashed #000; padding-top: 15px; text-align: center; font-size: 11px;">
-                Assinatura Operador: ${nomeOperador}
-                <br><br><br>
-                __________________________________
-            </div>
-            
-            <div style="margin-top: 30px; text-align: center; font-size: 11px; margin-bottom: 20px;">
-                Assinatura Gerente
-                <br><br><br>
-                __________________________________
-            </div>
-            
-            <script>
-                window.onload = function() {
-                    setTimeout(() => { window.print(); }, 400);
-                }
-            </script>
-        </body>
-        </html>
-    `);
-    janela.document.close();
 }
 
 async function imprimirRelatorioPorCaixa(caixa) {
     if (!caixa) return;
-    
-    mostrarNotificacao('⏳ Preparando relatório para impressão...', 'info');
-    
-    try {
-        // 1. Buscar operador
-        let nomeOperador = 'Desconhecido';
-        try {
-            const { data: userObj } = await supabaseClient
-                .from('usuarios')
-                .select('nome')
-                .eq('id', caixa.usuario_abertura_id)
-                .single();
-            if (userObj) nomeOperador = userObj.nome;
-        } catch (e) {
-            console.error(e);
-        }
-
-        // 2. Buscar vendas
-        let todasSaidas = [];
-        try {
-            const { data, error } = await supabaseClient
-                .from('saidas')
-                .select('*');
-            if (!error && data) {
-                todasSaidas = data;
-            }
-        } catch (errQ) {
-            console.warn('Erro ao buscar saidas para impressão:', errQ);
-        }
-
-        const dataAbertura = new Date(caixa.data_abertura);
-        const dataFechamento = caixa.data_fechamento ? new Date(caixa.data_fechamento) : null;
-        const dataAberturaStr = caixa.data_abertura ? caixa.data_abertura.substring(0, 10) : '';
-
-        const vendas = todasSaidas.filter(v => {
-            if (v.cancelado === true) return false;
-            if (v.caixa_id !== null && v.caixa_id !== undefined && String(v.caixa_id) === String(caixa.id)) {
-                return true;
-            }
-            if (!v.caixa_id) {
-                const dtVenda = v.data_finalizacao ? new Date(v.data_finalizacao) : (v.created_at ? new Date(v.created_at) : null);
-                if (dtVenda && !isNaN(dtVenda.getTime())) {
-                    if (dtVenda >= dataAbertura && (!dataFechamento || dtVenda <= dataFechamento)) {
-                        return true;
-                    }
-                }
-                if (v.data && dataAberturaStr && String(v.data).substring(0, 10) === dataAberturaStr) {
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        // Buscar despesas para impressão histórica
-        let despesas = [];
-        try {
-            const { data: despesasData, error: errorDespesas } = await supabaseClient
-                .from('despesas')
-                .select('*');
-            if (!errorDespesas && despesasData) {
-                despesas = despesasData.filter(d => {
-                    const dt = d.data_pagamento ? new Date(d.data_pagamento) : (d.created_at ? new Date(d.created_at) : (d.data ? new Date(d.data) : null));
-                    if (dt && !isNaN(dt.getTime())) {
-                        if (dt >= dataAbertura && (!dataFechamento || dt <= dataFechamento)) {
-                            return true;
-                        }
-                    }
-                    if (d.data && dataAberturaStr && String(d.data).substring(0, 10) === dataAberturaStr) {
-                        return true;
-                    }
-                    return false;
-                });
-            }
-        } catch (e) {
-            console.error('Erro ao buscar despesas para impressão:', e);
-        }
-        const totalDespesas = despesas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
-
-        // 3. Totais e agregação
-        let totalVendas = 0;
-        let totalDescontos = 0;
-        let totalItens = 0;
-        const formasPagamento = {};
-        const vendaIds = [];
-        
-        vendas.forEach(v => {
-            const valTotal = Number(v.total) || 0;
-            const valDesc = Number(v.desconto) || 0;
-            totalVendas += valTotal;
-            totalDescontos += valDesc;
-            vendaIds.push(v.id);
-            
-            const fp = v.forma_pagamento || 'Outro / Não Informado';
-            formasPagamento[fp] = (formasPagamento[fp] || 0) + valTotal;
-        });
-
-        // 3.1. Buscar pagamentos de Fiado realizados neste caixa para o comprovante impresso
-        try {
-            const { data: crPags } = await supabaseClient
-                .from('contas_receber_pagamentos')
-                .select('*')
-                .eq('caixa_id', caixa.id);
-            if (crPags) {
-                const pagamentosFiadoCaixa = crPags.filter(p => p.cancelado !== true && p.tipo_operacao !== 'venda_realizada');
-                pagamentosFiadoCaixa.forEach(p => {
-                    const valPago = Number(p.valor_pago) || 0;
-                    const fpKey = (p.forma_pagamento || 'Dinheiro') + ' (Receb. Fiado)';
-                    formasPagamento[fpKey] = (formasPagamento[fpKey] || 0) + valPago;
-                });
-            }
-        } catch (e) {
-            console.warn('Aviso ao buscar recebimentos fiado para impressão:', e);
-        }
-
-        // 4. Buscar itens
-        let itens = [];
-        if (vendaIds.length > 0) {
-            try {
-                const { data: itensData, error: errorItens } = await supabaseClient
-                    .from('saida_itens')
-                    .select('quantidade, subtotal, produto_id, serial_id, produtos(nome, categoria)')
-                    .in('saida_id', vendaIds.slice(0, 300));
-                if (!errorItens && itensData) {
-                    itens = itensData;
-                } else {
-                    const fallbackRes = await supabaseClient
-                        .from('saida_itens')
-                        .select('quantidade, subtotal, produto_id, serial_id')
-                        .in('saida_id', vendaIds.slice(0, 300));
-                    if (fallbackRes.data) itens = fallbackRes.data;
-                }
-            } catch (errI) {
-                console.warn('Erro ao buscar itens para relatório:', errI);
-            }
-        }
-
-        const categorias = {};
-        itens.forEach(item => {
-            totalItens += item.quantidade || 0;
-            const cat = item.produtos?.categoria || 'Sem Categoria';
-            if (!categorias[cat]) {
-                categorias[cat] = { qtd: 0, total: 0 };
-            }
-            categorias[cat].qtd += item.quantidade || 0;
-            categorias[cat].total += item.subtotal || 0;
-        });
-
-        // 5. Aparelhos IMEI
-        const itensComSerial = itens.filter(i => i.serial_id);
-        let aparelhos = [];
-        if (itensComSerial.length > 0) {
-            const serialIds = itensComSerial.map(i => i.serial_id);
-            let seriais = [];
-            try {
-                const { data: seriaisData, error: errorSeriais } = await supabaseClient
-                    .from('produtos_seriais')
-                    .select('*')
-                    .in('id', serialIds);
-                if (!errorSeriais) seriais = seriaisData || [];
-            } catch (e) {
-                console.error(e);
-            }
-            
-            const seriaisMap = {};
-            seriais.forEach(s => { seriaisMap[s.id] = s; });
-            
-            aparelhos = itensComSerial.map(item => {
-                const serialObj = seriaisMap[item.serial_id];
-                const serialText = serialObj 
-                    ? (serialObj.imei ? `IMEI: ${serialObj.imei}` : `S/N: ${serialObj.numero_serie}`) 
-                    : 'Não localizado';
-                return {
-                    nome: item.produtos?.nome || 'Produto Desconhecido',
-                    marca: item.produtos?.marca || '-',
-                    modelo: item.produtos?.modelo || '-',
-                    serialText: serialText,
-                    valor: item.valor_unitario
-                };
-            });
-        }
-
-        const dadosVendas = {
-            totalVendas,
-            totalDescontos,
-            totalItens,
-            formasPagamento,
-            categorias,
-            totalDespesas,
-            despesas
-        };
-
-        // Chamar impressão
-        imprimirRelatorioFechamento(caixa, dadosVendas, nomeOperador);
-
-    } catch (e) {
-        console.error('Erro ao gerar relatório de fechamento:', e);
-        mostrarNotificacao('Erro ao carregar dados do relatório para impressão', 'error');
-    }
-}
-
-async function carregarHistoricoCaixas() {
-    const tbody = document.getElementById('historicoCaixasBody');
-    if (!tbody) return;
-    
-    try {
-        const { data: caixas, error } = await supabaseClient
-            .from('caixas')
-            .select('*')
-            .eq('status', 'fechado')
-            .order('id', { ascending: false });
-            
-        if (error) throw error;
-        
-        if (!caixas || caixas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--gray);">Nenhum caixa fechado registrado.</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = '';
-        
-        caixas.forEach(caixa => {
-            const tr = document.createElement('tr');
-            
-            const tdId = document.createElement('td');
-            tdId.textContent = `#${caixa.id}`;
-            tdId.style.fontWeight = 'bold';
-            
-            const tdAbertura = document.createElement('td');
-            tdAbertura.textContent = formatarDataHora(caixa.data_abertura);
-            
-            const tdFechamento = document.createElement('td');
-            tdFechamento.textContent = formatarDataHora(caixa.data_fechamento);
-            
-            const tdInicial = document.createElement('td');
-            tdInicial.textContent = formatarMoeda(caixa.saldo_inicial);
-            
-            const tdFinal = document.createElement('td');
-            tdFinal.textContent = formatarMoeda(caixa.saldo_final || 0);
-            
-            const tdAcoes = document.createElement('td');
-            tdAcoes.style.textAlign = 'center';
-            
-            const btnPrint = document.createElement('button');
-            btnPrint.className = 'btn-acao-caixa btn-abrir';
-            btnPrint.style.background = 'var(--primary)';
-            btnPrint.style.padding = '6px 12px';
-            btnPrint.style.fontSize = '12px';
-            btnPrint.style.display = 'inline-flex';
-            btnPrint.style.margin = '0 auto';
-            btnPrint.style.width = 'auto';
-            btnPrint.style.height = 'auto';
-            btnPrint.style.lineHeight = 'normal';
-            btnPrint.innerHTML = '🖨️ Relatório';
-            btnPrint.onclick = () => {
-                imprimirRelatorioPorCaixa(caixa);
-            };
-            
-            tdAcoes.appendChild(btnPrint);
-            
-            tr.appendChild(tdId);
-            tr.appendChild(tdAbertura);
-            tr.appendChild(tdFechamento);
-            tr.appendChild(tdInicial);
-            tr.appendChild(tdFinal);
-            tr.appendChild(tdAcoes);
-            
-            tbody.appendChild(tr);
-        });
-    } catch (e) {
-        console.error('Erro ao carregar histórico de caixas:', e);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Erro ao carregar histórico.</td></tr>';
+    if (window.RelatorioFechamentoCaixa) {
+        await window.RelatorioFechamentoCaixa.reimprimirFechamento(caixa.id, 'termico');
     }
 }

@@ -319,9 +319,17 @@
                                     <span id="uSaldoFinal">-</span>
                                 </div>
                             </div>
-                            <button id="btnImprimirUltimoRelatorio" class="btn-acao-caixa btn-abrir" style="background-color: var(--info); margin-top: 12px;">
-                                🖨️ Imprimir Relatório de Fechamento
-                            </button>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                                <button id="btnVisualizarUltimoRelatorio" class="btn-acao-caixa btn-abrir" style="background-color: #2563eb;">
+                                    👁️ Visualizar Relatório
+                                </button>
+                                <button id="btnImprimirUltimoRelatorio" class="btn-acao-caixa btn-abrir" style="background-color: var(--info);">
+                                    🖨️ Reimprimir Cupom
+                                </button>
+                                <button id="btnCancelarUltimoRelatorio" class="btn-acao-caixa btn-fechar" style="display: none;">
+                                    ❌ Cancelar e Refazer
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -428,13 +436,53 @@
                         <!-- Ação de Fechamento de Caixa -->
                         <div class="panel-secao" style="margin-top: 20px;">
                             <h3>🔒 Fechamento de Caixa</h3>
-                            <p style="font-size: 14px; color: var(--gray); margin-bottom: 20px;">Ao fechar o caixa, você impede o lançamento de novas vendas para o dia de hoje. Para reabrir ou registrar mais vendas, será necessário realizar uma nova abertura de caixa.</p>
-                            
-                            <div style="display: flex; flex-direction: column; gap: 5px;">
-                                <label for="saldoFinal" style="font-weight: 600; font-size: 14px;">Saldo Final em Dinheiro (Dinheiro + Saldo Inicial):</label>
-                                <input type="number" id="saldoFinal" class="input-caixa" value="0.00" step="0.01" min="0">
-                                <span style="font-size: 12px; color: var(--gray); margin-top: -10px; margin-bottom: 15px;">Nota: O sistema sugere o saldo esperado em dinheiro na gaveta, mas você pode declarar o valor físico real.</span>
+                            <p style="font-size: 14px; color: var(--gray); margin-bottom: 16px;">Ao fechar o caixa, você impede o lançamento de novas vendas para o dia de hoje. Caso precise lançar suprimentos, sangrias ou ajustes de valores antes de encerrar, utilize as opções abaixo.</p>
+
+                            <details id="detalhesAjustesAtivo" style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+                                <summary style="cursor:pointer; font-weight:700; font-size:13.5px; color:var(--dark);">⚙️ Opções de Ajuste dos Valores (Suprimento, Sangria e Correções)</summary>
+                                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-top:12px;">
+                                    <div class="fr-field">
+                                        <label for="ajAtivoSuprimento">Suprimento (+ R$)</label>
+                                        <input type="number" id="ajAtivoSuprimento" step="0.01" min="0" value="0.00">
+                                    </div>
+                                    <div class="fr-field">
+                                        <label for="ajAtivoSangria">Sangria / Retirada (- R$)</label>
+                                        <input type="number" id="ajAtivoSangria" step="0.01" min="0" value="0.00">
+                                    </div>
+                                    <div class="fr-field">
+                                        <label for="ajAtivoDinheiro">Ajuste Dinheiro (+/- R$)</label>
+                                        <input type="number" id="ajAtivoDinheiro" step="0.01" value="0.00">
+                                    </div>
+                                    <div class="fr-field">
+                                        <label for="ajAtivoCartao">Ajuste Cartão (+/- R$)</label>
+                                        <input type="number" id="ajAtivoCartao" step="0.01" value="0.00">
+                                    </div>
+                                    <div class="fr-field">
+                                        <label for="ajAtivoPix">Ajuste PIX (+/- R$)</label>
+                                        <input type="number" id="ajAtivoPix" step="0.01" value="0.00">
+                                    </div>
+                                    <div class="fr-field">
+                                        <label for="ajAtivoDespesas">Ajuste Despesas (+/- R$)</label>
+                                        <input type="number" id="ajAtivoDespesas" step="0.01" value="0.00">
+                                    </div>
+                                </div>
+                                <div class="fr-field" style="margin-top:10px;">
+                                    <label for="ajAtivoObservacao">Observação do Fechamento / Motivo dos Ajustes</label>
+                                    <input type="text" id="ajAtivoObservacao" placeholder="Opcional: descreva suprimentos, sangrias ou justificativas...">
+                                </div>
+                            </details>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end; margin-bottom:16px;">
+                                <div style="display: flex; flex-direction: column; gap: 5px; min-width: 260px;">
+                                    <label for="saldoFinal" style="font-weight: 600; font-size: 14px;">Saldo Final em Dinheiro (Declarado na Gaveta):</label>
+                                    <input type="number" id="saldoFinal" class="input-caixa" style="margin-bottom:0;" value="0.00" step="0.01" min="0">
+                                </div>
+                                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; font-size:13px;">
+                                    <div>Esperado na Gaveta: <strong id="ativoEsperadoGaveta" style="color:#1d4ed8;">R$ 0,00</strong></div>
+                                    <div>Diferença: <strong id="ativoDiferencaCaixa">R$ 0,00 (Caixa Batido)</strong></div>
+                                </div>
                             </div>
+                            <span style="display:block; font-size: 12px; color: var(--gray); margin-bottom: 15px;">Nota: O sistema sugere o saldo esperado em dinheiro na gaveta, mas você pode declarar o valor físico real ou ajustar os valores acima.</span>
                             
                             <button id="btnFecharCaixa" class="btn-acao-caixa btn-fechar">
                                 🔒 Fechar Caixa Diário
@@ -442,37 +490,21 @@
                         </div>
                     </div>
                     
-                    <!-- Histórico de Caixas Fechados -->
-                    <div class="panel-secao" style="margin-top: 20px;">
-                        <h3>📋 Histórico de Caixas Fechados</h3>
-                        <p style="font-size: 13px; color: var(--gray); margin-bottom: 15px;">Abaixo estão os relatórios e registros de todos os caixas que já foram fechados anteriormente no sistema.</p>
-                        
-                        <div style="overflow-x: auto; max-height: 400px;">
-                            <table class="tabela-caixa" id="tabelaHistoricoCaixas">
-                                <thead>
-                                    <tr>
-                                        <th>Caixa ID</th>
-                                        <th>Abertura</th>
-                                        <th>Fechamento</th>
-                                        <th>Fundo Inicial</th>
-                                        <th>Saldo Final</th>
-                                        <th style="text-align: center;">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="historicoCaixasBody">
-                                    <tr><td colspan="6" style="text-align: center; color: var(--gray);">Carregando histórico...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                    <!-- Relatórios de Fechamento de Caixa (Visualizar, Reimprimir, Cancelar com Novo Fechamento Imediato) -->
+                    <div id="fechamentoRelatorioContainer" class="panel-secao" style="margin-top: 20px;">
+                        <p style="color: var(--gray); text-align: center; padding: 20px;">Carregando relatórios de fechamento...</p>
                     </div>
                 </div>
             </div>
         </main>
     </div>
     
-    <script src="js/config.js?v=2.0.3"></script>
-    <script src="js/auth-check.js?v=2.0.3"></script>
-    <script src="js/fechamento.js?v=2.0.3"></script>
-    <script src="js/active-nav.js?v=2.0.3"></script>
+    <script src="js/security.js?v=2.2.0"></script>
+    <script src="js/config.js?v=2.2.0"></script>
+    <script src="js/auth-check.js?v=2.2.0"></script>
+    <script src="js/export-helper.js?v=2.2.0"></script>
+    <script src="js/fechamento-relatorio.js?v=2.2.0"></script>
+    <script src="js/fechamento.js?v=2.2.0"></script>
+    <script src="js/active-nav.js?v=2.2.0"></script>
 </body>
 </html>

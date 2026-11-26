@@ -287,8 +287,19 @@ CREATE TABLE public.caixas (
     data_fechamento TIMESTAMP WITH TIME ZONE,
     saldo_inicial NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
     saldo_final NUMERIC(10, 2),
-    status VARCHAR(50) DEFAULT 'aberto' CHECK (status IN ('aberto', 'fechado')),
-    usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL
+    saldo_esperado NUMERIC(10, 2),
+    diferenca_caixa NUMERIC(10, 2),
+    ajustes_fechamento JSONB DEFAULT '{}'::jsonb,
+    observacao_fechamento TEXT,
+    cancelado BOOLEAN DEFAULT false,
+    cancelado_em TIMESTAMP WITH TIME ZONE,
+    cancelado_por INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    motivo_cancelamento TEXT,
+    historico_fechamentos JSONB DEFAULT '[]'::jsonb,
+    status VARCHAR(50) DEFAULT 'aberto' CHECK (status IN ('aberto', 'fechado', 'cancelado')),
+    usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    usuario_abertura_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    usuario_fechamento_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL
 );
 
 -- ============================================================================
